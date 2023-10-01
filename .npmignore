@@ -1,0 +1,15 @@
+# This ignores everything by default, except for package.json and LICENSE and README.md.
+# See https://docs.npmjs.com/misc/developers
+**/*
+# Include sources from lib, but not map files.
+!lib/**/*.js
+!lib/**/*.mjs
+# Include generated types and entrypoint.
+!index.d.ts
+!src/types/types.d.ts
+!playwright/packages/playwright-core/types/types.d.ts
+!playwright/packages/playwright/types/test.d.ts
+# Include essentials.
+!README.md
+!LICENSE
+!NOTICE

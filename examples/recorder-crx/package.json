@@ -1,0 +1,14 @@
+{
+  "name": "recorder-crx",
+  "version": "0.0.4-next",
+  "type": "module",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "scripts": {
+    "build": "tsc && vite build && vite --config vite.recorder.config.ts build"
+  },
+  "dependencies": {
+    "playwright-crx": "0.0.4-next"
+  }
+}

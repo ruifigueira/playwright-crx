@@ -1,0 +1,77 @@
+{
+  "name": "playwright-crx",
+  "version": "0.0.4-next",
+  "engines": {
+    "node": ">=16"
+  },
+  "author": {
+    "name": "Rui Figueira"
+  },
+  "license": "Apache-2.0",
+  "scripts": {
+    "pw:ci:core-utils-bundle": "npm ci --prefix ./playwright/packages/playwright-core/bundles/utils",
+    "pw:ci:core-zip-bundle": "npm ci --prefix ./playwright/packages/playwright-core/bundles/zip",
+    "pw:ci:test-babel-bundle": "npm ci --prefix ./playwright/packages/playwright/bundles/babel",
+    "pw:ci:test-expect-bundle": "npm ci --prefix ./playwright/packages/playwright/bundles/expect",
+    "pw:ci:test-utils-bundle": "npm ci --prefix ./playwright/packages/playwright/bundles/utils",
+    "pw:ci:bundles": "npm run pw:ci:core-utils-bundle && npm run pw:ci:core-zip-bundle && npm run pw:ci:test-babel-bundle && npm run pw:ci:test-expect-bundle && npm run pw:ci:test-utils-bundle",
+    "pw:clean-bundles": "rimraf -g ./playwright/packages/playwright-core/bundles/**/node_modules && rimraf -g ./playwright/packages/playwright/bundles/**/node_modules",
+    "pw:clean": "npm run pw:clean-bundles && cd ./playwright && npm run clean",
+    "pw:generate-injected": "cd ./playwright && node ./utils/generate_injected.js",
+    "examples:build:todomvc": "npm run build --prefix ./examples/todomvc-crx",
+    "examples:build:recorder": "npm run build --prefix ./examples/recorder-crx",
+    "examples:build": "npm run examples:build:todomvc && npm run examples:build:recorder",
+    "examples:clean": "rimraf ./examples/recorder-crx/dist && rimraf ./examples/todomvc-crx/dist",
+    "build:crx": "npm run pw:generate-injected && vite build",
+    "build": "npm run pw:ci:bundles && npm run build:crx && npm run examples:build",
+    "clean": "npm run pw:clean && npm run examples:clean && rimraf ./lib"
+  },
+  "workspaces": [
+    "."
+  ],
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./lib/index.mjs",
+      "require": "./lib/index.umd.js",
+      "default": "./lib/index.umd.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@isomorphic-git/lightning-fs": "^4.6.0",
+    "assert": "^2.1.0",
+    "babel-bundle": "file:./playwright/packages/playwright/bundles/babel",
+    "browserify-zlib": "^0.2.0",
+    "buffer": "^6.0.3",
+    "crypto-browserify": "^3.12.0",
+    "events": "^3.3.0",
+    "expect-bundle": "file:./playwright/packages/playwright/bundles/expect",
+    "https-browserify": "^1.0.0",
+    "inspector": "^0.5.0",
+    "os-browserify": "^0.3.0",
+    "path": "^0.12.7",
+    "process": "^0.11.10",
+    "readable-stream": "^4.4.2",
+    "setimmediate": "^1.0.5",
+    "stream-http": "^3.2.0",
+    "string_decoder": "^1.3.0",
+    "test-utils-bundle": "file:./playwright/packages/playwright/bundles/utils",
+    "url": "^0.11.3",
+    "util": "^0.12.5",
+    "utils-bundle": "file:./playwright/packages/playwright-core/bundles/utils",
+    "zip-bundle": "file:./playwright/packages/playwright-core/bundles/zip"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.246",
+    "@vitejs/plugin-react": "^4.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "rimraf": "^5.0.5",
+    "rollup-plugin-sourcemaps": "^0.6.3",
+    "typescript": "5.2.2",
+    "vite": "4.4.10",
+    "vite-plugin-require-transform": "1.0.21",
+    "web-package": "file:./playwright/packages/web"
+  }
+}
