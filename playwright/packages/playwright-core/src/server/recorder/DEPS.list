@@ -1,0 +1,9 @@
+[*]
+../
+../isomorphic/**
+../registry/**
+../../common/
+../../protocol/
+../../utils/**
+../../utilsBundle.ts
+../../zipBundle.ts

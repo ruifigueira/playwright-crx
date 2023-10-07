@@ -1,0 +1,85 @@
+/*
+  Copyright (c) Microsoft Corporation.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+*/
+
+
+.console-tab {
+  display: flex;
+  flex: auto;
+  white-space: pre;
+}
+
+.console-line {
+  width: 100%;
+  user-select: text;
+}
+
+.console-line .codicon {
+  padding: 0 2px 0 3px;
+  position: relative;
+  flex: none;
+  top: 3px;
+}
+
+.console-line.warning .codicon {
+  color: darkorange;
+}
+
+.console-line-message {
+  word-break: break-word;
+  white-space: pre-wrap;
+  position: relative;
+}
+
+.console-location {
+  padding-right: 3px;
+  float: right;
+  color: var(--vscode-editorCodeLens-foreground);
+  user-select: none;
+}
+
+.console-time {
+  float: left;
+  min-width: 50px;
+  color: var(--vscode-editorCodeLens-foreground);
+  user-select: none;
+}
+
+.console-stack {
+  white-space: pre-wrap;
+  margin-left: 50px;
+}
+
+.console-line .codicon.status-none::after,
+.console-line .codicon.status-error::after,
+.console-line .codicon.status-warning::after {
+  display: inline-block;
+  content: 'a';
+  color: transparent;
+  border-radius: 4px;
+  width: 8px;
+  height: 8px;
+  position: relative;
+  top: 8px;
+  left: -7px;
+}
+
+.console-line .codicon.status-error::after {
+  background-color: var(--vscode-errorForeground);
+}
+
+.console-line .codicon.status-warning::after {
+  background-color: var(--vscode-list-warningForeground);
+}

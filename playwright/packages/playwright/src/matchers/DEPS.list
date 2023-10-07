@@ -1,0 +1,4 @@
+[*]
+../common/
+../util.ts
+../worker/testInfo.ts

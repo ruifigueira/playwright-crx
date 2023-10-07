@@ -1,0 +1,82 @@
+/*
+  Copyright (c) Microsoft Corporation.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+*/
+
+.split-view {
+  display: flex;
+  flex: auto;
+  position: relative;
+}
+
+.split-view.vertical {
+  flex-direction: column;
+}
+
+.split-view.vertical.sidebar-first {
+  flex-direction: column-reverse;
+}
+
+.split-view.horizontal {
+  flex-direction: row;
+}
+
+.split-view.horizontal.sidebar-first {
+  flex-direction: row-reverse;
+}
+
+.split-view-main {
+  display: flex;
+  flex: auto;
+}
+
+.split-view-sidebar {
+  display: flex;
+  flex: none;
+}
+
+.split-view.vertical:not(.sidebar-first) > .split-view-sidebar {
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.split-view.horizontal:not(.sidebar-first) > .split-view-sidebar {
+  border-left: 1px solid var(--vscode-panel-border);
+}
+
+.split-view.vertical.sidebar-first > .split-view-sidebar {
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.split-view.horizontal.sidebar-first > .split-view-sidebar {
+  border-right: 1px solid var(--vscode-panel-border);
+}
+
+.split-view-resizer {
+  position: absolute;
+  z-index: 100;
+}
+
+.split-view.vertical > .split-view-resizer {
+  left: 0;
+  right: 0;
+  height: 12px;
+  cursor: ns-resize;
+}
+
+.split-view.horizontal > .split-view-resizer {
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  cursor: ew-resize;
+}

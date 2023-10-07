@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ES2019",
+    "noEmit": true,
+    "moduleResolution": "node",
+  },
+  "include": [
+    "test.ts"
+  ]
+}
