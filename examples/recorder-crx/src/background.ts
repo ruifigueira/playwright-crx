@@ -15,17 +15,51 @@
  */
 
 import type { CrxApplication } from 'playwright-crx';
-import { _setUnderTest, crx } from 'playwright-crx';
+import { crx } from 'playwright-crx';
 
 // we must lazy initialize it
 let crxAppPromise: Promise<CrxApplication> | undefined;
+
+const attachedTabIds = new Set<number>();
+
+async function changeAction(tabId: number, mode: 'none' | 'recording' | 'inspecting' | 'detached') {
+  // detached basically implies recorder windows was closed
+  if (mode === 'detached' || mode === 'none') {
+    await Promise.all([
+      chrome.action.setTitle({ title: mode === 'none' ? 'Stopped' : 'Record', tabId }),
+      chrome.action.setBadgeText({ text: '', tabId }),
+    ]).catch(() => {});
+    return;
+  }
+
+  const { text, title, color, bgColor } = mode === 'recording' ?
+    { text: 'REC', title: 'Recording', color: 'white', bgColor: 'darkred' } :
+    { text: 'INS', title: 'Inspecting', color: 'white', bgColor: 'dodgerblue' };
+
+  await Promise.all([
+    chrome.action.setTitle({ title, tabId }),
+    chrome.action.setBadgeText({ text, tabId }),
+    chrome.action.setBadgeTextColor({ color, tabId }),
+    chrome.action.setBadgeBackgroundColor({ color: bgColor, tabId }),
+  ]).catch(() => {});
+}
 
 async function getCrxApp() {
   if (!crxAppPromise) {
     crxAppPromise = crx.start().then(crxApp => {
       crxApp.recorder.addListener('hide', async () => {
         await crxApp.detachAll();
-        await chrome.action.enable();
+      });
+      crxApp.recorder.addListener('modechanged', async ({ mode }) => {
+        await Promise.all([...attachedTabIds].map(tabId => changeAction(tabId, mode)));
+      });
+      crxApp.addListener('attached', async ({ tabId }) => {
+        attachedTabIds.add(tabId);
+        await changeAction(tabId, crxApp.recorder.mode);
+      });
+      crxApp.addListener('detached', async tabId => {
+        attachedTabIds.delete(tabId);
+        await changeAction(tabId, 'detached');
       });
       return crxApp;
     });
@@ -35,20 +69,23 @@ async function getCrxApp() {
 }
 
 async function attach(tab: chrome.tabs.Tab) {
-  await chrome.action.disable();
+  if (!tab.id || attachedTabIds.has(tab.id)) return;
+  const tabId = tab.id;
 
-  const crxApp = await getCrxApp();
-
-  if (crxApp.recorder.isHidden())
-    await crxApp.recorder.show({ mode: 'recording' });
+  // ensure one attachment at a time
+  chrome.action.disable();
 
   try {
-    await crxApp.attach(tab.id!);
-    await chrome.action.disable(tab.id);
+    const crxApp = await getCrxApp();
+    if (crxApp.recorder.isHidden())
+      await crxApp.recorder.show({ mode: 'recording' });
+
+    await crxApp.attach(tabId);
   } catch (e) {
-    // do nothing
+    // nothing much to do...
+  } finally {
+    chrome.action.enable();
   }
-  await chrome.action.enable();
 }
 
 chrome.action.onClicked.addListener(attach);
@@ -56,9 +93,10 @@ chrome.action.onClicked.addListener(attach);
 chrome.contextMenus.create({
   id: 'pw-recorder',
   title: 'Attach to Playwright Recorder',
-  contexts: ['page'],
+  contexts: ['all'],
 });
 
 chrome.contextMenus.onClicked.addListener(async (_, tab) => {
   if (tab) await attach(tab);
 });
+
