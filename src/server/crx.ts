@@ -72,6 +72,7 @@ export class CrxApplication extends SdkObject {
   static Events = {
     RecorderHide: 'hide',
     RecorderShow: 'show',
+    ModeChanged: 'modeChanged',
   };
 
   private _browser: CRBrowser;
@@ -87,9 +88,13 @@ export class CrxApplication extends SdkObject {
     }, null);
     Recorder.setAppFactory(async recorder => {
       if (!this._recorderApp) {
-        this._recorderApp = await new CrxRecorderApp(recorder);
+        this._recorderApp = new CrxRecorderApp(recorder);
         this._recorderApp.on('show', () => this.emit(CrxApplication.Events.RecorderShow));
         this._recorderApp.on('hide', () => this.emit(CrxApplication.Events.RecorderHide));
+        this._recorderApp.on('event', ({ event, params }) => {
+          if (event === 'setMode')
+            this.emit(CrxApplication.Events.ModeChanged, params);
+        });
       }
       return this._recorderApp;
     });

@@ -63,6 +63,9 @@ scheme.CrxApplicationInitializer = tObject({
 });
 scheme.CrxApplicationHideEvent = tOptional(tObject({}));
 scheme.CrxApplicationShowEvent = tOptional(tObject({}));
+scheme.CrxApplicationModeChangedEvent = tObject({
+  mode: tEnum(['none', 'recording', 'inspecting']),
+});
 scheme.CrxApplicationAttachParams = tObject({
   tabId: tNumber,
 });

@@ -49,6 +49,9 @@ export class CrxApplicationDispatcher extends Dispatcher<CrxApplication, channel
     this.addObjectListener(CrxApplication.Events.RecorderShow, () => {
       (this._dispatchEvent as any)('show');
     });
+    this.addObjectListener(CrxApplication.Events.ModeChanged, event => {
+      (this._dispatchEvent as any)('modeChanged', event);
+    });
   }
 
   async attach(params: channels.CrxApplicationAttachParams): Promise<channels.CrxApplicationAttachResult> {

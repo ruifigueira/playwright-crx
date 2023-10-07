@@ -48,6 +48,7 @@ export class Crx extends ChannelOwner<channels.CrxChannel> implements api.Crx {
 export class CrxRecorder extends EventEmitter {
   private _channel: channels.CrxApplicationChannel;
   private _hidden: boolean = true;
+  private _mode: 'none' | 'recording' | 'inspecting' = 'none';
 
   constructor(channel: channels.CrxApplicationChannel) {
     super();
@@ -60,6 +61,14 @@ export class CrxRecorder extends EventEmitter {
       this._hidden = false;
       this.emit('show');
     });
+    this._channel.on('modeChanged', event => {
+      this._mode = event.mode;
+      this.emit('modechanged', event);
+    });
+  }
+
+  get mode() {
+    return this._mode;
   }
 
   isHidden() {

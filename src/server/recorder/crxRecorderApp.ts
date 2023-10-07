@@ -71,7 +71,8 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     // set in recorder
     this._onMessage({ type: 'recorderEvent', event: 'clear', params: {} });
     this._onMessage({ type: 'recorderEvent', event: 'fileChanged', params: { file: 'playwright-test' } });
-    this._recorder.setMode(mode);
+    // also sends event to crx recorder client
+    this._onMessage({ type: 'recorderEvent', event: 'setMode', params: { mode } });
     this.setMode(mode);
   }
 
