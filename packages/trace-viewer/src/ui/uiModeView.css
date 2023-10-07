@@ -1,0 +1,171 @@
+/*
+  Copyright (c) Microsoft Corporation.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+*/
+
+.ui-mode-sidebar {
+  background-color: var(--vscode-sideBar-background);
+}
+
+.ui-mode-sidebar input[type=search] {
+  flex: auto;
+}
+
+.ui-mode-sidebar .toolbar-button:not([disabled]) .codicon-play {
+  color: var(--vscode-debugIcon-restartForeground);
+}
+
+.ui-mode-sidebar .toolbar-button:not([disabled]) .codicon-debug-stop {
+  color: var(--vscode-debugIcon-stopForeground);
+}
+
+.ui-mode-list-item {
+  flex: auto;
+}
+
+.ui-mode-list-item-title {
+  flex: auto;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.ui-mode-list-item-time {
+  flex: none;
+  color: var(--vscode-editorCodeLens-foreground);
+  margin: 0 4px;
+  user-select: none;
+}
+
+.list-view-entry.selected .ui-mode-list-item-time,
+.list-view-entry.highlighted .ui-mode-list-item-time {
+  display: none;
+}
+
+.ui-mode .section-title {
+  display: flex;
+  flex: auto;
+  flex-direction: row;
+  align-items: center;
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: bold;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  padding: 8px;
+  height: 30px;
+}
+
+.ui-mode-sidebar img {
+  flex: none;
+  margin-left: 6px;
+  width: 24px;
+  height: 24px;
+}
+
+.ui-mode .disconnected {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.status-line {
+  flex: auto;
+  white-space: nowrap;
+  line-height: 22px;
+  padding-left: 10px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 30px;
+}
+
+.status-line > div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.list-view-entry:not(.highlighted):not(.selected) .toolbar-button:not(.toggled) {
+  display: none;
+}
+
+.ui-mode-sidebar input[type=search] {
+  flex: auto;
+  padding: 0 5px;
+  line-height: 24px;
+  outline: none;
+  margin: 0 4px;
+  border: none;
+  color: var(--vscode-input-foreground);
+  background-color: var(--vscode-input-background);
+}
+
+.filters {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  margin: 2px 0;
+}
+
+.filter-list {
+  padding: 0 10px 10px 10px;
+  user-select: none;
+}
+
+.filter-title,
+.filter-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+}
+
+.filter-label {
+  color: var(--vscode-disabledForeground);
+}
+
+.filter-summary {
+  line-height: 24px;
+  margin-left: 24px;
+}
+
+.filter-summary .filter-label {
+  margin-left: 5px;
+}
+
+.filter-entry {
+  line-height: 24px;
+}
+
+.filter-entry label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.filter-entry input {
+  flex: none;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.filter-entry label div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

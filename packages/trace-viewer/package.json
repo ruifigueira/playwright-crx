@@ -1,0 +1,11 @@
+{
+  "name": "trace-viewer",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && tsc",
+    "build-sw": "vite --config vite.sw.config.ts build && tsc",
+    "preview": "vite preview"
+  }
+}

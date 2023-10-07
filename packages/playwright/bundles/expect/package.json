@@ -1,0 +1,15 @@
+{
+  "name": "expect-bundle",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "esbuild": "esbuild ./src/expectBundleImpl.ts --bundle --outdir=../../lib/common --format=cjs --platform=node --target=ES2019",
+    "build": "npm run esbuild -- --minify",
+    "watch": "npm run esbuild -- --watch --sourcemap",
+    "generate-license": "node ../../../../utils/generate_third_party_notice.js"
+  },
+  "dependencies": {
+    "expect": "29.5.0",
+    "jest-matcher-utils": "29.5.0"
+  }
+}

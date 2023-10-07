@@ -1,0 +1,6 @@
+[*]
+../../
+../../registry/
+../../../generated/
+../../../utils/
+../../../utilsBundle.ts

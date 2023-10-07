@@ -1,0 +1,13 @@
+[browserServerImpl.ts]
+**
+
+[androidServerImpl.ts]
+**
+
+[inProcessFactory.ts]
+**
+
+[outofprocess.ts]
+client/
+protocol/
+utils/

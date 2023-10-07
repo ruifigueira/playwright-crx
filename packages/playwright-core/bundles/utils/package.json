@@ -1,0 +1,42 @@
+{
+  "name": "utils-bundle",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "esbuild": "node build.js",
+    "build": "npm run esbuild -- --minify",
+    "watch": "npm run esbuild -- --watch --sourcemap",
+    "generate-license": "node ../../../../utils/generate_third_party_notice.js"
+  },
+  "dependencies": {
+    "colors": "1.4.0",
+    "commander": "8.3.0",
+    "debug": "^4.3.4",
+    "graceful-fs": "4.2.10",
+    "https-proxy-agent": "5.0.0",
+    "jpeg-js": "0.4.4",
+    "mime": "^3.0.0",
+    "minimatch": "^3.1.2",
+    "open": "8.4.0",
+    "pngjs": "6.0.0",
+    "progress": "2.0.3",
+    "proxy-from-env": "1.1.0",
+    "retry": "0.12.0",
+    "rimraf": "^4.4.1",
+    "signal-exit": "3.0.7",
+    "socks-proxy-agent": "6.1.1",
+    "stack-utils": "2.0.5",
+    "ws": "8.4.2"
+  },
+  "devDependencies": {
+    "@types/debug": "^4.1.7",
+    "@types/mime": "^2.0.3",
+    "@types/minimatch": "^3.0.5",
+    "@types/pngjs": "^6.0.1",
+    "@types/progress": "^2.0.5",
+    "@types/proper-lockfile": "^4.1.2",
+    "@types/proxy-from-env": "^1.0.1",
+    "@types/stack-utils": "^2.0.1",
+    "@types/ws": "8.2.2"
+  }
+}

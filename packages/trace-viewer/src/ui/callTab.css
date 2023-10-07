@@ -1,0 +1,100 @@
+/*
+  Copyright (c) Microsoft Corporation.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+*/
+
+.call-tab {
+  flex: auto;
+  line-height: 24px;
+  white-space: pre;
+  overflow: auto;
+  user-select: text;
+}
+
+.call-error {
+  border-bottom: 1px solid var(--vscode-panel-border);
+  padding: 3px 0 3px 12px;
+}
+
+.call-error .codicon {
+  color: var(--vscode-errorForeground);
+  position: relative;
+  top: 2px;
+  margin-right: 2px;
+}
+
+.call-section {
+  padding-left: 6px;
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: 10px;
+  color: var(--vscode-sideBarTitle-foreground);
+  line-height: 24px;
+}
+
+.call-section:not(:first-child) {
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.call-line {
+  padding: 4px 0 4px 6px;
+  display: flex;
+  align-items: center;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.copy-icon {
+  display: none;
+  margin-right: 4px;
+}
+
+.call-line:hover .copy-icon {
+  display: block;
+  cursor: pointer;
+}
+
+.call-value {
+  margin-left: 2px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  flex: 1;
+}
+
+.call-value::before {
+  content: '\00a0';
+}
+
+.call-value.datetime,
+.call-value.string,
+.call-value.locator {
+  color: var(--vscode-charts-orange);
+}
+
+.call-value.number,
+.call-value.bigint,
+.call-value.boolean,
+.call-value.symbol,
+.call-value.undefined,
+.call-value.function,
+.call-value.object {
+  color: var(--vscode-charts-blue);
+}
+
+.call-tab .error-message {
+  padding: 5px;
+  line-height: 17px;
+}

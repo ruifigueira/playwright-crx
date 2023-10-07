@@ -1,0 +1,80 @@
+/*
+  Copyright (c) Microsoft Corporation.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+*/
+
+.action-title {
+  flex: auto;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.action-duration {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin: 0 4px;
+  color: var(--vscode-editorCodeLens-foreground);
+}
+
+.action-icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding-right: 3px;
+}
+
+.action-icons {
+  flex: none;
+  display: flex;
+  flex-direction: row;
+  cursor: pointer;
+  height: 20px;
+  position: relative;
+  top: 1px;
+  border-bottom: 1px solid transparent;
+}
+
+.action-icons:hover {
+  border-bottom: 1px solid var(--vscode-sideBarTitle-foreground);
+}
+
+.action-error {
+  color: var(--vscode-errorForeground);
+  position: relative;
+  margin-right: 2px;
+  flex: none;
+}
+
+.action-selector {
+  display: inline;
+  flex: none;
+  padding-left: 5px;
+  color: var(--vscode-charts-orange);
+}
+
+.action-url {
+  display: inline;
+  flex: none;
+  padding-left: 5px;
+  color: var(--vscode-charts-blue);
+}
+
+.action-list-show-all {
+  display: flex;
+  cursor: pointer;
+  height: 28px;
+  align-items: center;
+}
