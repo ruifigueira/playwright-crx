@@ -18,7 +18,7 @@ import { EventEmitter } from 'events';
 import { ChannelOwner } from 'playwright-core/lib/client/channelOwner';
 import type * as api from '../types/types';
 import type * as channels from '../protocol/channels';
-import type { Page } from 'playwright-core/lib/client/page';
+import { Page } from 'playwright-core/lib/client/page';
 import type { BrowserContext } from 'playwright-core/lib/client/browserContext';
 
 function from<T>(obj: any): T {
@@ -96,6 +96,12 @@ export class CrxApplication extends ChannelOwner<channels.CrxApplicationChannel>
     super(parent, type, guid, initializer);
     this._context = (initializer.context as any)._object;
     this.recorder = new CrxRecorder(this._channel);
+    this._channel.on('attached', ({ page, tabId }) => {
+      this.emit('attached', { tabId, page: Page.from(page) });
+    });
+    this._channel.on('detached', ({ tabId }) => {
+      this.emit('detached', tabId);
+    });
   }
 
   context() {

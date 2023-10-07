@@ -43,6 +43,10 @@ export class CrxTransport implements ConnectionTransport {
     return this._tabToTarget.get(tabId);
   }
 
+  getTabId(targetId: string) {
+    return this._targetToTab.get(targetId);
+  }
+
   async send(message: ProtocolRequest) {
     try {
       const [, tabIdStr] = /crx-tab-(\d+)/.exec(message.sessionId ?? '') ?? [];

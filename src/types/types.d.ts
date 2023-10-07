@@ -35,6 +35,126 @@ export interface Crx {
 
 export interface CrxApplication {
   /**
+   * Emitted when a page is attached.
+   */
+  on(event: 'attached', listener: (data: {
+    /**
+     * attached page
+     */
+    page: Page;
+
+    /**
+     * page tab ID
+     */
+    tabId: number;
+  }) => void): this;
+
+  /**
+   * Emitted when a page is detached.
+   */
+  on(event: 'detached', listener: (number: number) => void): this;
+
+  /**
+   * Adds an event listener that will be automatically removed after it is triggered once. See `addListener` for more information about this event.
+   */
+  once(event: 'attached', listener: (data: {
+    /**
+     * attached page
+     */
+    page: Page;
+
+    /**
+     * page tab ID
+     */
+    tabId: number;
+  }) => void): this;
+
+  /**
+   * Adds an event listener that will be automatically removed after it is triggered once. See `addListener` for more information about this event.
+   */
+  once(event: 'detached', listener: (number: number) => void): this;
+
+  /**
+   * Emitted when a page is attached.
+   */
+  addListener(event: 'attached', listener: (data: {
+    /**
+     * attached page
+     */
+    page: Page;
+
+    /**
+     * page tab ID
+     */
+    tabId: number;
+  }) => void): this;
+
+  /**
+   * Emitted when a page is detached.
+   */
+  addListener(event: 'detached', listener: (number: number) => void): this;
+
+  /**
+   * Removes an event listener added by `on` or `addListener`.
+   */
+  removeListener(event: 'attached', listener: (data: {
+    /**
+     * attached page
+     */
+    page: Page;
+
+    /**
+     * page tab ID
+     */
+    tabId: number;
+  }) => void): this;
+
+  /**
+   * Removes an event listener added by `on` or `addListener`.
+   */
+  removeListener(event: 'detached', listener: (number: number) => void): this;
+
+  /**
+   * Removes an event listener added by `on` or `addListener`.
+   */
+  off(event: 'attached', listener: (data: {
+    /**
+     * attached page
+     */
+    page: Page;
+
+    /**
+     * page tab ID
+     */
+    tabId: number;
+  }) => void): this;
+
+  /**
+   * Removes an event listener added by `on` or `addListener`.
+   */
+  off(event: 'detached', listener: (number: number) => void): this;
+
+  /**
+   * Emitted when a page is attached.
+   */
+  prependListener(event: 'attached', listener: (data: {
+    /**
+     * attached page
+     */
+    page: Page;
+
+    /**
+     * page tab ID
+     */
+    tabId: number;
+  }) => void): this;
+
+  /**
+   * Emitted when a page is detached.
+   */
+  prependListener(event: 'detached', listener: (number: number) => void): this;
+
+  /**
    * Attach a tab and returns the corresponding `Page`.
    * @param tabId
    */
