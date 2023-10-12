@@ -17,18 +17,16 @@
 import { crx } from 'playwright-crx';
 import { createTodos } from './todos';
 
-const crxAppPromise = crx.start({ slowMo: 500 });
-
 chrome.action.onClicked.addListener(async ({ id: tabId }) => {
   await chrome.action.disable();
 
-  const crxApp = await crxAppPromise;
+  const crxApp = await crx.start({ slowMo: 500 });
   const page = await crxApp.attach(tabId!).catch(() => crxApp.newPage());
 
   try {
     await createTodos(page);
   } finally {
-    await crxApp.detach(page);
+    await crxApp.close();
     await chrome.action.enable();
   }
 });
