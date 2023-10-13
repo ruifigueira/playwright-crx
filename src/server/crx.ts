@@ -190,8 +190,8 @@ export class CrxApplication extends SdkObject {
 
   async close() {
     await Promise.all(this._crPages().map(crPage => this._doDetach(crPage._targetId)));
-    await this._browser.close();
     await this._transport.closeAndWait();
+    await this._browser.close();
   }
 
   private async _doDetach(targetId?: string) {
