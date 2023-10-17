@@ -48,7 +48,7 @@ import {
 import { toMatchSnapshot, toHaveScreenshot, toHaveScreenshotStepTitle } from './toMatchSnapshot';
 import type { Expect } from '../../types/test';
 import { currentTestInfo, currentExpectTimeout, setCurrentExpectConfigureTimeout } from '../common/globals';
-import { filteredStackTrace, serializeError, stringifyStackFrames, trimLongString } from '../util';
+import { filteredStackTrace, trimLongString } from '../util';
 import {
   expect as expectLibrary,
   INVERTED_COLOR,
@@ -58,12 +58,7 @@ import {
 export type { ExpectMatcherContext } from '../common/expectBundle';
 import { zones } from 'playwright-core/lib/utils';
 import { TestInfoImpl } from '../worker/testInfo';
-
-// from expect/build/types
-export type SyncExpectationResult = {
-  pass: boolean;
-  message: () => string;
-};
+import { ExpectError } from './matcherHint';
 
 // #region
 // Mirrored from https://github.com/facebook/jest/blob/f13abff8df9a0e1148baf3584bcde6d1b479edc7/packages/expect/src/print.ts
@@ -112,7 +107,7 @@ function createMatchers(actual: unknown, info: ExpectMetaInfo): any {
 }
 
 function createExpect(info: ExpectMetaInfo) {
-  const expectInstance: Expect = new Proxy(expectLibrary, {
+  const expectInstance: Expect<{}> = new Proxy(expectLibrary, {
     apply: function(target: any, thisArg: any, argumentsList: [unknown, ExpectMessage?]) {
       const [actual, messageOrOptions] = argumentsList;
       const message = isString(messageOrOptions) ? messageOrOptions : messageOrOptions?.message || info.message;
@@ -128,6 +123,13 @@ function createExpect(info: ExpectMetaInfo) {
     get: function(target: any, property: string) {
       if (property === 'configure')
         return configure;
+
+      if (property === 'extend') {
+        return (matchers: any) => {
+          expectLibrary.extend(matchers);
+          return expectInstance;
+        };
+      }
 
       if (property === 'soft') {
         return (actual: unknown, messageOrOptions?: ExpectMessage) => {
@@ -166,7 +168,7 @@ function createExpect(info: ExpectMetaInfo) {
   return expectInstance;
 }
 
-export const expect: Expect = createExpect({});
+export const expect: Expect<{}> = createExpect({});
 
 expectLibrary.setState({ expand: false });
 
@@ -259,70 +261,37 @@ class ExpectMetaInfoProxyHandler implements ProxyHandler<any> {
         params: args[0] ? { expected: args[0] } : undefined,
         wallTime,
         infectParentStepsWithError: this._info.isSoft,
+        laxParent: true,
       }) : undefined;
 
-      const reportStepError = (jestError: Error) => {
-        const message = jestError.message;
-        if (customMessage) {
-          const messageLines = message.split('\n');
-          // Jest adds something like the following error to all errors:
-          //    expect(received).toBe(expected); // Object.is equality
-          const uselessMatcherLineIndex = messageLines.findIndex((line: string) => /expect.*\(.*received.*\)/.test(line));
-          if (uselessMatcherLineIndex !== -1) {
-            // if there's a newline after the matcher text, then remove it as well.
-            if (uselessMatcherLineIndex + 1 < messageLines.length && messageLines[uselessMatcherLineIndex + 1].trim() === '')
-              messageLines.splice(uselessMatcherLineIndex, 2);
-            else
-              messageLines.splice(uselessMatcherLineIndex, 1);
-          }
-          const newMessage = [
-            customMessage,
-            '',
-            ...messageLines,
-          ].join('\n');
-          jestError.message = newMessage;
-          jestError.stack = jestError.name + ': ' + newMessage + '\n' + stringifyStackFrames(stackFrames).join('\n');
-        }
-
-        const serializedError = serializeError(jestError);
-        // Serialized error has filtered stack trace.
-        jestError.stack = serializedError.stack;
+      const reportStepError = (jestError: ExpectError) => {
+        const error = new ExpectError(jestError, customMessage, stackFrames);
+        const serializedError = {
+          message: error.message,
+          stack: error.stack,
+        };
         step?.complete({ error: serializedError });
         if (this._info.isSoft)
           testInfo._failWithError(serializedError, false /* isHardError */);
         else
-          throw jestError;
+          throw error;
       };
 
       const finalizer = () => {
         step?.complete({});
       };
 
-      // Process the async matchers separately to preserve the zones in the stacks.
-      if (this._info.isPoll || (matcherName in customAsyncMatchers && matcherName !== 'toPass')) {
-        return (async () => {
-          try {
-            const expectZone: ExpectZone = { title, wallTime };
-            await zones.run<ExpectZone, any>('expectZone', expectZone, async () => {
-              // We assume that the matcher will read the current expect timeout the first thing.
-              setCurrentExpectConfigureTimeout(this._info.timeout);
-              await matcher.call(target, ...args);
-            });
-            finalizer();
-          } catch (e) {
-            reportStepError(e);
-          }
-        })();
-      } else {
-        try {
-          const result = matcher.call(target, ...args);
-          if (result instanceof Promise)
-            return result.then(finalizer).catch(reportStepError);
-          finalizer();
-          return result;
-        } catch (e) {
-          reportStepError(e);
-        }
+      const expectZone: ExpectZone = { title, wallTime };
+      // We assume that the matcher will read the current expect timeout the first thing.
+      setCurrentExpectConfigureTimeout(this._info.timeout);
+      try {
+        const result = zones.run<ExpectZone, any>('expectZone', expectZone, () => matcher.call(target, ...args));
+        if (result instanceof Promise)
+          return result.then(finalizer).catch(reportStepError);
+        finalizer();
+        return result;
+      } catch (e) {
+        reportStepError(e);
       }
     };
   }
@@ -368,3 +337,7 @@ function computeArgsSuffix(matcherName: string, args: any[]) {
 }
 
 expectLibrary.extend(customMatchers);
+
+export function mergeExpects(...expects: any[]) {
+  return expect;
+}

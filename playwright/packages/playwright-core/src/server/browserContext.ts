@@ -157,9 +157,13 @@ export abstract class BrowserContext extends SdkObject {
     return true;
   }
 
-  async stopPendingOperations() {
+  async stopPendingOperations(reason: string) {
+    // When using context reuse, stop pending operations to gracefully terminate all the actions
+    // with a user-friendly error message containing operation log.
     for (const controller of this._activeProgressControllers)
-      controller.abort(new Error(`Context was reset for reuse.`));
+      controller.abort(new Error(reason));
+    // Let rejections in microtask generate events before returning.
+    await new Promise(f => setTimeout(f, 0));
   }
 
   static reusableContextHash(params: channels.BrowserNewContextForReuseParams): string {
@@ -193,7 +197,7 @@ export abstract class BrowserContext extends SdkObject {
     const [, ...otherPages] = this.pages();
     for (const p of otherPages)
       await p.close(metadata);
-    if (page && page._crashedScope.isClosed()) {
+    if (page && page.hasCrashed()) {
       await page.close(metadata);
       page = undefined;
     }

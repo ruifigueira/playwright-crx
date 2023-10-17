@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 import { test, expect } from './npmTest';
+import http from 'http';
+import type { AddressInfo } from 'net';
 
 const CDNS = [
   'https://playwright.azureedge.net',
@@ -32,10 +34,11 @@ const parsedDownloads = (rawLogs: string) => {
   return out;
 };
 
+test.use({ isolateBrowsers: true });
 
 for (const cdn of CDNS) {
-  test(`playwright cdn failover should work (${cdn})`, async ({ exec, nodeMajorVersion, installedSoftwareOnDisk }) => {
-    await exec('npm i --foreground-scripts playwright');
+  test(`playwright cdn failover should work (${cdn})`, async ({ exec, installedSoftwareOnDisk }) => {
+    await exec('npm i playwright');
     const result = await exec('npx playwright install', { env: { PW_TEST_CDN_THAT_SHOULD_WORK: cdn, DEBUG: 'pw:install' } });
     expect(result).toHaveLoggedSoftwareDownload(['chromium', 'ffmpeg', 'firefox', 'webkit']);
     expect(await installedSoftwareOnDisk()).toEqual(['chromium', 'ffmpeg', 'firefox', 'webkit']);
@@ -43,7 +46,25 @@ for (const cdn of CDNS) {
     for (const software of ['chromium', 'ffmpeg', 'firefox', 'webkit'])
       expect(dls).toContainEqual({ status: 200, name: software, url: expect.stringContaining(cdn) });
     await exec('node sanity.js playwright chromium firefox webkit');
-    if (nodeMajorVersion >= 14)
-      await exec('node esm-playwright.mjs');
+    await exec('node esm-playwright.mjs');
   });
 }
+
+test(`playwright cdn should race with a timeout`, async ({ exec }) => {
+  const server = http.createServer(() => {});
+  await new Promise<void>(resolve => server.listen(0, resolve));
+  try {
+    await exec('npm i playwright');
+    const result = await exec('npx playwright install', {
+      env: {
+        PLAYWRIGHT_DOWNLOAD_HOST: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+        DEBUG: 'pw:install',
+        PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: '1000',
+      },
+      expectToExitWithError: true
+    });
+    expect(result).toContain(`timed out after 1000ms`);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});

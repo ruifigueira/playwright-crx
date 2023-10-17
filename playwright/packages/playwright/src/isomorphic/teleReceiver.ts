@@ -32,7 +32,7 @@ export type JsonConfig = Pick<FullConfig, 'configFile' | 'globalTimeout' | 'maxF
   listOnly: boolean;
 };
 
-export type MergeReporterConfig = Pick<FullConfig, 'configFile' | 'quiet' | 'reportSlowTests' | 'rootDir' >;
+export type MergeReporterConfig = Pick<FullConfig, 'configFile' | 'quiet' | 'reportSlowTests' | 'rootDir' | 'reporter' >;
 
 export type JsonPattern = {
   s?: string;
@@ -306,8 +306,8 @@ export class TeleReporterReceiver {
     }
   }
 
-  private _onEnd(result: JsonFullResult): Promise<void> | void {
-    return this._reporter.onEnd?.({
+  private async _onEnd(result: JsonFullResult): Promise<void> {
+    await this._reporter.onEnd?.({
       status: result.status,
       startTime: new Date(result.startTime),
       duration: result.duration,
@@ -327,6 +327,7 @@ export class TeleReporterReceiver {
       result.rootDir = this._reportConfig.rootDir;
       result.reportSlowTests = this._reportConfig.reportSlowTests;
       result.quiet = this._reportConfig.quiet;
+      result.reporter = [...this._reportConfig.reporter];
     }
     return result;
   }

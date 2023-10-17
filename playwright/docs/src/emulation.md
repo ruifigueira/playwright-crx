@@ -3,6 +3,8 @@ id: emulation
 title: "Emulation"
 ---
 
+## Introduction
+
 With Playwright you can test your app on any browser as well as emulate a real device such as a mobile phone or tablet. Simply configure the devices you would like to emulate and Playwright will simulate the browser behavior such as `"userAgent"`, `"screenSize"`, `"viewport"` and if it `"hasTouch"` enabled. You can also emulate the `"geolocation"`, `"locale"` and `"timezone"` for all tests or for a specific test as well as set the `"permissions"` to show notifications or change the `"colorScheme"`.
 
 ## Devices
@@ -43,9 +45,9 @@ const context = await browser.newContext({
 
 ```python async
 import asyncio
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, Playwright
 
-async def run(playwright):
+async def run(playwright: Playwright):
     iphone_13 = playwright.devices['iPhone 13']
     browser = await playwright.webkit.launch(headless=False)
     context = await browser.new_context(
@@ -59,9 +61,9 @@ asyncio.run(main())
 ```
 
 ```python sync
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, Playwright
 
-def run(playwright):
+def run(playwright: Playwright):
     iphone_13 = playwright.devices['iPhone 13']
     browser = playwright.webkit.launch(headless=False)
     context = browser.new_context(
@@ -101,10 +103,17 @@ The viewport is included in the device but you can override it for some tests wi
 ```js tab=js-test title="playwright.config.ts"
 import { defineConfig } from '@playwright/test';
 export default defineConfig({
-  use: {
-    // Viewport used for all pages in the context.
-    viewport: { width: 1280, height: 720 },
-  },
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        // It is important to define the `viewport` property after destructuring `devices`,
+        // since devices also define the `viewport` for that device.
+        viewport: { width: 1280, height: 720 },
+      },
+    },
+  ]
 });
 ```
 
@@ -239,9 +248,17 @@ Whether the meta viewport tag is taken into account and touch events are enabled
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
-  use: {
-    isMobile: false,
-  },
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        // It is important to define the `isMobile` property after destructuring `devices`,
+        // since devices also define the `isMobile` for that device.
+        isMobile: false,
+      },
+    },
+  ]
 });
 ```
 

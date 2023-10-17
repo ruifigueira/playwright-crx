@@ -38,7 +38,6 @@ export type InitializerTraits<T> =
     T extends TracingChannel ? TracingInitializer :
     T extends DialogChannel ? DialogInitializer :
     T extends BindingCallChannel ? BindingCallInitializer :
-    T extends ConsoleMessageChannel ? ConsoleMessageInitializer :
     T extends WebSocketChannel ? WebSocketInitializer :
     T extends ResponseChannel ? ResponseInitializer :
     T extends RouteChannel ? RouteInitializer :
@@ -76,7 +75,6 @@ export type EventsTraits<T> =
     T extends TracingChannel ? TracingEvents :
     T extends DialogChannel ? DialogEvents :
     T extends BindingCallChannel ? BindingCallEvents :
-    T extends ConsoleMessageChannel ? ConsoleMessageEvents :
     T extends WebSocketChannel ? WebSocketEvents :
     T extends ResponseChannel ? ResponseEvents :
     T extends RouteChannel ? RouteEvents :
@@ -114,7 +112,6 @@ export type EventTargetTraits<T> =
     T extends TracingChannel ? TracingEventTarget :
     T extends DialogChannel ? DialogEventTarget :
     T extends BindingCallChannel ? BindingCallEventTarget :
-    T extends ConsoleMessageChannel ? ConsoleMessageEventTarget :
     T extends WebSocketChannel ? WebSocketEventTarget :
     T extends ResponseChannel ? ResponseEventTarget :
     T extends RouteChannel ? RouteEventTarget :
@@ -392,7 +389,26 @@ export type APIResponse = {
 
 export type LifecycleEvent = 'load' | 'domcontentloaded' | 'networkidle' | 'commit';
 // ----------- LocalUtils -----------
-export type LocalUtilsInitializer = {};
+export type LocalUtilsInitializer = {
+  deviceDescriptors: {
+    name: string,
+    descriptor: {
+      userAgent: string,
+      viewport: {
+        width: number,
+        height: number,
+      },
+      screen?: {
+        width: number,
+        height: number,
+      },
+      deviceScaleFactor: number,
+      isMobile: boolean,
+      hasTouch: boolean,
+      defaultBrowserType: 'chromium' | 'firefox' | 'webkit',
+    },
+  }[],
+};
 export interface LocalUtilsEventTarget {
 }
 export interface LocalUtilsChannel extends LocalUtilsEventTarget, Channel {
@@ -537,25 +553,7 @@ export type PlaywrightInitializer = {
   webkit: BrowserTypeChannel,
   android: AndroidChannel,
   electron: ElectronChannel,
-  utils: LocalUtilsChannel,
-  deviceDescriptors: {
-    name: string,
-    descriptor: {
-      userAgent: string,
-      viewport: {
-        width: number,
-        height: number,
-      },
-      screen?: {
-        width: number,
-        height: number,
-      },
-      deviceScaleFactor: number,
-      isMobile: boolean,
-      hasTouch: boolean,
-      defaultBrowserType: 'chromium' | 'firefox' | 'webkit',
-    },
-  }[],
+  utils?: LocalUtilsChannel,
   selectors: SelectorsChannel,
   preLaunchedBrowser?: BrowserChannel,
   preConnectedAndroidDevice?: AndroidDeviceChannel,
@@ -585,8 +583,8 @@ export type PlaywrightNewRequestParams = {
   },
   timeout?: number,
   storageState?: {
-    cookies: NetworkCookie[],
-    origins: OriginStorage[],
+    cookies?: NetworkCookie[],
+    origins?: OriginStorage[],
   },
   tracesDir?: string,
 };
@@ -608,8 +606,8 @@ export type PlaywrightNewRequestOptions = {
   },
   timeout?: number,
   storageState?: {
-    cookies: NetworkCookie[],
-    origins: OriginStorage[],
+    cookies?: NetworkCookie[],
+    origins?: OriginStorage[],
   },
   tracesDir?: string,
 };
@@ -1087,6 +1085,7 @@ export interface BrowserChannel extends BrowserEventTarget, Channel {
   defaultUserAgentForTest(params?: BrowserDefaultUserAgentForTestParams, metadata?: CallMetadata): Promise<BrowserDefaultUserAgentForTestResult>;
   newContext(params: BrowserNewContextParams, metadata?: CallMetadata): Promise<BrowserNewContextResult>;
   newContextForReuse(params: BrowserNewContextForReuseParams, metadata?: CallMetadata): Promise<BrowserNewContextForReuseResult>;
+  stopPendingOperations(params: BrowserStopPendingOperationsParams, metadata?: CallMetadata): Promise<BrowserStopPendingOperationsResult>;
   newBrowserCDPSession(params?: BrowserNewBrowserCDPSessionParams, metadata?: CallMetadata): Promise<BrowserNewBrowserCDPSessionResult>;
   startTracing(params: BrowserStartTracingParams, metadata?: CallMetadata): Promise<BrowserStartTracingResult>;
   stopTracing(params?: BrowserStopTracingParams, metadata?: CallMetadata): Promise<BrowserStopTracingResult>;
@@ -1341,6 +1340,13 @@ export type BrowserNewContextForReuseOptions = {
 export type BrowserNewContextForReuseResult = {
   context: BrowserContextChannel,
 };
+export type BrowserStopPendingOperationsParams = {
+  reason: string,
+};
+export type BrowserStopPendingOperationsOptions = {
+
+};
+export type BrowserStopPendingOperationsResult = void;
 export type BrowserNewBrowserCDPSessionParams = {};
 export type BrowserNewBrowserCDPSessionOptions = {};
 export type BrowserNewBrowserCDPSessionResult = {
@@ -1445,7 +1451,15 @@ export type BrowserContextBindingCallEvent = {
   binding: BindingCallChannel,
 };
 export type BrowserContextConsoleEvent = {
-  message: ConsoleMessageChannel,
+  page: PageChannel,
+  type: string,
+  text: string,
+  args: JSHandleChannel[],
+  location: {
+    url: string,
+    lineNumber: number,
+    columnNumber: number,
+  },
 };
 export type BrowserContextCloseEvent = {};
 export type BrowserContextDialogEvent = {
@@ -3705,27 +3719,6 @@ export interface WebSocketEvents {
   'frameReceived': WebSocketFrameReceivedEvent;
   'socketError': WebSocketSocketErrorEvent;
   'close': WebSocketCloseEvent;
-}
-
-// ----------- ConsoleMessage -----------
-export type ConsoleMessageInitializer = {
-  page: PageChannel,
-  type: string,
-  text: string,
-  args: JSHandleChannel[],
-  location: {
-    url: string,
-    lineNumber: number,
-    columnNumber: number,
-  },
-};
-export interface ConsoleMessageEventTarget {
-}
-export interface ConsoleMessageChannel extends ConsoleMessageEventTarget, Channel {
-  _type_ConsoleMessage: boolean;
-}
-
-export interface ConsoleMessageEvents {
 }
 
 // ----------- BindingCall -----------

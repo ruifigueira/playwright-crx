@@ -13,13 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { test, expect } from './npmTest';
 
-test('should skip download', async ({ exec }) => {
-  const installOutput = await exec('npm i --foreground-scripts playwright @playwright/browser-chromium', { env: { PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' } });
-  expect(installOutput).toContain('Skipping browsers download because');
-  if (process.platform === 'linux') {
-    const output = await exec('node inspector-custom-executable.js', { env: { PWDEBUG: '1' } });
-    expect(output).toContain('SUCCESS');
+import { test, expect } from './playwright-test-fixtures';
+
+const reporter = `
+class Reporter {
+  async onEnd() {
+    return { status: 'passed' };
   }
+}
+module.exports = Reporter;
+`;
+
+test('should override exit code', async ({ runInlineTest }) => {
+  const result = await runInlineTest({
+    'reporter.ts': reporter,
+    'playwright.config.ts': `module.exports = { reporter: './reporter' };`,
+    'a.test.js': `
+      import { test, expect } from '@playwright/test';
+      test('fail', async ({}) => {
+        expect(1 + 1).toBe(3);
+      });
+    `
+  });
+  expect(result.exitCode).toBe(0);
 });

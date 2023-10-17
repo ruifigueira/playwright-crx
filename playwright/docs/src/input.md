@@ -3,6 +3,8 @@ id: input
 title: "Actions"
 ---
 
+## Introduction
+
 Playwright can interact with HTML Input elements such as text inputs, checkboxes, radio buttons, select options, mouse clicks, type characters, keys and shortcuts as well as upload files and focus elements.
 
 ## Text input
@@ -144,7 +146,7 @@ Selects one or multiple options in the `<select>` element with [`method: Locator
 You can specify option `value`, or `label` to select. Multiple options can be selected.
 
 ```js
-// Single selection matching the value
+// Single selection matching the value or label
 await page.getByLabel('Choose a color').selectOption('blue');
 
 // Single selection matching the label
@@ -155,7 +157,7 @@ await page.getByLabel('Choose multiple colors').selectOption(['red', 'green', 'b
 ```
 
 ```java
-// Single selection matching the value
+// Single selection matching the value or label
 page.getByLabel("Choose a color").selectOption("blue");
 
 // Single selection matching the label
@@ -166,7 +168,7 @@ page.getByLabel("Choose multiple colors").selectOption(new String[] {"red", "gre
 ```
 
 ```python async
-# Single selection matching the value
+# Single selection matching the value or label
 await page.get_by_label('Choose a color').select_option('blue')
 
 # Single selection matching the label
@@ -177,7 +179,7 @@ await page.get_by_label('Choose multiple colors').select_option(['red', 'green',
 ```
 
 ```python sync
-# Single selection matching the value
+# Single selection matching the value or label
 page.get_by_label('Choose a color').select_option('blue')
 
 # Single selection matching the label
@@ -188,7 +190,7 @@ page.get_by_label('Choose multiple colors').select_option(['red', 'green', 'blue
 ```
 
 ```csharp
-// Single selection matching the value
+// Single selection matching the value or label
 await page.GetByLabel("Choose a color").SelectOptionAsync("blue");
 
 // Single selection matching the label
