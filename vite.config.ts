@@ -21,7 +21,7 @@ import requireTransform from 'vite-plugin-require-transform';
 // we exclude some files with require, otherwise we can get out-of-order dependencies
 const requireTransformFiles = [
   'playwright/packages/playwright-core/bundles/utils/src/utilsBundleImpl.ts',
-  'playwright/packages/playwright-core/src/server/dispatchers/playwrightDispatcher.ts',
+  'playwright/packages/playwright-core/src/server/dispatchers/localUtilsDispatcher.ts',
   'playwright/packages/playwright-core/src/server/recorder/csharp.ts',
   'playwright/packages/playwright-core/src/server/recorder/java.ts',
   'playwright/packages/playwright-core/src/server/recorder/javascript.ts',
