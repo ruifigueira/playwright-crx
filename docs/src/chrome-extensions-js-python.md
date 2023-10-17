@@ -3,6 +3,8 @@ id: chrome-extensions
 title: "Chrome extensions"
 ---
 
+## Introduction
+
 :::note
 Extensions only work in Chrome / Chromium launched with a persistent context.
 :::
@@ -33,13 +35,13 @@ const { chromium } = require('playwright');
 
 ```python async
 import asyncio
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, Playwright
 
 path_to_extension = "./my-extension"
 user_data_dir = "/tmp/test-user-data-dir"
 
 
-async def run(playwright):
+async def run(playwright: Playwright):
     context = await playwright.chromium.launch_persistent_context(
         user_data_dir,
         headless=False,
@@ -67,13 +69,13 @@ asyncio.run(main())
 ```
 
 ```python sync
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, Playwright
 
 path_to_extension = "./my-extension"
 user_data_dir = "/tmp/test-user-data-dir"
 
 
-def run(playwright):
+def run(playwright: Playwright):
     context = playwright.chromium.launch_persistent_context(
         user_data_dir,
         headless=False,

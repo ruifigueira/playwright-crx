@@ -20,6 +20,7 @@ import { Frame } from './frame';
 import * as network from './network';
 import type * as channels from '@protocol/channels';
 import fs from 'fs';
+import path from 'path';
 import { ChannelOwner } from './channelOwner';
 import { evaluationScript } from './clientHelper';
 import { Browser } from './browser';
@@ -95,8 +96,8 @@ export class BrowserContext extends ChannelOwner<channels.BrowserContextChannel>
       this._serviceWorkers.add(serviceWorker);
       this.emit(Events.BrowserContext.ServiceWorker, serviceWorker);
     });
-    this._channel.on('console', ({ message }) => {
-      const consoleMessage = ConsoleMessage.from(message);
+    this._channel.on('console', event => {
+      const consoleMessage = new ConsoleMessage(event);
       this.emit(Events.BrowserContext.Console, consoleMessage);
       const page = consoleMessage.page();
       if (page)
@@ -469,6 +470,8 @@ export async function prepareBrowserContextParams(options: BrowserContextOptions
       size: options.videoSize
     };
   }
+  if (contextParams.recordVideo && contextParams.recordVideo.dir)
+    contextParams.recordVideo.dir = path.resolve(process.cwd(), contextParams.recordVideo.dir);
   return contextParams;
 }
 

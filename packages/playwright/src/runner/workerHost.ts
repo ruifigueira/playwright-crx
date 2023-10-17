@@ -17,6 +17,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { TestGroup } from './testGroups';
+import { stdioChunkToParams } from '../common/ipc';
 import type { RunPayload, SerializedConfig, WorkerInitParams } from '../common/ipc';
 import { ProcessHost } from './processHost';
 import { artifactsFolderName } from '../isomorphic/folders';
@@ -28,8 +29,8 @@ export class WorkerHost extends ProcessHost {
   readonly parallelIndex: number;
   readonly workerIndex: number;
   private _hash: string;
-  currentTestId: string | null = null;
   private _params: WorkerInitParams;
+  private _didFail = false;
 
   constructor(testGroup: TestGroup, parallelIndex: number, config: SerializedConfig, extraEnv: Record<string, string | undefined>, outputDir: string) {
     const workerIndex = lastWorkerIndex++;
@@ -54,12 +55,20 @@ export class WorkerHost extends ProcessHost {
 
   async start() {
     await fs.promises.mkdir(this._params.artifactsDir, { recursive: true });
-    await this.startRunner(this._params, false);
+    return await this.startRunner(this._params, {
+      onStdOut: chunk => this.emit('stdOut', stdioChunkToParams(chunk)),
+      onStdErr: chunk => this.emit('stdErr', stdioChunkToParams(chunk)),
+    });
+  }
+
+  override async onExit() {
+    await removeFolders([this._params.artifactsDir]);
   }
 
   override async stop(didFail?: boolean) {
-    await super.stop(didFail);
-    await removeFolders([this._params.artifactsDir]);
+    if (didFail)
+      this._didFail = true;
+    await super.stop();
   }
 
   runTestGroup(runPayload: RunPayload) {
@@ -68,5 +77,9 @@ export class WorkerHost extends ProcessHost {
 
   hash() {
     return this._hash;
+  }
+
+  didFail() {
+    return this._didFail;
   }
 }

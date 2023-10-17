@@ -33,8 +33,8 @@ import { WKPage } from './wkPage';
 import { kBrowserClosedError } from '../../common/errors';
 import type { SdkObject } from '../instrumentation';
 
-const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
-const BROWSER_VERSION = '17.0';
+const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15';
+const BROWSER_VERSION = '17.4';
 
 export class WKBrowser extends Browser {
   private readonly _connection: WKConnection;
@@ -78,7 +78,8 @@ export class WKBrowser extends Browser {
 
   _onDisconnect() {
     for (const wkPage of this._wkPages.values())
-      wkPage.dispose(true);
+      wkPage.didClose();
+    this._wkPages.clear();
     for (const video of this._idToVideo.values())
       video.artifact.reportFinished(kBrowserClosedError);
     this._idToVideo.clear();
@@ -121,7 +122,7 @@ export class WKBrowser extends Browser {
     // here by simulating cancelled provisional load which matches downloads from network.
     //
     // TODO: this is racy, because download might be unrelated any navigation, and we will
-    // abort navgitation that is still running. We should be able to fix this by
+    // abort navigation that is still running. We should be able to fix this by
     // instrumenting policy decision start/proceed/cancel.
     page._page._frameManager.frameAbortedNavigation(payload.frameId, 'Download is starting');
     let originPage = page._initializedPage;
@@ -178,7 +179,6 @@ export class WKBrowser extends Browser {
     if (!wkPage)
       return;
     wkPage.didClose();
-    wkPage.dispose(false);
     this._wkPages.delete(pageProxyId);
   }
 

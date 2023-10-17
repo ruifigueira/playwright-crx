@@ -155,7 +155,7 @@ function expectRedFrames(videoFile: string, size: { width: number, height: numbe
 
 it.describe('screencast', () => {
   it.slow();
-  it.skip(({ mode }) => mode !== 'default', 'video.path() is not avaialble in remote mode');
+  it.skip(({ mode }) => mode !== 'default', 'video.path() is not available in remote mode');
 
   it('videoSize should require videosPath', async ({ browser }) => {
     const error = await browser.newContext({ videoSize: { width: 100, height: 100 } }).catch(e => e);
@@ -310,6 +310,23 @@ it.describe('screencast', () => {
     expect(fs.existsSync(path)).toBeTruthy();
   });
 
+  it('should work with relative path for recordVideo.dir', async ({ browser }, testInfo) => {
+    it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/27086' });
+    const videosPath = path.relative(process.cwd(), testInfo.outputPath(''));
+    const size = { width: 320, height: 240 };
+    const context = await browser.newContext({
+      recordVideo: {
+        dir: videosPath,
+        size
+      },
+      viewport: size,
+    });
+    const page = await context.newPage();
+    const videoPath = await page.video()!.path();
+    await context.close();
+    expect(fs.existsSync(videoPath)).toBeTruthy();
+  });
+
   it('should expose video path blank popup', async ({ browser }, testInfo) => {
     const videosPath = testInfo.outputPath('');
     const size = { width: 320, height: 240 };
@@ -427,7 +444,8 @@ it.describe('screencast', () => {
   });
 
   it('should scale frames down to the requested size ', async ({ browser, browserName, server, headless, trace }, testInfo) => {
-    it.fixme(!headless, 'Fails on headed');
+    const isChromiumHeadlessNew = browserName === 'chromium' && !!headless && !!process.env.PLAYWRIGHT_CHROMIUM_USE_HEADLESS_NEW;
+    it.fixme(!headless || isChromiumHeadlessNew, 'Fails on headed');
 
     const context = await browser.newContext({
       recordVideo: {
