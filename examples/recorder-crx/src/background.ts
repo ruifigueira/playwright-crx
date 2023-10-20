@@ -100,3 +100,5 @@ chrome.contextMenus.onClicked.addListener(async (_, tab) => {
   if (tab) await attach(tab);
 });
 
+// for testing
+Object.assign(self, { attach });
