@@ -1,9 +1,25 @@
-import type { Page, CrxApplication } from 'playwright-crx';
+/**
+ * Copyright (c) Rui Figueira.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import type { Worker } from '@playwright/test';
 import { test as base, chromium, type BrowserContext } from '@playwright/test';
-import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import path from 'path';
+import type { CrxApplication, Page } from 'playwright-crx';
 import { rimrafSync } from 'rimraf';
 
 type Server = {
