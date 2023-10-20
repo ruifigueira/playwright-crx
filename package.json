@@ -22,7 +22,7 @@
     "examples:build:recorder": "npm run build --prefix ./examples/recorder-crx",
     "examples:build": "npm run examples:build:todomvc && npm run examples:build:recorder",
     "examples:clean": "rimraf ./examples/recorder-crx/dist && rimraf ./examples/todomvc-crx/dist",
-    "build:crx": "npm run pw:generate-injected && vite build",
+    "build:crx": "npm run pw:generate-injected && node ./utils/generate_test_types.js && vite build",
     "build": "npm run pw:ci:bundles && npm run build:crx && npm run examples:build",
     "clean": "npm run pw:clean && npm run examples:clean && rimraf ./lib"
   },
@@ -33,8 +33,14 @@
     ".": {
       "types": "./index.d.ts",
       "import": "./lib/index.mjs",
-      "require": "./lib/index.umd.js",
-      "default": "./lib/index.umd.js"
+      "require": "./lib/index.js",
+      "default": "./lib/index.js"
+    },
+    "./test": {
+      "types": "./test.d.ts",
+      "import": "./lib/test.mjs",
+      "require": "./lib/test.js",
+      "default": "./lib/test.js"
     },
     "./package.json": "./package.json"
   },

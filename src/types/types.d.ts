@@ -14,11 +14,8 @@
  * limitations under the License.
  */
 
-import type { BrowserContext } from "playwright-core/lib/client/browserContext";
-import type { Page } from "playwright-core/lib/client/page";
-
-export type { BrowserContext } from "playwright-core/lib/client/browserContext";
-export type { Page } from "playwright-core/lib/client/page";
+import { Page, BrowserContext } from '../../playwright/packages/playwright-core/types/types';
+export * from '../../playwright/packages/playwright-core/types/types';
 
 export interface Crx {
   /**

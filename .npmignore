@@ -6,6 +6,7 @@
 !lib/**/*.mjs
 # Include generated types and entrypoint.
 !index.d.ts
+!test.d.ts
 !src/types/types.d.ts
 !playwright/packages/playwright-core/types/types.d.ts
 !playwright/packages/playwright/types/test.d.ts

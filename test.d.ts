@@ -14,7 +14,5 @@
  * limitations under the License.
  */
 
-import type { Crx } from './src/types/types';
-export * from './src/types/types';
-
-export const crx: Crx;
+export * from './index';
+export { expect, Expect } from './src/types/test';

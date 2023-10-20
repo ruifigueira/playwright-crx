@@ -107,9 +107,10 @@ export default defineConfig({
     // skip code obfuscation
     minify: false,
     lib: {
-      entry: path.resolve(__dirname, 'src/index.ts'),
-      name: 'playwright-crx',
-      fileName: 'index',
+      entry: {
+        index: path.resolve(__dirname, 'src/index.ts'),
+        test: path.resolve(__dirname, 'src/test.ts'),
+      },
     },
     rollupOptions: {
       output: {

@@ -19,12 +19,10 @@ import './shims/global';
 import './protocol/validator';
 
 import { DispatcherConnection, RootDispatcher } from 'playwright-core/lib/server';
-import { setUnderTest } from 'playwright-core/lib/utils';
 import { CrxConnection } from './client/crxConnection';
 import type { CrxPlaywright as CrxPlaywrightAPI } from './client/crxPlaywright';
 import { CrxPlaywright } from './server/crxPlaywright';
 import { CrxPlaywrightDispatcher } from './server/dispatchers/crxPlaywrightDispatcher';
-export { expect, test } from '@playwright/test/lib/index';
 
 const playwright = new CrxPlaywright();
 
@@ -48,6 +46,5 @@ clientConnection.onmessage = message => setImmediate(() => dispatcherConnection.
 clientConnection.toImpl = (x: any) => x ? dispatcherConnection._dispatchers.get(x._guid)!._object : dispatcherConnection._dispatchers.get('');
 (playwrightAPI as any)._toImpl = clientConnection.toImpl;
 
-export const _setUnderTest = setUnderTest;
 export const { _crx: crx } = playwrightAPI;
 export default playwrightAPI;

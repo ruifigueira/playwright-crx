@@ -1,4 +1,4 @@
-import { Page } from "playwright-crx";
+import { Page, expect } from "playwright-crx/test";
 
 export async function createTodos(page: Page) {
 
@@ -25,4 +25,7 @@ export async function createTodos(page: Page) {
     await newTodo.fill(item);
     await newTodo.press('Enter');
   }
+
+  // assertions work too
+  await expect(page.getByTestId('todo-title')).toHaveText(TODO_ITEMS);
 }
