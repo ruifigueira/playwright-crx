@@ -105,8 +105,8 @@ export class CrxTransport implements ConnectionTransport {
     let targetId = this._tabToTarget.get(tabId);
 
     if (!targetId) {
-      this._progress?.log(`<chrome debugger disconnecting>`);
       await chrome.debugger.attach({ tabId }, '1.3');
+      this._progress?.log(`<chrome debugger attached to tab ${tabId}>`);
       // we don't create a new browser context, just return the current one
       const { targetInfo } = await this._send('Target.getTargetInfo', { tabId });
       targetId = targetInfo.targetId;
@@ -132,6 +132,7 @@ export class CrxTransport implements ConnectionTransport {
       this._emitDetachedToTarget(tabId, targetId);
     }
     await chrome.debugger.detach({ tabId }).catch(() => {});
+    this._progress?.log(`<chrome debugger detached from tab ${tabId}>`);
   }
 
   close() {
