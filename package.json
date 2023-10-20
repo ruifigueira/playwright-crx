@@ -22,10 +22,15 @@
     "build:examples:recorder": "npm run build --prefix ./examples/recorder-crx",
     "build:examples": "npm run build:examples:todomvc && npm run build:examples:recorder",
     "clean:examples": "rimraf ./examples/recorder-crx/dist && rimraf ./examples/todomvc-crx/dist",
+    "ci:tests": "npm ci --prefix ./tests",
+    "build:tests": "npm run ci:tests && npm run build --prefix ./tests",
+    "clean:tests": "rimraf ./tests/node_modules && rimraf ./tests/playwright-report && rimraf ./tests/test-results",
     "generate:crx": "node ./utils/generate_test_types.js",
     "build:crx": "npm run generate:pw && npm run generate:crx && vite build",
-    "build": "npm run ci:pw:bundles && npm run build:crx && npm run build:examples",
-    "clean": "npm run clean:pw && npm run clean:examples && rimraf ./lib"
+    "clean:crx": "rimraf ./lib",
+    "build": "npm run ci:pw:bundles && npm run build:crx && npm run build:examples && npm run build:tests",
+    "clean": "npm run clean:pw && npm run clean:examples && npm run clean:tests && npm run clean:crx",
+    "test": "cd ./tests && npx playwright test"
   },
   "workspaces": [
     "."

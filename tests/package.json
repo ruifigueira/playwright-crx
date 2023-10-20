@@ -1,0 +1,14 @@
+{
+  "name": "playwright-crx-tests",
+  "version": "0.0.4-next",
+  "keywords": [],
+  "author": "",
+  "scripts": {
+    "build": "tsc -p ./test-extension/tsconfig.json && vite build ./test-extension",
+    "serve": "http-server ../playwright/tests/assets -p 3000 -s"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.39.0",
+    "http-server": "^14.1.1"
+  }
+}
