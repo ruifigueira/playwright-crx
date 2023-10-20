@@ -22,9 +22,8 @@
     "build:examples:recorder": "npm run build --prefix ./examples/recorder-crx",
     "build:examples": "npm run build:examples:todomvc && npm run build:examples:recorder",
     "clean:examples": "rimraf ./examples/recorder-crx/dist && rimraf ./examples/todomvc-crx/dist",
-    "ci:tests": "npm ci --prefix ./tests",
-    "build:tests": "npm run ci:tests && npm run build --prefix ./tests",
-    "clean:tests": "rimraf ./tests/node_modules && rimraf ./tests/playwright-report && rimraf ./tests/test-results",
+    "build:tests": "npm run build --prefix ./tests",
+    "clean:tests": "rimraf ./tests/playwright-report && rimraf ./tests/test-results",
     "generate:crx": "node ./utils/generate_test_types.js",
     "build:crx": "npm run generate:pw && npm run generate:crx && vite build",
     "clean:crx": "rimraf ./lib",
@@ -33,7 +32,9 @@
     "test": "cd ./tests && npx playwright install --with-deps chromium && npx playwright test"
   },
   "workspaces": [
-    "."
+    "examples/recorder-crx",
+    "examples/todomvc-crx",
+    "tests"
   ],
   "exports": {
     ".": {
