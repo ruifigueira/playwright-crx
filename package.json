@@ -30,7 +30,7 @@
     "clean:crx": "rimraf ./lib",
     "build": "npm run ci:pw:bundles && npm run build:crx && npm run build:examples && npm run build:tests",
     "clean": "npm run clean:pw && npm run clean:examples && npm run clean:tests && npm run clean:crx",
-    "test": "cd ./tests && npx playwright test"
+    "test": "cd ./tests && npx playwright install --with-deps chromium && npx playwright test"
   },
   "workspaces": [
     "."

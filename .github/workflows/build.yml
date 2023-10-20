@@ -6,7 +6,6 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js
@@ -18,3 +17,9 @@ jobs:
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
       - run: npm run test
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: playwright-report
+          path: tests/playwright-report/
+          retention-days: 5
