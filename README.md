@@ -1,4 +1,4 @@
-# Playwrigh CRX
+# Playwright CRX
 
 This package contains the [Chrome Extensions](https://developer.chrome.com/docs/extensions/) flavor of the [Playwright](http://github.com/microsoft/playwright) library.
 

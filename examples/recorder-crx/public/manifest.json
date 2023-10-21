@@ -1,6 +1,6 @@
 {
   "name": "Playwright CRX",
-  "version": "0.0.0.2",
+  "version": "0.0.4",
   "manifest_version": 3,
   "icons": {
     "16": "icon-16x16.png",
