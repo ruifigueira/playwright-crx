@@ -1,0 +1,35 @@
+name: Publish Playwright CRX
+
+on:
+  release:
+    types: [published]
+
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci
+      - run: npm run build
+        env:
+          NODE_OPTIONS: "--max_old_space_size=4096"
+      - run: cd examples/recorder-crx/dist && zip -r recorder-crx.zip .
+      - name: Publish to NPM
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Upload to Chrome Web Store
+        uses: mnao305/chrome-extension-upload@v4.0.1
+        with:
+          file-path: examples/recorder-crx/dist/recorder-crx.zip
+          extension-id: jambeljnbnfbkcpnoiaedcabbgmnnlcd
+          client-id: ${{ secrets.GOOGLE_API_CLIENT }}
+          client-secret: ${{ secrets.GOOGLE_API_SECRET }}
+          refresh-token: ${{ secrets.GOOGLE_API_REFRESH_TOKEN }}
+
