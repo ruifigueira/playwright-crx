@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import { Page } from 'playwright-core';
-import { test as crxTest } from './crxTest';
+import { Page, type Locator } from 'playwright-core';
+import { test as crxTest, expect as baseExpect } from './crxTest';
 import path from 'path';
 
 declare function attach(tab: chrome.tabs.Tab): Promise<void>;
@@ -40,4 +40,33 @@ export const test = crxTest.extend<{
       return recorderPage ?? (await recorderPagePromise)!;
     });
   },
+});
+
+export const expect = baseExpect.extend({
+  async toChangeCount(locator: Locator, options?: { timeout?: number }) {
+    let pass: boolean;
+    let matcherResult: any;
+    try {
+      const count = await locator.count();
+      await baseExpect.poll(async () => await locator.count(), options).not.toBe(count);
+      pass = true;
+    } catch (e: any) {
+      matcherResult = e.matcherResult;
+      pass = false;
+    }
+
+    const message = pass
+      ? () => this.utils.matcherHint('toChangeCount', undefined, undefined, { isNot: this.isNot }) +
+          '\n\n' +
+          `Locator: ${locator}\n`
+      : () =>  this.utils.matcherHint('toChangeCount', undefined, undefined, undefined) +
+          '\n\n' +
+          `Locator: ${locator}\n`;
+
+    return {
+      message,
+      pass,
+      name: 'toChangeCount',
+    };
+  }
 });

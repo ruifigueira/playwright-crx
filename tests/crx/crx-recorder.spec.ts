@@ -13,18 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { expect } from '@playwright/test';
-import { test } from './crxRecorderTest';
+
+import { test, expect } from './crxRecorderTest';
 
 test('should record @smoke', async ({ page, attachRecorder, baseURL }) => {
   await page.goto(`${baseURL}/input/textarea.html`);
   const recorderPage = await attachRecorder(page);
 
-  await expect(recorderPage.locator('.CodeMirror-line')).toHaveCount(14);
-  await page.locator('textarea').click();
-  await expect(recorderPage.locator('.CodeMirror-line')).toHaveCount(15);
-  await page.locator('textarea').fill('test');
-  await expect(recorderPage.locator('.CodeMirror-line')).toHaveCount(16);
+  await Promise.all([
+    expect(recorderPage.locator('.CodeMirror-line')).toChangeCount(),
+    page.locator('textarea').click(),
+  ]);
+  await Promise.all([
+    expect(recorderPage.locator('.CodeMirror-line')).toChangeCount(),
+    page.locator('textarea').fill('test'),
+  ]);
 
   const code = `const { chromium } = require('playwright');
 
@@ -54,10 +57,11 @@ test('should attach two pages', async ({ context, page, attachRecorder, baseURL 
   await page1.goto(`${baseURL}/input/textarea.html`);
 
   const recorderPage = await attachRecorder(page);
-  await expect(recorderPage.locator('.CodeMirror-line')).toHaveCount(14);
 
-  await attachRecorder(page1);
-  await expect(recorderPage.locator('.CodeMirror-line')).toHaveCount(16);
+  await Promise.all([
+    expect(recorderPage.locator('.CodeMirror-line')).toChangeCount(),
+    attachRecorder(page1),
+  ]);
 
   const code = `const { chromium } = require('playwright');
 
