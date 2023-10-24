@@ -213,7 +213,7 @@ export class Recorder implements InstrumentationListener {
         this.onBeforeCall(sdkObject, metadata);
     }
     this._recorderApp?.setPaused(this._debugger.isPaused());
-    this._updateUserSources();
+    this._updateSources();
     this.updateCallLog([...this._currentCallsMetadata.keys()]);
   }
 
@@ -257,7 +257,7 @@ export class Recorder implements InstrumentationListener {
     if (this._omitCallTracking || this._mode === 'recording')
       return;
     this._currentCallsMetadata.set(metadata, sdkObject);
-    this._updateUserSources();
+    this._updateSources();
     this.updateCallLog([metadata]);
     if (isScreenshotCommand(metadata)) {
       this.hideHighlightedSelector();
@@ -272,13 +272,13 @@ export class Recorder implements InstrumentationListener {
       return;
     if (!metadata.error)
       this._currentCallsMetadata.delete(metadata);
-    this._updateUserSources();
+    this._updateSources();
     this.updateCallLog([metadata]);
   }
 
-  private _updateUserSources() {
+  private _updateSources() {
     // Remove old decorations.
-    for (const source of this._userSources.values()) {
+    for (const source of [...this._recorderSources, ...this._userSources.values()]) {
       source.highlight = [];
       source.revealLine = undefined;
     }
@@ -289,7 +289,7 @@ export class Recorder implements InstrumentationListener {
       if (!metadata.location)
         continue;
       const { file, line } = metadata.location;
-      let source = this._userSources.get(file);
+      let source = this._userSources.get(file) ?? this._recorderSources.find(rs => rs.id === file);
       if (!source) {
         source = { isRecorded: false, label: file, id: file, text: this._readSource(file), highlight: [], language: languageForFile(file) };
         this._userSources.set(file, source);
