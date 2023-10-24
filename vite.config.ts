@@ -15,6 +15,7 @@
  */
 
 import path from 'path';
+import sourcemaps from 'rollup-plugin-sourcemaps';
 import { defineConfig } from 'vite';
 import requireTransform from 'vite-plugin-require-transform';
 
@@ -112,19 +113,17 @@ export default defineConfig({
         test: path.resolve(__dirname, 'src/test.ts'),
       },
     },
+    sourcemap: true,
     rollupOptions: {
-      output: {
-        exports: 'named',
-      },
+      // @ts-ignore
+      plugins: [sourcemaps()],
     },
     commonjsOptions: {
       include: [
         path.resolve(__dirname, './playwright/packages/playwright-core/src/**/*.js'),
         path.resolve(__dirname, './playwright/packages/playwright-core/bundles/utils/src/third_party/**/*.js'),
-        path.resolve(__dirname, './playwright/packages/playwright-core/bundles/utils/src/utilsBundleImpl.ts'),
         /node_modules/,
       ],
     }
   },
-  optimizeDeps: { include: ['./utilsBundleImpl'] },
 });
