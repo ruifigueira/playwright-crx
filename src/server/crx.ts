@@ -91,7 +91,7 @@ export class CrxApplication extends SdkObject {
     }, null);
     Recorder.setAppFactory(async recorder => {
       if (!this._recorderApp) {
-        this._recorderApp = new CrxRecorderApp(recorder);
+        this._recorderApp = new CrxRecorderApp(recorder, this._context().debugger());
         this._recorderApp.on('show', () => this.emit(CrxApplication.Events.RecorderShow));
         this._recorderApp.on('hide', () => this.emit(CrxApplication.Events.RecorderHide));
         this._recorderApp.on('event', ({ event, params }) => {

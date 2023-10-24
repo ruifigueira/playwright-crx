@@ -19,6 +19,9 @@ import type { Recorder } from 'playwright-core/lib/server/recorder';
 import type { IRecorderApp } from 'playwright-core/lib/server/recorder/recorderApp';
 import { ManualPromise } from 'playwright-core/lib/utils';
 import type * as channels from '../../protocol/channels';
+import Player from './crxPlayer';
+import { BrowserContext } from 'playwright-core/lib/server/browserContext';
+import { Debugger } from 'playwright-core/lib/server/debugger';
 
 type Port = chrome.runtime.Port;
 type TabChangeInfo = chrome.tabs.TabChangeInfo;
@@ -37,10 +40,12 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   private _recorder: Recorder;
   private _window?: ChromeWindow;
   private _port?: Port;
+  private _player: Player;
 
-  constructor(recorder: Recorder) {
+  constructor(recorder: Recorder, _debugger: Debugger) {
     super();
     this._recorder = recorder;
+    this._player = new Player(this, _debugger);
     chrome.windows.onRemoved.addListener(window => {
       if (this._window?.id === window)
         this.hide();
@@ -99,6 +104,13 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   }
 
   async setMode(mode: 'none' | 'recording' | 'inspecting') {
+    if (mode === 'none') {
+      const [page] = ((this._recorder as any)._context as BrowserContext).pages();
+      this._player.pageCreated('page', page);
+      this._player.pause().catch(() => {});
+    } else {
+      this._player.stop().catch(() => {});
+    }
     await this._sendMessage({ type: 'recorder', method: 'setMode', mode });
   }
 
@@ -117,6 +129,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   }
 
   async setSources(sources: Source[]) {
+    this._player.setSources(sources);
     await this._sendMessage({ type: 'recorder', method: 'setSources', sources });
   }
 
