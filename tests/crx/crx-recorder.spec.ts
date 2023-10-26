@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-import { test, expect } from './crxRecorderTest';
+import { test, expect, codeChanged } from './crxRecorderTest';
 
 test('should record @smoke', async ({ page, attachRecorder, baseURL }) => {
   await page.goto(`${baseURL}/input/textarea.html`);
   const recorderPage = await attachRecorder(page);
 
   await Promise.all([
-    expect(recorderPage.locator('.CodeMirror-line')).toChangeCount(),
+    expect.poll(codeChanged(recorderPage)).toBeTruthy(),
     page.locator('textarea').click(),
   ]);
   await Promise.all([
-    expect(recorderPage.locator('.CodeMirror-line')).toChangeCount(),
+    expect.poll(codeChanged(recorderPage)).toBeTruthy(),
     page.locator('textarea').fill('test'),
   ]);
 
@@ -59,7 +59,7 @@ test('should attach two pages', async ({ context, page, attachRecorder, baseURL 
   const recorderPage = await attachRecorder(page);
 
   await Promise.all([
-    expect(recorderPage.locator('.CodeMirror-line')).toChangeCount(),
+    expect.poll(codeChanged(recorderPage)).toBeTruthy(),
     attachRecorder(page1),
   ]);
 

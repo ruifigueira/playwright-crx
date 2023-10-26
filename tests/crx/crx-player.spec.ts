@@ -13,29 +13,102 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { test, expect } from './crxRecorderTest';
+import { test, expect, dumpLogHeaders, codeChanged } from './crxRecorderTest';
 
-test('should play @smoke', async ({ page, attachRecorder, baseURL }) => {
+test.beforeEach(async ({ page, recorderPage, baseURL }) => {
   await page.goto(`${baseURL}/input/textarea.html`);
-  const recorderPage = await attachRecorder(page);
-
-  recorderPage.on('console', (msg) => {
-    console.log(msg);
-  });
 
   await Promise.all([
-    expect(recorderPage.locator('.CodeMirror-line')).toChangeCount(),
+    expect.poll(codeChanged(recorderPage)).toBeTruthy(),
     page.locator('textarea').click(),
   ]);
 
   await Promise.all([
-    expect(recorderPage.locator('.CodeMirror-line')).toChangeCount(),
+    expect.poll(codeChanged(recorderPage)).toBeTruthy(),
     page.locator('textarea').fill('test'),
   ]);
+});
 
-  await recorderPage.bringToFront();
+test('should allow resume and step @smoke', async ({ recorderPage }) => {
   await recorderPage.getByTitle('Record').click();
 
   await expect(recorderPage.getByTitle('Record')).not.toHaveClass('toggled');
   await expect(recorderPage.getByTitle('Resume (F8)')).not.toBeDisabled();
+  await expect(recorderPage.getByTitle('Pause (F8)')).toBeDisabled();
+  await expect(recorderPage.getByTitle('Step Over (F10)')).not.toBeDisabled();
 });
+
+test('should resume', async ({ recorderPage, baseURL }) => {
+  await recorderPage.getByTitle('Record').click();
+  await recorderPage.getByTitle('Resume (F8)').click();
+
+  await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
+    `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► frame.click( page.locator('textarea') ) ✅ — XXms`,
+    `► frame.fill( page.locator('textarea') ) ✅ — XXms`,
+  ]);
+});
+
+test('should step', async ({ recorderPage, baseURL }) => {
+  await recorderPage.getByTitle('Record').click();
+
+  await recorderPage.getByTitle('Step Over (F10)').click();
+  await expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toHaveText(`  await page.locator('textarea').click();`);
+  await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
+    `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `▼ frame.click( page.locator('textarea') ) ⏸️`,
+  ]);
+
+  await recorderPage.getByTitle('Step Over (F10)').click();
+  await expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toHaveText(`  await page.locator('textarea').fill('test');`);
+  await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
+    `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► frame.click( page.locator('textarea') ) ✅ — XXms`,
+    `▼ frame.fill( page.locator('textarea') ) ⏸️`,
+  ]);
+
+  await recorderPage.getByTitle('Step Over (F10)').click();
+  await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
+    `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► frame.click( page.locator('textarea') ) ✅ — XXms`,
+    `► frame.fill( page.locator('textarea') ) ✅ — XXms`,
+  ]);
+});
+
+test('should step then resume', async ({ recorderPage, baseURL }) => {
+  await recorderPage.getByTitle('Record').click();
+
+  await recorderPage.getByTitle('Step Over (F10)').click();
+  await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
+    `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `▼ frame.click( page.locator('textarea') ) ⏸️`,
+  ]);
+
+  await recorderPage.getByTitle('Resume (F8)').click();
+  await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
+    `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► frame.click( page.locator('textarea') ) ✅ — XXms`,
+    `► frame.fill( page.locator('textarea') ) ✅ — XXms`,
+  ]);
+});
+
+test('should resume then step', async ({ recorderPage, baseURL }) => {
+  await recorderPage.getByTitle('Record').click();
+
+  await recorderPage.getByTitle('Resume (F8)').click();
+  await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
+    `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► frame.click( page.locator('textarea') ) ✅ — XXms`,
+    `► frame.fill( page.locator('textarea') ) ✅ — XXms`,
+  ]);
+
+  await recorderPage.getByTitle('Step Over (F10)').click();
+  await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
+    `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► frame.click( page.locator('textarea') ) ✅ — XXms`,
+    `► frame.fill( page.locator('textarea') ) ✅ — XXms`,
+    `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `▼ frame.click( page.locator('textarea') ) ⏸️`,
+  ]);
+});
+
