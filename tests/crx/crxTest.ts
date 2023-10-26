@@ -60,11 +60,10 @@ export const test = base.extend<{
     rimrafSync(dirs);
   },
 
-  context: async ({ extensionPath, headless, createUserDataDir }, use) => {
+  context: async ({ extensionPath, createUserDataDir }, use) => {
     const context = await chromium.launchPersistentContext(createUserDataDir(), {
       headless: false,
       args: [
-        ...(headless ? [`--headless=new`] : []),
         `--disable-extensions-except=${extensionPath}`,
         `--load-extension=${extensionPath}`,
       ],
