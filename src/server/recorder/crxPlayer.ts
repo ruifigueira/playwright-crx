@@ -16,12 +16,12 @@
 
 import type { CallMetadata } from '@protocol/callMetadata';
 import type { Source } from '@recorder/recorderTypes';
-import { Debugger } from 'playwright-core/lib/server/debugger';
 import type { Page } from 'playwright-core/lib/server/page';
 import type * as actions from 'playwright-core/lib/server/recorder/recorderActions';
 import { toClickOptions, toModifiers } from 'playwright-core/lib/server/recorder/utils';
 import { ManualPromise, createGuid, monotonicTime } from 'playwright-core/lib/utils';
 import { CrxRecorderApp } from './crxRecorderApp';
+import { BrowserContext } from 'playwright-core/lib/server/browserContext';
 
 export class Stopped extends Error {
 }
@@ -43,17 +43,26 @@ export default class Player {
   private _pages = new Map<string, Page>();
   private _pause?: Promise<void>;
   private _recorderApp: CrxRecorderApp;
-  private _debugger: Debugger;
+  private _context: BrowserContext;
 
-  constructor(recorderApp: CrxRecorderApp, _debugger: Debugger) {
+  constructor(recorderApp: CrxRecorderApp, context: BrowserContext) {
     this._recorderApp = recorderApp;
-    this._debugger = _debugger;
-    this._recorderApp.on('event', ({ event }) => {
+    this._context = context;
+    // events from UI to recorder
+    this._recorderApp.on('event', ({ event, params }) => {
       switch (event) {
         case 'resume':
         case 'step':
           this.play().catch(() => {});
           break;
+        case 'setMode':
+          if (params.mode === 'none') {
+            const [page] = this._context.pages();
+            this._pages.set('page', page);
+            this.pause().catch(() => {});
+          } else {
+            this.stop().catch(() => {});
+          }
       }
     });
   }
