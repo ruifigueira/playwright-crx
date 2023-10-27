@@ -24,6 +24,9 @@ import type { CrxPlaywright as CrxPlaywrightAPI } from './client/crxPlaywright';
 import { CrxPlaywright } from './server/crxPlaywright';
 import { CrxPlaywrightDispatcher } from './server/dispatchers/crxPlaywrightDispatcher';
 
+export { debug as _debug } from 'debug';
+export { setUnderTest as _setUnderTest } from 'playwright-core/lib/utils';
+
 const playwright = new CrxPlaywright();
 
 const clientConnection = new CrxConnection();

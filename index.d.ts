@@ -18,3 +18,9 @@ import type { Crx } from './src/types/types';
 export * from './src/types/types';
 
 export const crx: Crx;
+export function _setUnderTest(): void;
+export const _debug: {
+  enable(namespaces: string): void;
+  enabled(namespaces: string): boolean;
+  disable(): void;
+};

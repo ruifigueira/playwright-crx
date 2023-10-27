@@ -69,6 +69,7 @@ export default defineConfig({
       'chokidar': path.resolve(__dirname, './src/shims/chokidar'),
       'constants': path.resolve(__dirname, './node_modules/constants-browserify'),
       'crypto': path.resolve(__dirname, './node_modules/crypto-browserify'),
+      'debug': path.resolve(__dirname, './node_modules/debug'),
       'dns': path.resolve(__dirname, './src/shims/dns'),
       'events': path.resolve(__dirname, './node_modules/events'),
       'fs': path.resolve(__dirname, './src/shims/fs'),
