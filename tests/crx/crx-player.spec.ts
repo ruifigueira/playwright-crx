@@ -13,20 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { test, expect, dumpLogHeaders, codeChanged } from './crxRecorderTest';
 
-test.beforeEach(async ({ page, recorderPage, baseURL }) => {
+import { dumpLogHeaders, expect, test } from './crxRecorderTest';
+
+test.beforeEach(async ({ page, recordAction, baseURL }) => {
   await page.goto(`${baseURL}/input/textarea.html`);
 
-  await Promise.all([
-    expect.poll(codeChanged(recorderPage)).toBeTruthy(),
-    page.locator('textarea').click(),
-  ]);
-
-  await Promise.all([
-    expect.poll(codeChanged(recorderPage)).toBeTruthy(),
-    page.locator('textarea').fill('test'),
-  ]);
+  await recordAction(() => page.locator('textarea').click());
+  await recordAction(() => page.locator('textarea').fill('test'));
 });
 
 test('should allow resume and step @smoke', async ({ recorderPage }) => {
@@ -112,3 +106,32 @@ test('should resume then step', async ({ recorderPage, baseURL }) => {
   ]);
 });
 
+test('should resume then record then resume', async ({ recorderPage, recordAction, baseURL, page }) => {
+  await recorderPage.getByTitle('Record').click();
+
+  await recorderPage.getByTitle('Resume (F8)').click();
+  await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
+    `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► frame.click( page.locator('textarea') ) ✅ — XXms`,
+    `► frame.fill( page.locator('textarea') ) ✅ — XXms`,
+  ]);
+
+  await recorderPage.getByTitle('Record').click();
+
+  await recordAction(() => page.locator('input').click());
+  await recordAction(() => page.locator('input').fill('another test'));
+
+  await recorderPage.getByTitle('Record').click();
+
+  await recorderPage.getByTitle('Resume (F8)').click();
+  await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
+    `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► frame.click( page.locator('textarea') ) ✅ — XXms`,
+    `► frame.fill( page.locator('textarea') ) ✅ — XXms`,
+    `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► frame.click( page.locator('textarea') ) ✅ — XXms`,
+    `► frame.fill( page.locator('textarea') ) ✅ — XXms`,
+    `► frame.click( page.locator('input') ) ✅ — XXms`,
+    `► frame.fill( page.locator('input') ) ✅ — XXms`,
+  ]);
+});

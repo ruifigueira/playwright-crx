@@ -14,20 +14,14 @@
  * limitations under the License.
  */
 
-import { test, expect, codeChanged } from './crxRecorderTest';
+import { test, expect } from './crxRecorderTest';
 
-test('should record @smoke', async ({ page, attachRecorder, baseURL }) => {
-  await page.goto(`${baseURL}/input/textarea.html`);
+test('should record @smoke', async ({ page, attachRecorder, recordAction, baseURL }) => {
   const recorderPage = await attachRecorder(page);
 
-  await Promise.all([
-    expect.poll(codeChanged(recorderPage)).toBeTruthy(),
-    page.locator('textarea').click(),
-  ]);
-  await Promise.all([
-    expect.poll(codeChanged(recorderPage)).toBeTruthy(),
-    page.locator('textarea').fill('test'),
-  ]);
+  await recordAction(() => page.goto(`${baseURL}/input/textarea.html`));
+  await recordAction(() => page.locator('textarea').click());
+  await recordAction(() => page.locator('textarea').fill('test'));
 
   const code = `const { chromium } = require('playwright');
 
@@ -50,18 +44,14 @@ test('should record @smoke', async ({ page, attachRecorder, baseURL }) => {
 });
 
 
-test('should attach two pages', async ({ context, page, attachRecorder, baseURL }) => {
-  const page1 = await context.newPage();
-
-  await page.goto(`${baseURL}/empty.html`);
-  await page1.goto(`${baseURL}/input/textarea.html`);
+test('should attach two pages', async ({ context, page, attachRecorder, recordAction, baseURL }) => {
 
   const recorderPage = await attachRecorder(page);
+  await recordAction(() => page.goto(`${baseURL}/empty.html`));
 
-  await Promise.all([
-    expect.poll(codeChanged(recorderPage)).toBeTruthy(),
-    attachRecorder(page1),
-  ]);
+  const page1 = await context.newPage();
+  await attachRecorder(page1);
+  await recordAction(() => page1.goto(`${baseURL}/input/textarea.html`));
 
   const code = `const { chromium } = require('playwright');
 
@@ -84,14 +74,14 @@ test('should attach two pages', async ({ context, page, attachRecorder, baseURL 
 });
 
 
-test('should detach pages', async ({ context, page, attachRecorder, baseURL }) => {
-  const page1 = await context.newPage();
-
-  await page.goto(`${baseURL}/empty.html`);
-  await page1.goto(`${baseURL}/input/textarea.html`);
+test('should detach pages', async ({ context, page, attachRecorder, baseURL, recordAction }) => {
 
   const recorderPage = await attachRecorder(page);
+  await recordAction(() => page.goto(`${baseURL}/empty.html`));
+
+  const page1 = await context.newPage();
   await attachRecorder(page1);
+  await recordAction(() => page1.goto(`${baseURL}/input/textarea.html`));
 
   await recorderPage.close();
 
@@ -99,11 +89,12 @@ test('should detach pages', async ({ context, page, attachRecorder, baseURL }) =
   await expect(page1.locator('x-pw-glass')).toBeHidden();
 });
 
-test('should inspect element', async ({ context, page, attachRecorder, baseURL }) => {
-  await page.goto(`${baseURL}/input/textarea.html`);
+test('should inspect element', async ({ page, attachRecorder, baseURL }) => {
 
   const recorderPage = await attachRecorder(page);
-  await recorderPage.getByRole('button', { name: ' Record' }).click();
+  await page.goto(`${baseURL}/input/textarea.html`);
+
+  await recorderPage.getByTitle('Record').click();
   await recorderPage.getByTitle('Pick locator').click();
 
   await page.locator('textarea').click();

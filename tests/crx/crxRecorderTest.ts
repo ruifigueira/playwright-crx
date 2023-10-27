@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-import { Page } from 'playwright-core';
-import { test as crxTest } from './crxTest';
 import path from 'path';
+import { Page } from 'playwright-core';
+import { test as crxTest, expect } from './crxTest';
 
 export { expect } from './crxTest';
 
 declare function attach(tab: chrome.tabs.Tab): Promise<void>;
+declare function _setUnderTest(): void;
 
 export function dumpLogHeaders(recorderPage: Page) {
   return async () => {
@@ -68,48 +69,41 @@ export function dumpLogHeaders(recorderPage: Page) {
   }
 }
 
-export function codeChanged(recorderPage: Page) {
-  let prevCount: number | undefined = undefined;
-  return async () => {
-    const count = await recorderPage.locator('.CodeMirror-line').count();
-    if (prevCount !== undefined) {
-      return prevCount !== count;
-    }
-    prevCount = count;
-    return undefined;
-  }
-}
-
 export const test = crxTest.extend<{
   attachRecorder: (page: Page) => Promise<Page>;
   recorderPage: Page;
-  _openExtensionServiceWorkerDevtools: () => Promise<void>;
+  recordAction: (action: () => Promise<void>) => Promise<void>;
 }>({
   extensionPath: path.join(__dirname, '../../examples/recorder-crx/dist'),
 
-  // we don't have a way to capture service worker logs, so this trick will open
-  // service worker dev tools for debugging porpuses
-  _openExtensionServiceWorkerDevtools: async ({ context, extensionId }, run) => {
-    await run(async () => {
-      const extensionsPage = await context.newPage();
-      await extensionsPage.goto(`chrome://extensions/?id=${extensionId}`);
-      await extensionsPage.locator('#devMode').click();
-      await extensionsPage.getByRole('link', { name: /.*service worker.*/ }).click();
-      await extensionsPage.waitForEvent('close');
-    });
-  },
-
   attachRecorder: async ({ extensionServiceWorker, extensionId, context }, run) => {
     await run(async (page: Page) => {
-      const recorderPage = context.pages().find(p => p.url().startsWith(`chrome-extension://${extensionId}`));
+      let recorderPage = context.pages().find(p => p.url().startsWith(`chrome-extension://${extensionId}`));
       const recorderPagePromise = recorderPage ? undefined : context.waitForEvent('page');
 
       await extensionServiceWorker.evaluate(async (url) => {
+        // ensure we're in test mode
+        _setUnderTest();
         const [tab] = await chrome.tabs.query({ url, active: true, currentWindow: true });
         await attach(tab);
       }, page.url());
 
-      return recorderPage ?? (await recorderPagePromise)!;
+      recorderPage = recorderPage ?? (await recorderPagePromise)!;
+
+      try {
+        await page.locator('x-pw-glass').waitFor({ state: 'attached', timeout: 100 });
+      } catch(e) {
+        if (await recorderPage.getByTitle('Record').evaluate(e => e.classList.contains('toggled'))) {
+          await recorderPage.getByTitle('Record').click();
+          await page.reload();
+          await recorderPage.getByTitle('Record').click();
+        } else {
+          await page.reload();
+        }
+        await page.locator('x-pw-glass').waitFor({ state: 'attached', timeout: 100 });
+      }
+
+      return recorderPage;
     });
   },
 
@@ -117,5 +111,13 @@ export const test = crxTest.extend<{
     const recorderPage = await attachRecorder(page);
     await run(recorderPage);
     await recorderPage.close();
+  },
+
+  recordAction: async ({ recorderPage }, run) => {
+    await run(async (action) => {
+      const count = await recorderPage.locator('.CodeMirror-line').count();
+      await action();
+      await expect(recorderPage.locator('.CodeMirror-line')).not.toHaveCount(count);
+    });
   },
 });

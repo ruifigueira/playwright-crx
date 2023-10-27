@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { LogName, debugLogger } from 'playwright-core/lib/common/debugLogger';
 import type { Protocol } from 'playwright-core/lib/server/chromium/protocol';
 import type { Progress } from 'playwright-core/lib/server/progress';
 import type { ConnectionTransport, ProtocolRequest, ProtocolResponse } from 'playwright-core/lib/server/transport';
@@ -165,6 +166,10 @@ export class CrxTransport implements ConnectionTransport {
     // eslint-disable-next-line no-console
     if (!tabId) console.trace(`No tabId provided for ${method}`);
 
+    if (debugLogger.isEnabled('chromedebugger' as LogName)) {
+      debugLogger.log('chromedebugger' as LogName, `SEND> ${method} #${tabId}`);
+    }
+
     return await chrome.debugger.sendCommand({ tabId }, method, commandParams) as
       Protocol.CommandReturnValues[T];
   }
@@ -191,6 +196,10 @@ export class CrxTransport implements ConnectionTransport {
 
   private _onDebuggerEvent = ({ tabId }: { tabId?: number }, message?: string, params?: any) => {
     if (!tabId) return;
+
+    if (debugLogger.isEnabled(`chromedebugger` as LogName)) {
+      debugLogger.log('chromedebugger' as LogName, `<RECV ${message} #${tabId}`);
+    }
 
     this._emitMessage({
       method: message,

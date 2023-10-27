@@ -34,6 +34,11 @@ type CrxFixtures = {
   server: Server;
 }
 
+type Debug = {
+  enable(namespaces: string): Promise<void>;
+  disable(): Promise<void>;
+}
+
 type CrxTest = (fixtures: CrxFixtures) => Promise<void>;
 
 declare const serviceWorker: ServiceWorker;
@@ -46,6 +51,8 @@ export const test = base.extend<{
   extensionServiceWorker: Worker;
   extensionId: string;
   runCrxTest: (testFn: CrxTest) => Promise<void>;
+  _extensionServiceWorkerDevtools: void;
+  _debug: Debug;
 }>({
 
   extensionPath: path.join(__dirname, '..', 'test-extension', 'dist'),
@@ -105,6 +112,39 @@ export const test = base.extend<{
       }
       await extensionServiceWorker.evaluate(`_runTest(${fn.toString()}, { server: ${JSON.stringify(server)} })`);
     });
-  }
+  },
+
+  // we don't have a way to capture service worker logs, so this trick will open
+  // service worker dev tools for debugging purposes
+  _extensionServiceWorkerDevtools: async ({ context, extensionId }, run) => {
+    const extensionsPage = await context.newPage();
+    await extensionsPage.goto(`chrome://extensions/?id=${extensionId}`);
+    await extensionsPage.locator('#devMode').click();
+    await extensionsPage.getByRole('link', { name: /.*service worker.*/ }).click();
+    await extensionsPage.close();
+    await run();
+  },
+
+  _debug: async ({ extensionServiceWorker }, run) => {
+    await run({
+      async enable(namespaces: string) {
+        await extensionServiceWorker.evaluate((namespaces) => {
+          // @ts-ignore
+          const _debug = self._debug as any;
+          if (!_debug) console.warn(`_debug is not available`);
+          _debug?.enable(namespaces);
+        }, namespaces);
+      },
+
+      async disable() {
+        await extensionServiceWorker.evaluate(() => {
+          // @ts-ignore
+          const _debug = self._debug as any;
+          if (!_debug) console.warn(`_debug is not available`);
+          _debug?.disable();
+        });
+      }
+    });
+  },
 });
 export const expect = test.expect;

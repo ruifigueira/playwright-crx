@@ -22,6 +22,7 @@ import { toClickOptions, toModifiers } from 'playwright-core/lib/server/recorder
 import { ManualPromise, createGuid, monotonicTime } from 'playwright-core/lib/utils';
 import { CrxRecorderApp } from './crxRecorderApp';
 import { BrowserContext } from 'playwright-core/lib/server/browserContext';
+import { LogName, debugLogger } from 'playwright-core/lib/common/debugLogger';
 
 export class Stopped extends Error {
 }
@@ -177,6 +178,8 @@ export default class Player {
         log: [],
         location
       };
+
+      debugLogger.log('crxplayer' as LogName, `Performing ${action}`);
 
       try {
         await frame.instrumentation.onBeforeCall(frame, callMetadata);
