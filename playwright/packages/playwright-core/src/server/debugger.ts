@@ -50,6 +50,7 @@ export class Debugger extends EventEmitter implements InstrumentationListener {
 
   async setMuted(muted: boolean) {
     this._muted = muted;
+    if (muted) this.resume(false);
   }
 
   async onBeforeCall(sdkObject: SdkObject, metadata: CallMetadata): Promise<void> {
