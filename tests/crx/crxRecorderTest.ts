@@ -72,7 +72,7 @@ export function dumpLogHeaders(recorderPage: Page) {
 export const test = crxTest.extend<{
   attachRecorder: (page: Page) => Promise<Page>;
   recorderPage: Page;
-  recordAction: (action: () => Promise<void>) => Promise<void>;
+  recordAction<T = void>(action: () => Promise<T>): Promise<T>;
 }>({
   extensionPath: path.join(__dirname, '../../examples/recorder-crx/dist'),
 
@@ -116,8 +116,9 @@ export const test = crxTest.extend<{
   recordAction: async ({ recorderPage }, run) => {
     await run(async (action) => {
       const count = await recorderPage.locator('.CodeMirror-line').count();
-      await action();
+      const result = await action();
       await expect(recorderPage.locator('.CodeMirror-line')).not.toHaveCount(count);
+      return result;
     });
   },
 });

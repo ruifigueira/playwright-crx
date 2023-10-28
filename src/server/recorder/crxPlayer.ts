@@ -22,21 +22,25 @@ import { toClickOptions, toModifiers } from 'playwright-core/lib/server/recorder
 import { ManualPromise, createGuid, monotonicTime } from 'playwright-core/lib/utils';
 import { CrxRecorderApp } from './crxRecorderApp';
 import { BrowserContext } from 'playwright-core/lib/server/browserContext';
-import { LogName, debugLogger } from 'playwright-core/lib/common/debugLogger';
 
-export class Stopped extends Error {
-}
+type Location = CallMetadata['location'];
+
+export type ActionWithContext = actions.Action & {
+  pageAlias: string;
+  location?: Location;
+};
+
+class Stopped extends Error {}
 
 function sourceLine({ header, actions }: Source, index: number) {
   const numLines = (str?: string) => str ? str.split(/\r?\n/).length : 0;
   return numLines(header) + numLines(actions?.slice(0, index).join('\n')) + 1;
 }
 
-export type ActionWithPageAlias = actions.Action & { pageAlias: string };
 
 export default class Player {
 
-  private _currAction?: ActionWithPageAlias;
+  private _currAction?: ActionWithContext;
   private _stopping?: ManualPromise;
   private _recorderSources: Source[] = [];
   private _filename?: string;
@@ -58,8 +62,6 @@ export default class Player {
           break;
         case 'setMode':
           if (params.mode === 'none') {
-            const [page] = this._context.pages();
-            this._pages.set('page', page);
             this.pause().catch(() => {});
           } else {
             this.stop().catch(() => {});
@@ -90,13 +92,9 @@ export default class Player {
 
   async pause() {
     if (!this._pause) {
-      if (this._pages.size === 0) return;
-      const pageAlias = this._pages.has('page') ? 'page' : [...this._pages.keys()][0];
       this._pause = this
-          ._performAction({ name: 'pause', pageAlias })
-          .finally(() => {
-            this._pause = undefined;
-          })
+          ._performAction({ name: 'pause', pageAlias: 'page' })
+          .finally(() => this._pause = undefined)
           .catch(() => {});
     }
     await this._pause;
@@ -105,31 +103,29 @@ export default class Player {
   canPlay() {
     return this._enabled &&
         !this._currAction &&
-        !!this._getCurrentLanguageAndActionsInContext();
+        !!this._getCurrentActionsWithContext();
   }
 
   async play() {
     if (this.isPlaying()) return;
 
-    const { languageSource: source, actions } = this._getCurrentLanguageAndActionsInContext() ?? {};
+    this._pages.clear();
+
+    const actions = this._getCurrentActionsWithContext();
     if (!actions?.length) return;
 
     try {
-      for (const [i, action] of actions.entries()) {
-        if (action.name === 'openPage' && i === 0) continue;
+      for (const action of actions) {
+        if (action.name === 'openPage' && action.pageAlias === 'page') continue;
         this._currAction = action;
-        const location = source ? {
-          file: source.id,
-          line: sourceLine(source, i),
-        } : undefined;
-        await this._performAction(action, location);
+        await this._performAction(action);
       }
     } catch (e) {
       if (e instanceof Stopped) return;
       throw e;
     } finally {
       this._currAction = undefined;
-      this.pause();
+      this.pause().catch(() => {});
     }
   }
 
@@ -151,14 +147,18 @@ export default class Player {
   }
 
   // "borrowed" from ContextRecorder
-  private async _performAction(action: ActionWithPageAlias | { name: 'pause', pageAlias: string }, location?: CallMetadata['location']) {
+  private async _performAction(action: ActionWithContext | { name: 'pause', pageAlias: string, location?: Location }) {
     this._checkStopped();
 
-    const page = this._pages.get(action.pageAlias);
-    if (!page) throw Error(`Could not find page with alias '${action.pageAlias}'`);
+    let page = this._pages.get(action.pageAlias);
+    if (!page && action.pageAlias === 'page') {
+      page = this._context.pages()[0];
+      if (page) this._pages.set(action.pageAlias, page);
+    }
+    if (!page && action.name !== 'openPage') throw Error(`Could not find page with alias '${action.pageAlias}'`);
 
     // TODO convert frameDescription to frame (reverse of ContextRecorder._describeFrame)
-    const frame = page.mainFrame();
+    const frame = page?.mainFrame();
 
     const perform = async (actionName: string, params: any, cb: (callMetadata: CallMetadata) => Promise<any>) => {
       const callMetadata: CallMetadata = {
@@ -166,9 +166,9 @@ export default class Player {
         apiName: 'frame.' + actionName,
         // prevents pause action from being written into calllogs
         internal: actionName === 'pause',
-        objectId: frame.guid,
-        pageId: page.guid,
-        frameId: frame.guid,
+        objectId: frame?.guid,
+        pageId: page?.guid,
+        frameId: frame?.guid,
         startTime: monotonicTime(),
         endTime: 0,
         wallTime: Date.now(),
@@ -176,18 +176,17 @@ export default class Player {
         method: actionName,
         params,
         log: [],
-        location
+        location: action.location
       };
 
-      debugLogger.log('crxplayer' as LogName, `Performing ${action}`);
-
+      const context = frame ?? this._context;
       try {
-        await frame.instrumentation.onBeforeCall(frame, callMetadata);
+        await context.instrumentation.onBeforeCall(context, callMetadata);
         this._checkStopped();
         await cb(callMetadata);
       } finally {
         callMetadata.endTime = monotonicTime();
-        await frame.instrumentation.onAfterCall(frame, callMetadata);
+        await context.instrumentation.onAfterCall(context, callMetadata);
       }
     };
 
@@ -195,6 +194,17 @@ export default class Player {
 
     if (action.name === 'pause')
       await perform(action.name, {}, () => Promise.resolve());
+
+    if (action.name === 'openPage') {
+      await perform(action.name, { url: action.url }, async callMetadata => {
+        if (this._pages.has(action.pageAlias)) throw new Error(`Page with alias ${action.pageAlias} already exists`);
+        const page = await this._context.newPage(callMetadata);
+        this._pages.set(action.pageAlias, page);
+      });
+      return;
+    }
+
+    if (!frame) throw new Error(`Expected frame for ${action.name}`);
 
     if (action.name === 'navigate')
       await perform(action.name, { url: action.url }, callMetadata => frame.goto(callMetadata, action.url, { timeout: kActionTimeout }));
@@ -232,11 +242,11 @@ export default class Player {
     }
   }
 
-  private _getCurrentLanguageAndActionsInContext() {
+  private _getCurrentActionsWithContext() {
     let languageSource = this._filename ? this._recorderSources.find(({ id }) => id === this._filename) : this._recorderSources[0];
     const jsonlSource = this._recorderSources.find(({ id }) => id === 'jsonl');
     if (languageSource && jsonlSource) {
-      const allActions = jsonlSource.actions?.map(a => JSON.parse(a) as ActionWithPageAlias) ?? [];
+      const allActions = jsonlSource.actions?.map(a => JSON.parse(a) as ActionWithContext) ?? [];
       const [first, ...rest] = allActions;
 
       // some languages include openPage action as a first action while others don't
@@ -252,7 +262,14 @@ export default class Player {
       // actions size must match...
       if (languageSource.actions?.length !== actions.length) return;
 
-      return { languageSource, actions };
+      for (let i = 0; i < actions.length; i++) {
+        actions[i].location = {
+          file: languageSource.id,
+          line: sourceLine(languageSource, i),
+        };
+      }
+
+      return actions;
     }
   }
 }

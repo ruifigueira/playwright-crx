@@ -17,8 +17,7 @@
 import { dumpLogHeaders, expect, test } from './crxRecorderTest';
 
 test.beforeEach(async ({ page, recordAction, baseURL }) => {
-  await page.goto(`${baseURL}/input/textarea.html`);
-
+  await recordAction(() => page.goto(`${baseURL}/input/textarea.html`));
   await recordAction(() => page.locator('textarea').click());
   await recordAction(() => page.locator('textarea').fill('test'));
 });
@@ -134,4 +133,31 @@ test('should resume then record then resume', async ({ recorderPage, recordActio
     `► frame.click( page.locator('input') ) ✅ — XXms`,
     `► frame.fill( page.locator('input') ) ✅ — XXms`,
   ]);
+});
+
+test('should resume with multiple pages', async ({ context, attachRecorder, recorderPage, recordAction, baseURL, page }) => {
+  const page1 = await context.newPage();
+  await attachRecorder(page1);
+
+  // actions on page1
+  await recordAction(() => page1.goto(`${baseURL}/input/button.html`));
+  await recordAction(() => page1.locator('button').click());
+
+  // action back to page
+  await recordAction(() => page.locator('input').fill('another test'));
+
+  await recorderPage.getByTitle('Record').click();
+
+  await recorderPage.getByTitle('Resume (F8)').click();
+  await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
+    `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► frame.click( page.locator('textarea') ) ✅ — XXms`,
+    `► frame.fill( page.locator('textarea') ) ✅ — XXms`,
+    `► frame.openPage( about:blank ) ✅ — XXms`,
+    `► frame.navigate( ${baseURL}/input/button.html ) ✅ — XXms`,
+    `► frame.click( page.getByRole('button', { name: 'Click target' }) ) ✅ — XXms`,
+    `► frame.fill( page.locator('input') ) ✅ — XXms`,
+  ]);
+
+  await page1.close();
 });
