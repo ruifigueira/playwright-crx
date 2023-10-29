@@ -25,9 +25,10 @@ import { BrowserContext } from 'playwright-core/lib/server/browserContext';
 
 type Location = CallMetadata['location'];
 
-export type ActionWithContext = actions.Action & {
+export type ActionWithContext = (actions.Action | { name: 'pause' }) & {
   pageAlias: string;
   location?: Location;
+  frameSelectorsChain?: string[];
 };
 
 class Stopped extends Error {}
@@ -147,7 +148,7 @@ export default class Player {
   }
 
   // "borrowed" from ContextRecorder
-  private async _performAction(action: ActionWithContext | { name: 'pause', pageAlias: string, location?: Location }) {
+  private async _performAction(action: ActionWithContext) {
     this._checkStopped();
 
     let page = this._pages.get(action.pageAlias);
@@ -157,7 +158,6 @@ export default class Player {
     }
     if (!page && action.name !== 'openPage') throw Error(`Could not find page with alias '${action.pageAlias}'`);
 
-    // TODO convert frameDescription to frame (reverse of ContextRecorder._describeFrame)
     const frame = page?.mainFrame();
 
     const perform = async (actionName: string, params: any, cb: (callMetadata: CallMetadata) => Promise<any>) => {
@@ -181,6 +181,7 @@ export default class Player {
 
       const context = frame ?? this._context;
       try {
+        this._checkStopped();
         await context.instrumentation.onBeforeCall(context, callMetadata);
         this._checkStopped();
         await cb(callMetadata);
@@ -205,33 +206,34 @@ export default class Player {
     }
 
     if (!frame) throw new Error(`Expected frame for ${action.name}`);
+    const actionSelector = 'selector' in action ? this._getFullSelector(action.selector, action.frameSelectorsChain) : '';
 
     if (action.name === 'navigate')
       await perform(action.name, { url: action.url }, callMetadata => frame.goto(callMetadata, action.url, { timeout: kActionTimeout }));
 
     if (action.name === 'fill')
-      await perform(action.name, { selector: action.selector, text: action.text }, callMetadata => frame.fill(callMetadata, action.selector, action.text, { timeout: kActionTimeout }));
+      await perform(action.name, { selector: actionSelector, text: action.text }, callMetadata => frame.fill(callMetadata, actionSelector, action.text, { timeout: kActionTimeout }));
 
     if (action.name === 'click') {
       const { options } = toClickOptions(action);
-      await perform('click', { selector: action.selector }, callMetadata => frame.click(callMetadata, action.selector, { ...options, timeout: kActionTimeout, strict: true }));
+      await perform('click', { selector: actionSelector }, callMetadata => frame.click(callMetadata, actionSelector, { ...options, timeout: kActionTimeout, strict: true }));
     }
 
     if (action.name === 'press') {
       const modifiers = toModifiers(action.modifiers);
       const shortcut = [...modifiers, action.key].join('+');
-      await perform('press', { selector: action.selector, key: shortcut }, callMetadata => frame.press(callMetadata, action.selector, shortcut, { timeout: kActionTimeout, strict: true }));
+      await perform('press', { selector: actionSelector, key: shortcut }, callMetadata => frame.press(callMetadata, actionSelector, shortcut, { timeout: kActionTimeout, strict: true }));
     }
 
     if (action.name === 'check')
-      await perform('check', { selector: action.selector }, callMetadata => frame.check(callMetadata, action.selector, { timeout: kActionTimeout, strict: true }));
+      await perform('check', { selector: actionSelector }, callMetadata => frame.check(callMetadata, actionSelector, { timeout: kActionTimeout, strict: true }));
 
     if (action.name === 'uncheck')
-      await perform('uncheck', { selector: action.selector }, callMetadata => frame.uncheck(callMetadata, action.selector, { timeout: kActionTimeout, strict: true }));
+      await perform('uncheck', { selector: actionSelector }, callMetadata => frame.uncheck(callMetadata, actionSelector, { timeout: kActionTimeout, strict: true }));
 
     if (action.name === 'select') {
       const values = action.options.map(value => ({ value }));
-      await perform('selectOption', { selector: action.selector, values }, callMetadata => frame.selectOption(callMetadata, action.selector, [], values, { timeout: kActionTimeout, strict: true }));
+      await perform('selectOption', { selector: actionSelector, values }, callMetadata => frame.selectOption(callMetadata, actionSelector, [], values, { timeout: kActionTimeout, strict: true }));
     }
   }
 
@@ -271,5 +273,10 @@ export default class Player {
 
       return actions;
     }
+  }
+
+  private _getFullSelector(selector: string, frameSelectorsChain?: string[]) {
+    if (!frameSelectorsChain) return selector;
+    return [...frameSelectorsChain, selector].join(' >> internal:control=enter-frame >> ');
   }
 }
