@@ -20,9 +20,12 @@ const _crxAppPromise = crx.start();
 
 async function _runTest(fn: (params: any) => Promise<void>, params: any) {
   const [crxApp, [ tab ]] = await Promise.all([_crxAppPromise, chrome.tabs.query({ active: true })]);
+  const server = { PREFIX: `chrome-extension://${chrome.runtime.id}`, EMPTY_PAGE: `chrome-extension://${chrome.runtime.id}/empty.html` };
+  const context = crxApp.context();
+  await context.route(server.EMPTY_PAGE, (route) => route.fulfill({ body: '', contentType: 'text/html' }));
   expect(tab?.id).toBeTruthy();
   const page = await crxApp.attach(tab?.id!);
-  await fn({ expect, page, crxApp, ...params });
+  await fn({ expect, page, context, crxApp, server, ...params });
 }
 
 Object.assign(self, { expect, _runTest });

@@ -69,7 +69,7 @@ async function getCrxApp() {
 }
 
 async function attach(tab: chrome.tabs.Tab) {
-  if (!tab.id || attachedTabIds.has(tab.id)) return;
+  if (!tab?.id || attachedTabIds.has(tab.id)) return;
   const tabId = tab.id;
 
   // ensure one attachment at a time

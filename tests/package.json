@@ -8,7 +8,6 @@
     "serve": "http-server ../playwright/tests/assets -p 3000 -s"
   },
   "devDependencies": {
-    "@playwright/test": "^1.39.0",
-    "http-server": "^14.1.1"
+    "@playwright/test": "^1.39.0"
   }
 }
