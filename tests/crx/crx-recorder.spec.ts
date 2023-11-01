@@ -101,3 +101,37 @@ test('should inspect element', async ({ page, attachRecorder, baseURL }) => {
 
   await expect(recorderPage.locator('.split-view-sidebar .CodeMirror-line')).toHaveText(`locator('textarea')`);
 });
+
+test('should record popups', async ({ page, attachRecorder, baseURL, mockPaths, recordAction }) => {
+  await mockPaths({
+    'popup/root.html': `<button onclick="window.open('./popup.html')">Open popup</button>`,
+  });
+
+  const recorderPage = await attachRecorder(page);
+
+  await recordAction(() => page.goto(`${baseURL}/popup/root.html`));
+  await recordAction(() => page.locator('button').click());
+
+  await recorderPage.getByTitle('Record').click();
+
+  const code = `const { chromium } = require('playwright');
+
+(async () => {
+  const browser = await chromium.launch({
+    headless: false
+  });
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto('${baseURL}/popup/root.html');
+  const page1Promise = page.waitForEvent('popup');
+  await page.getByRole('button', { name: 'Open popup' }).click();
+  const page1 = await page1Promise;
+
+  // ---------------------
+  await context.close();
+  await browser.close();
+})();`;
+
+  await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
+});
+
