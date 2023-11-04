@@ -15,80 +15,41 @@
  */
 
 import type { CallMetadata } from '@protocol/callMetadata';
-import type { Source } from '@recorder/recorderTypes';
+import EventEmitter from 'events';
+import { serializeError } from 'playwright-core/lib/protocol/serializers';
+import { BrowserContext } from 'playwright-core/lib/server/browserContext';
 import type { Page } from 'playwright-core/lib/server/page';
 import type * as actions from 'playwright-core/lib/server/recorder/recorderActions';
 import { toClickOptions, toModifiers } from 'playwright-core/lib/server/recorder/utils';
-import { ManualPromise, createGuid, monotonicTime } from 'playwright-core/lib/utils';
-import { CrxRecorderApp } from './crxRecorderApp';
-import { BrowserContext } from 'playwright-core/lib/server/browserContext';
+import { ManualPromise, createGuid, isUnderTest, monotonicTime } from 'playwright-core/lib/utils';
 
 type Location = CallMetadata['location'];
+
+type FrameDescription = {
+  url: string;
+  name?: string;
+  selectorsChain?: string[];
+};
 
 export type ActionWithContext = (actions.Action | { name: 'pause' }) & {
   pageAlias: string;
   location?: Location;
-  frameSelectorsChain?: string[];
+  frame?: FrameDescription;
 };
 
 class Stopped extends Error {}
 
-function sourceLine({ header, actions }: Source, index: number) {
-  const numLines = (str?: string) => str ? str.split(/\r?\n/).length : 0;
-  return numLines(header) + numLines(actions?.slice(0, index).join('\n')) + 1;
-}
-
-
-export default class Player {
+export default class Player extends EventEmitter {
 
   private _currAction?: ActionWithContext;
   private _stopping?: ManualPromise;
-  private _recorderSources: Source[] = [];
-  private _filename?: string;
-  private _enabled: boolean = false;
   private _pages = new Map<string, Page>();
   private _pause?: Promise<void>;
-  private _recorderApp: CrxRecorderApp;
   private _context: BrowserContext;
 
-  constructor(recorderApp: CrxRecorderApp, context: BrowserContext) {
-    this._recorderApp = recorderApp;
+  constructor(context: BrowserContext) {
+    super();
     this._context = context;
-    // events from UI to recorder
-    this._recorderApp.on('event', ({ event, params }) => {
-      switch (event) {
-        case 'resume':
-        case 'step':
-          this.play().catch(() => {});
-          break;
-        case 'setMode':
-          if (params.mode === 'none') {
-            this.pause().catch(() => {});
-          } else {
-            this.stop().catch(() => {});
-          }
-      }
-    });
-  }
-
-  setSources(sources: Source[]) {
-    this._recorderSources = [...sources];
-  }
-
-  setFilename(file: string) {
-    this._filename = file;
-  }
-
-  setEnabled(enabled: boolean) {
-    this._enabled = enabled;
-  }
-
-  pageCreated(pageAlias: string, page: Page) {
-    this._pages.set(pageAlias, page);
-  }
-
-  pageClosed(pageAlias: string) {
-    this._pages.delete(pageAlias);
   }
 
   async pause() {
@@ -101,19 +62,12 @@ export default class Player {
     await this._pause;
   }
 
-  canPlay() {
-    return this._enabled &&
-        !this._currAction &&
-        !!this._getCurrentActionsWithContext();
-  }
-
-  async play() {
+  async play(actions: ActionWithContext[]) {
     if (this.isPlaying()) return;
 
-    this._pages.clear();
+    this.emit('start');
 
-    const actions = this._getCurrentActionsWithContext();
-    if (!actions?.length) return;
+    this._pages.clear();
 
     try {
       for (const action of actions) {
@@ -144,6 +98,7 @@ export default class Player {
       ]);
       this._stopping = undefined;
       this._pause = undefined;
+      this.emit('stop');
     }
   }
 
@@ -176,7 +131,8 @@ export default class Player {
         method: actionName,
         params,
         log: [],
-        location: action.location
+        location: action.location,
+        playing: true,
       };
 
       const context = frame ?? this._context;
@@ -185,13 +141,16 @@ export default class Player {
         await context.instrumentation.onBeforeCall(context, callMetadata);
         this._checkStopped();
         await cb(callMetadata);
+      } catch (e) {
+        callMetadata.error = serializeError(e);
+        throw e;
       } finally {
         callMetadata.endTime = monotonicTime();
         await context.instrumentation.onAfterCall(context, callMetadata);
       }
     };
 
-    const kActionTimeout = 5000;
+    const kActionTimeout = isUnderTest() ? 500 : 5000;
 
     if (action.name === 'pause')
       await perform(action.name, {}, () => Promise.resolve());
@@ -206,7 +165,7 @@ export default class Player {
     }
 
     if (!frame) throw new Error(`Expected frame for ${action.name}`);
-    const actionSelector = 'selector' in action ? this._getFullSelector(action.selector, action.frameSelectorsChain) : '';
+    const actionSelector = 'selector' in action ? this._getFullSelector(action.selector, action.frame) : '';
 
     if (action.name === 'navigate')
       await perform(action.name, { url: action.url }, callMetadata => frame.goto(callMetadata, action.url, { timeout: kActionTimeout }));
@@ -244,39 +203,8 @@ export default class Player {
     }
   }
 
-  private _getCurrentActionsWithContext() {
-    let languageSource = this._filename ? this._recorderSources.find(({ id }) => id === this._filename) : this._recorderSources[0];
-    const jsonlSource = this._recorderSources.find(({ id }) => id === 'jsonl');
-    if (languageSource && jsonlSource) {
-      const allActions = jsonlSource.actions?.map(a => JSON.parse(a) as ActionWithContext) ?? [];
-      const [first, ...rest] = allActions;
-
-      // some languages include openPage action as a first action while others don't
-      const actions = first.name === 'openPage' ? rest : allActions;
-      if (actions.length === 0) return;
-
-      if (languageSource.actions?.length === actions.length + 1) {
-        const { header, actions } = languageSource;
-        const [first, ...rest] = actions ?? [];
-        languageSource = { ...languageSource, header: [header, first].join('\n'), actions: rest };
-      }
-
-      // actions size must match...
-      if (languageSource.actions?.length !== actions.length) return;
-
-      for (let i = 0; i < actions.length; i++) {
-        actions[i].location = {
-          file: languageSource.id,
-          line: sourceLine(languageSource, i),
-        };
-      }
-
-      return actions;
-    }
-  }
-
-  private _getFullSelector(selector: string, frameSelectorsChain?: string[]) {
-    if (!frameSelectorsChain) return selector;
-    return [...frameSelectorsChain, selector].join(' >> internal:control=enter-frame >> ');
+  private _getFullSelector(selector: string, frame?: FrameDescription) {
+    if (!frame?.selectorsChain) return selector;
+    return [...frame.selectorsChain, selector].join(' >> internal:control=enter-frame >> ');
   }
 }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { crx, expect } from 'playwright-crx/test';
+import { crx, expect, _debug } from 'playwright-crx/test';
 
 const _crxAppPromise = crx.start();
 
@@ -25,7 +25,7 @@ async function _runTest(fn: (params: any) => Promise<void>, params: any) {
   await context.route(server.EMPTY_PAGE, (route) => route.fulfill({ body: '', contentType: 'text/html' }));
   expect(tab?.id).toBeTruthy();
   const page = await crxApp.attach(tab?.id!);
-  await fn({ expect, page, context, crxApp, server, ...params });
+  await fn({ expect, page, context, crxApp, server, _debug, ...params });
 }
 
-Object.assign(self, { expect, _runTest });
+Object.assign(self, { _runTest });

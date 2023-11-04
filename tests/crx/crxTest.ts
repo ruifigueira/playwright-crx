@@ -33,6 +33,7 @@ type CrxFixtures = {
   context: CrxBrowserContext;
   crxApp: CrxApplication;
   server: Server;
+  _debug: Debug;
 }
 
 type Debug = {

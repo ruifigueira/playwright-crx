@@ -74,19 +74,28 @@ test('should attach two pages', async ({ context, page, attachRecorder, recordAc
 });
 
 
-test('should detach pages', async ({ context, page, attachRecorder, baseURL, recordAction }) => {
+test('should detach pages', async ({ context, page, attachRecorder, baseURL }) => {
 
   const recorderPage = await attachRecorder(page);
-  await recordAction(() => page.goto(`${baseURL}/empty.html`));
+  await page.goto(`${baseURL}/empty.html`);
 
   const page1 = await context.newPage();
   await attachRecorder(page1);
-  await recordAction(() => page1.goto(`${baseURL}/input/textarea.html`));
+  await page1.goto(`${baseURL}/input/textarea.html`);
+
+  await Promise.all([
+    expect(page.locator('x-pw-glass')).toBeAttached(),
+    expect(page1.locator('x-pw-glass')).toBeAttached(),
+  ]);
 
   await recorderPage.close();
 
-  await expect(page.locator('x-pw-glass')).toBeHidden();
-  await expect(page1.locator('x-pw-glass')).toBeHidden();
+  await Promise.all([
+    expect(page.locator('x-pw-glass')).toBeHidden(),
+    expect(page1.locator('x-pw-glass')).toBeHidden(),
+  ]);
+
+  await page1.close();
 });
 
 test('should inspect element', async ({ page, attachRecorder, baseURL }) => {
