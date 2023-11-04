@@ -276,6 +276,14 @@ export class Recorder implements InstrumentationListener {
     this.updateCallLog([metadata]);
   }
 
+  clearErrors() {
+    const errors = [...this._currentCallsMetadata.keys()].filter(c => c.error);
+    for (const error of errors)
+      this._currentCallsMetadata.delete(error);
+
+    this._updateSources();
+  }
+
   private _updateSources() {
     // Remove old decorations.
     for (const source of [...this._recorderSources, ...this._userSources.values()]) {
