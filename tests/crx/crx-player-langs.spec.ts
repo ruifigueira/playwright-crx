@@ -16,6 +16,12 @@
 
 import { dumpLogHeaders, expect, test } from "./crxRecorderTest";
 
+test.beforeEach(async ({ page, recordAction, baseURL }) => {
+  await recordAction(() => page.goto(`${baseURL}/input/textarea.html`));
+  await recordAction(() => page.locator('textarea').click());
+  await recordAction(() => page.locator('textarea').fill('test'));
+});
+
 const langs = {
   'javascript': { line: `  await page.locator('textarea').click();`, linenumber: 10 },
   'playwright-test': { line: `  await page.locator('textarea').click();`, linenumber: 5 },
@@ -29,10 +35,7 @@ const langs = {
 };
 
 for (const [lang, { linenumber, line }] of Object.entries(langs)) {
-  test(`should step in ${lang}`, async ({ page, recordAction, recorderPage, baseURL }) => {
-    await recordAction(() => page.goto(`${baseURL}/input/textarea.html`));
-    await recordAction(() => page.locator('textarea').click());
-
+  test(`should step in ${lang}`, async ({ recorderPage, baseURL }) => {
     await recorderPage.getByTitle('Record').click();
 
     await recorderPage.locator('.recorder-chooser').selectOption(lang);
@@ -53,3 +56,31 @@ for (const [lang, { linenumber, line }] of Object.entries(langs)) {
     ]);
   });
 }
+
+test('should support target change while steping', async ({ recorderPage }) => {
+  await recorderPage.getByTitle('Record').click();
+
+  await recorderPage.getByTitle('Step Over (F10)').click();
+  await recorderPage.getByTitle('Step Over (F10)').click();
+
+  await Promise.all([
+    expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toHaveText(langs.javascript.line),
+    expect(recorderPage.locator('.source-line-paused .CodeMirror-linenumber')).toHaveText(`${langs.javascript.linenumber}`),
+  ]);
+
+  await recorderPage.locator('.recorder-chooser').selectOption('csharp');
+
+  await expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toBeHidden();
+
+  // it will resume the rest of the javascript actions
+  await recorderPage.getByTitle('Resume (F8)').click();
+
+  // it now plays the csharp actions
+  await recorderPage.getByTitle('Step Over (F10)').click();
+  await recorderPage.getByTitle('Step Over (F10)').click();
+
+  await Promise.all([
+    expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toHaveText(langs.csharp.line),
+    expect(recorderPage.locator('.source-line-paused .CodeMirror-linenumber')).toHaveText(`${langs.csharp.linenumber}`),
+  ]);
+});
