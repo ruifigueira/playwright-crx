@@ -83,6 +83,10 @@ export class CrxTransport implements ConnectionTransport {
       } else if (message.method === 'Browser.setDownloadBehavior') {
         // do nothing...
         result = await Promise.resolve().then();
+      } else if (message.method === 'Emulation.setEmulatedMedia') {
+        // avoids crashing on chrome.debugger.detach
+        // see: https://github.com/ruifigueira/playwright-crx/issues/2
+        result = await Promise.resolve().then();
       } else {
         // @ts-ignore
         result = await this._send(message.method, { tabId, ...message.params });
