@@ -18,6 +18,7 @@ import type { CallMetadata } from '@protocol/callMetadata';
 import EventEmitter from 'events';
 import { serializeError } from 'playwright-core/lib/protocol/serializers';
 import { BrowserContext } from 'playwright-core/lib/server/browserContext';
+import { Frame } from 'playwright-core/lib/server/frames';
 import type { Page } from 'playwright-core/lib/server/page';
 import type * as actions from 'playwright-core/lib/server/recorder/recorderActions';
 import { toClickOptions, toModifiers } from 'playwright-core/lib/server/recorder/utils';
@@ -113,7 +114,7 @@ export default class Player extends EventEmitter {
     }
     if (!page && action.name !== 'openPage') throw Error(`Could not find page with alias '${action.pageAlias}'`);
 
-    const frame = page?.mainFrame();
+    const [frame, selector] = page ? this._getFrameAndSelector(page, action) : [];
 
     const perform = async (actionName: string, params: any, cb: (callMetadata: CallMetadata) => Promise<any>) => {
       const callMetadata: CallMetadata = {
@@ -165,34 +166,33 @@ export default class Player extends EventEmitter {
     }
 
     if (!frame) throw new Error(`Expected frame for ${action.name}`);
-    const actionSelector = 'selector' in action ? this._getFullSelector(action.selector, action.frame) : '';
 
     if (action.name === 'navigate')
       await perform(action.name, { url: action.url }, callMetadata => frame.goto(callMetadata, action.url, { timeout: kActionTimeout }));
 
     if (action.name === 'fill')
-      await perform(action.name, { selector: actionSelector, text: action.text }, callMetadata => frame.fill(callMetadata, actionSelector, action.text, { timeout: kActionTimeout }));
+      await perform(action.name, { selector, text: action.text }, callMetadata => frame.fill(callMetadata, selector!, action.text, { timeout: kActionTimeout }));
 
     if (action.name === 'click') {
       const { options } = toClickOptions(action);
-      await perform('click', { selector: actionSelector }, callMetadata => frame.click(callMetadata, actionSelector, { ...options, timeout: kActionTimeout, strict: true }));
+      await perform('click', { selector }, callMetadata => frame.click(callMetadata, selector!, { ...options, timeout: kActionTimeout, strict: true }));
     }
 
     if (action.name === 'press') {
       const modifiers = toModifiers(action.modifiers);
       const shortcut = [...modifiers, action.key].join('+');
-      await perform('press', { selector: actionSelector, key: shortcut }, callMetadata => frame.press(callMetadata, actionSelector, shortcut, { timeout: kActionTimeout, strict: true }));
+      await perform('press', { selector, key: shortcut }, callMetadata => frame.press(callMetadata, selector!, shortcut, { timeout: kActionTimeout, strict: true }));
     }
 
     if (action.name === 'check')
-      await perform('check', { selector: actionSelector }, callMetadata => frame.check(callMetadata, actionSelector, { timeout: kActionTimeout, strict: true }));
+      await perform('check', { selector }, callMetadata => frame.check(callMetadata, selector!, { timeout: kActionTimeout, strict: true }));
 
     if (action.name === 'uncheck')
-      await perform('uncheck', { selector: actionSelector }, callMetadata => frame.uncheck(callMetadata, actionSelector, { timeout: kActionTimeout, strict: true }));
+      await perform('uncheck', { selector }, callMetadata => frame.uncheck(callMetadata, selector!, { timeout: kActionTimeout, strict: true }));
 
     if (action.name === 'select') {
       const values = action.options.map(value => ({ value }));
-      await perform('selectOption', { selector: actionSelector, values }, callMetadata => frame.selectOption(callMetadata, actionSelector, [], values, { timeout: kActionTimeout, strict: true }));
+      await perform('selectOption', { selector, values }, callMetadata => frame.selectOption(callMetadata, selector!, [], values, { timeout: kActionTimeout, strict: true }));
     }
   }
 
@@ -203,8 +203,20 @@ export default class Player extends EventEmitter {
     }
   }
 
-  private _getFullSelector(selector: string, frame?: FrameDescription) {
-    if (!frame?.selectorsChain) return selector;
-    return [...frame.selectorsChain, selector].join(' >> internal:control=enter-frame >> ');
+  private _getFrameAndSelector(page: Page, action: ActionWithContext): [Frame, string | undefined] {
+    // same rules as applied in LanguageGenerator.generateAction
+    const selector = (action as any).selector;
+
+    if (!action.frame) return [page.mainFrame(), selector];
+
+    if (action.frame.selectorsChain && action.name !== 'navigate') {
+      const chainedSelector = [...action.frame.selectorsChain, selector].join(' >> internal:control=enter-frame >> ');
+      return [page.mainFrame(), chainedSelector];
+    }
+
+    const frame = page.frames().find(f => f.name() === action.frame?.name || f.url() === action.frame?.url);
+    if (!frame) throw new Error(`No frame found with either name '${action.frame.name}' or url ${action.frame.url}`);
+
+    return [frame, selector];
   }
 }
