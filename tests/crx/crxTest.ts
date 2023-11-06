@@ -126,12 +126,19 @@ export const test = base.extend<{
 
   // we don't have a way to capture service worker logs, so this trick will open
   // service worker dev tools for debugging purposes
-  _extensionServiceWorkerDevtools: async ({ context, extensionId }, run) => {
+  _extensionServiceWorkerDevtools: async ({ context, extensionId, extensionServiceWorker }, run) => {
     const extensionsPage = await context.newPage();
     await extensionsPage.goto(`chrome://extensions/?id=${extensionId}`);
     await extensionsPage.locator('#devMode').click();
     await extensionsPage.getByRole('link', { name: /.*service worker.*/ }).click();
     await extensionsPage.close();
+    // ensures devtools is open (it must stop in debugger, and user will take at least 1 sec. to continue)
+    while(true) {
+      const start = Date.now();
+      await extensionServiceWorker.evaluate(() => { debugger });
+      if (Date.now() - start > 1000) break;
+      await new Promise(r => setTimeout(r, 100));
+    }
     await run();
   },
 
