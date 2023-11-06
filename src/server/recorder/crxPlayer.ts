@@ -167,6 +167,13 @@ export default class Player extends EventEmitter {
 
     if (!frame) throw new Error(`Expected frame for ${action.name}`);
 
+    if (action.name === 'closePage') {
+      await perform(action.name, {}, async callMetadata => {
+        await page!.close(callMetadata, { runBeforeUnload: true });
+        this._pages.delete(action.pageAlias);
+      });
+    }
+
     if (action.name === 'navigate')
       await perform(action.name, { url: action.url }, callMetadata => frame.goto(callMetadata, action.url, { timeout: kActionTimeout }));
 
@@ -192,8 +199,11 @@ export default class Player extends EventEmitter {
 
     if (action.name === 'select') {
       const values = action.options.map(value => ({ value }));
-      await perform('selectOption', { selector, values }, callMetadata => frame.selectOption(callMetadata, selector!, [], values, { timeout: kActionTimeout, strict: true }));
+      await perform('selectOption', { selector: action.selector, values }, callMetadata => frame.selectOption(callMetadata, action.selector, [], values, { timeout: kActionTimeout, strict: true }));
     }
+
+    if (action.name === 'setInputFiles')
+      await perform('setInputFiles', { selector: action.selector, files: action.files }, () => Promise.reject(`player does not support setInputFiles yet`));
   }
 
   private _checkStopped() {

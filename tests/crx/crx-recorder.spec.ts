@@ -144,3 +144,73 @@ test('should record popups', async ({ page, attachRecorder, baseURL, mockPaths, 
   await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
 });
 
+test('should record with all supported actions', async ({ context, page, recorderPage, baseURL, mockPaths, recordAction, attachRecorder, basePath }) => {
+  await mockPaths({
+    'root.html': `<html>
+      <input type="checkbox">
+      <button onclick="this.innerText = 'button clicked'">button</button>
+      <input type="text">
+      <select><option>A</option><option>B</option></select>
+      <input type="file">
+    </html>`,
+  });
+
+  // navigate
+  await recordAction(() => page.goto(`${baseURL}/root.html`));
+  // check
+  await recordAction(() => page.locator('[type=checkbox]').click());
+  // click
+  await recordAction(() => page.locator('button').click());
+  // uncheck
+  await recordAction(() => page.locator('[type=checkbox]').click());
+  // fill
+  await recordAction(() => page.locator('[type=text]').fill('Hello world'));
+  // press
+  await recordAction(() => page.locator('[type=text]').press('Tab'));
+  // select
+  await recordAction(async () => {
+    await page.locator('select').focus();
+    await page.locator('select').selectOption('B');
+  });
+  // setInputFiles
+  await recordAction(async () => {
+    await page.locator('[type=file]').focus();
+    await page.locator('[type=file]').setInputFiles(`${basePath}/file-to-upload.txt`);
+  });
+  // openPage
+  const page1 = await recordAction(async () => {
+    const newPage = await context.newPage();
+    await attachRecorder(newPage);
+    return newPage;
+  });
+  // closePage
+  await recordAction(() => page1.close());
+
+  await recorderPage.getByTitle('Record').click();
+
+  const code = `const { chromium } = require('playwright');
+
+(async () => {
+  const browser = await chromium.launch({
+    headless: false
+  });
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto('http://127.0.0.1:3000/root.html');
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'button' }).click();
+  await page.getByRole('checkbox').uncheck();
+  await page.locator('input[type="text"]').fill('Hello world');
+  await page.locator('input[type="text"]').press('Tab');
+  await page.getByRole('combobox').selectOption('B');
+  await page.locator('input[type="file"]').setInputFiles('file-to-upload.txt');
+  const page1 = await context.newPage();
+  await page1.close();
+​
+  // ---------------------
+  await context.close();
+  await browser.close();
+})();`;
+
+  await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
+});
