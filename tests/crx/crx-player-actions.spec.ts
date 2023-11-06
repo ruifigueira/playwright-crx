@@ -135,4 +135,9 @@ test('should fail while playing setInputFiles', async ({ page, recorderPage, bas
     `► frame.navigate( ${baseURL}/root.html ) ✅ — XXms`,
     `▼ frame.setInputFiles( page.getByRole('textbox') ) ❌ — XXms`,
   ]);
+
+  await Promise.all([
+    expect(recorderPage.locator('.source-line-error-widget')).toHaveText('player does not support setInputFiles yet'),
+    expect(recorderPage.locator('.call-log-message.error')).toHaveText('player does not support setInputFiles yet'),
+  ]);
 });

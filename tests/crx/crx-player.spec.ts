@@ -42,6 +42,26 @@ test('should resume', async ({ recorderPage, baseURL }) => {
   ]);
 });
 
+test('should show errors', async ({ basePath, page, recorderPage, baseURL }) => {
+  await recorderPage.getByTitle('Record').click();
+
+  await page.route('**/*', (route) => route.fulfill({ path: `${basePath}/empty.html` }));
+
+  await recorderPage.getByTitle('Resume (F8)').click();
+
+  await expect(recorderPage.locator('.source-line-error-underline')).toHaveCount(1);
+
+  await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
+    `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `▼ frame.click( page.locator('textarea') ) ❌ — XXms`,
+  ]);
+
+  await Promise.all([
+    expect(recorderPage.locator('.source-line-error-widget')).toHaveText('Timeout 500ms exceeded.'),
+    expect(recorderPage.locator('.call-log-message.error')).toHaveText('Timeout 500ms exceeded.'),
+  ]);
+});
+
 test('should clear errors when resuming after errors', async ({ basePath, page, recorderPage, baseURL }) => {
   await recorderPage.getByTitle('Record').click();
 

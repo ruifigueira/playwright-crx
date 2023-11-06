@@ -203,7 +203,7 @@ export default class Player extends EventEmitter {
     }
 
     if (action.name === 'setInputFiles')
-      await perform('setInputFiles', { selector: action.selector, files: action.files }, () => Promise.reject(`player does not support setInputFiles yet`));
+      await perform('setInputFiles', { selector: action.selector, files: action.files }, () => Promise.reject(new Error(`player does not support setInputFiles yet`)));
   }
 
   private _checkStopped() {
