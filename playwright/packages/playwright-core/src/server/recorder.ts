@@ -304,7 +304,7 @@ export class Recorder implements InstrumentationListener {
       }
       if (line) {
         const paused = this._debugger.isPaused(metadata);
-        source.highlight.push({ line, type: metadata.error ? 'error' : (paused ? 'paused' : 'running') });
+        source.highlight.push({ line, type: metadata.error ? 'error' : (paused ? 'paused' : 'running'), message: metadata.error?.error?.message });
         source.revealLine = line;
         fileToSelect = source.id;
       }
