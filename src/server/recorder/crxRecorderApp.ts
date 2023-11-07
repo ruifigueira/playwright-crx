@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import type { CallLog, EventData, Source } from '@recorder/recorderTypes';
+import type { CallLog, EventData, Mode, Source } from '@recorder/recorderTypes';
 import { EventEmitter } from 'events';
 import { BrowserContext } from 'playwright-core/lib/server/browserContext';
 import type { Recorder } from 'playwright-core/lib/server/recorder';
@@ -31,10 +31,10 @@ type ChromeWindow = chrome.windows.Window;
 export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'updateCallLogs', callLogs: CallLog[] }
   | { method: 'setPaused', paused: boolean }
-  | { method: 'setMode', mode: 'none' | 'recording' | 'inspecting' }
+  | { method: 'setMode', mode: Mode }
   | { method: 'setSources', sources: Source[] }
   | { method: 'setFileIfNeeded', file: string }
-  | { method: 'setSelector', selector: string, focus?: boolean }
+  | { method: 'setSelector', selector: string, userGesture: string }
 );
 
 export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
@@ -110,7 +110,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     await this._sendMessage({ type: 'recorder', method: 'setPaused',  paused });
   }
 
-  async setMode(mode: 'none' | 'recording' | 'inspecting') {
+  async setMode(mode: Mode) {
     await this._sendMessage({ type: 'recorder', method: 'setMode', mode });
   }
 
@@ -118,10 +118,16 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     await this._sendMessage({ type: 'recorder', method: 'setFileIfNeeded', file });
   }
 
-  async setSelector(selector: string, focus?: boolean) {
-    if (focus)
-      this._recorder.setMode('none');
-    await this._sendMessage({ type: 'recorder', method: 'setSelector', selector, focus });
+  async setSelector(selector: string, userGesture?: boolean) {
+    if (userGesture) {
+      if (this._recorder.mode() === 'inspecting') {
+        this._recorder.setMode('standby');
+        if (this._window?.id) chrome.windows.update(this._window.id, { focused: true, drawAttention: true });
+      } else {
+        this._recorder.setMode('recording');
+      }
+    }
+    await this._sendMessage({ type: 'recorder', method: 'setSelector', selector, userGesture });
   }
 
   async updateCallLogs(callLogs: CallLog[]) {
@@ -133,7 +139,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     await this._sendMessage({ type: 'recorder', method: 'setSources', sources });
   }
 
-  private _onMessage = ({ type, event, params }: (EventData | SaveEventData) & { type: string }) => {
+  private _onMessage = ({ type, event, params }: EventData & { type: string }) => {
     if (type === 'recorderEvent') {
       switch (event) {
         case 'fileChanged':
@@ -144,7 +150,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
           this._player.play(this._getActionsWithContext()).catch(() => {});
           break;
         case 'setMode':
-          if (params.mode === 'none') {
+          if (['none', 'standby'].includes(params.mode)) {
             this._player.pause().catch(() => {});
           } else {
             this._player.stop().catch(() => {});

@@ -90,8 +90,9 @@ export const test = crxTest.extend<{
 
       recorderPage = recorderPage ?? (await recorderPagePromise)!;
 
+      const locator = page.locator('x-pw-glass').first();
       try {
-        await page.locator('x-pw-glass').waitFor({ state: 'attached', timeout: 100 });
+        await locator.waitFor({ state: 'attached', timeout: 100 });
       } catch(e) {
         if (await recorderPage.getByTitle('Record').evaluate(e => e.classList.contains('toggled'))) {
           await recorderPage.getByTitle('Record').click();
@@ -100,7 +101,7 @@ export const test = crxTest.extend<{
         } else {
           await page.reload();
         }
-        await page.locator('x-pw-glass').waitFor({ state: 'attached', timeout: 100 });
+        await locator.waitFor({ state: 'attached', timeout: 100 });
       }
 
       return recorderPage;

@@ -339,7 +339,7 @@ export interface CrxRecorder {
     /**
      * mode
      */
-    mode: "none"|"recording"|"inspecting";
+    mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
   }) => void): this;
 
   /**
@@ -359,7 +359,7 @@ export interface CrxRecorder {
     /**
      * mode
      */
-    mode: "none"|"recording"|"inspecting";
+    mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
   }) => void): this;
 
   /**
@@ -379,7 +379,7 @@ export interface CrxRecorder {
       /**
        * mode
        */
-      mode: "none"|"recording"|"inspecting";
+      mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
     }) => void): this;
 
   /**
@@ -399,7 +399,7 @@ export interface CrxRecorder {
     /**
      * mode
      */
-    mode: "none"|"recording"|"inspecting";
+    mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
   }) => void): this;
 
   /**
@@ -419,7 +419,7 @@ export interface CrxRecorder {
     /**
      * mode
      */
-    mode: "none"|"recording"|"inspecting";
+    mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
   }) => void): this;
 
   /**
@@ -439,7 +439,7 @@ export interface CrxRecorder {
     /**
      * mode
      */
-    mode: "none"|"recording"|"inspecting";
+    mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
   }) => void): this;
 
   hide(): Promise<void>;
@@ -452,10 +452,10 @@ export interface CrxRecorder {
   show(options?: {
     language?: null|string;
 
-    mode?: null|"none"|"recording"|"inspecting";
+    mode?: null|"none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
 
     testIdAttributeName?: null|string;
   }): Promise<void>;
 
-  mode: "none"|"recording"|"inspecting";
+  mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
 }
