@@ -20,6 +20,7 @@ import type * as api from '../types/types';
 import type * as channels from '../protocol/channels';
 import { Page } from 'playwright-core/lib/client/page';
 import type { BrowserContext } from 'playwright-core/lib/client/browserContext';
+import { Mode } from '@recorder/recorderTypes';
 
 function from<T>(obj: any): T {
   return obj._object as T;
@@ -48,7 +49,7 @@ export class Crx extends ChannelOwner<channels.CrxChannel> implements api.Crx {
 export class CrxRecorder extends EventEmitter {
   private _channel: channels.CrxApplicationChannel;
   private _hidden: boolean = true;
-  private _mode: 'none' | 'recording' | 'inspecting' = 'none';
+  private _mode: Mode = 'none';
 
   constructor(channel: channels.CrxApplicationChannel) {
     super();

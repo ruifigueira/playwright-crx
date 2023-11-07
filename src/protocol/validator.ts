@@ -71,7 +71,7 @@ scheme.CrxApplicationDetachedEvent = tObject({
   tabId: tNumber,
 });
 scheme.CrxApplicationModeChangedEvent = tObject({
-  mode: tEnum(['none', 'recording', 'inspecting']),
+  mode: tEnum(['none', 'recording', 'inspecting', 'assertingText', 'recording-inspecting', 'standby', 'assertingVisibility', 'assertingValue']),
 });
 scheme.CrxApplicationAttachParams = tObject({
   tabId: tNumber,
@@ -120,7 +120,7 @@ scheme.CrxApplicationNewPageResult = tObject({
   page: tChannel(['Page']),
 });
 scheme.CrxApplicationShowRecorderParams = tObject({
-  mode: tOptional(tEnum(['none', 'recording', 'inspecting'])),
+  mode: tOptional(tEnum(['none', 'recording', 'inspecting', 'assertingText', 'recording-inspecting', 'standby', 'assertingVisibility', 'assertingValue'])),
   language: tOptional(tString),
   testIdAttributeName: tOptional(tString),
 });

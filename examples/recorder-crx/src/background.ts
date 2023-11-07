@@ -17,12 +17,14 @@
 import type { CrxApplication } from 'playwright-crx';
 import { crx, _debug, _setUnderTest } from 'playwright-crx';
 
+type Mode = 'none' | 'recording' | 'inspecting' | 'assertingText' | 'recording-inspecting' | 'standby' | 'assertingVisibility' | 'assertingValue';
+
 // we must lazy initialize it
 let crxAppPromise: Promise<CrxApplication> | undefined;
 
 const attachedTabIds = new Set<number>();
 
-async function changeAction(tabId: number, mode: 'none' | 'recording' | 'inspecting' | 'detached') {
+async function changeAction(tabId: number, mode: Mode | 'detached') {
   // detached basically implies recorder windows was closed
   if (mode === 'detached' || mode === 'none') {
     await Promise.all([

@@ -31,7 +31,7 @@
     "clean": "npm run clean:pw && npm run clean:examples && npm run clean:tests && npm run clean:crx",
     "test:install": "cd ./tests && npx playwright install --with-deps chromium",
     "test": "cd ./tests && npx playwright test",
-    "test-ui": "cd ./tests && npx playwright test --ui"
+    "test-ui": "cd ./tests && npx playwright test --ui --timeout 0"
   },
   "workspaces": [
     "examples/recorder-crx",

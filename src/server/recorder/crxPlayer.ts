@@ -16,7 +16,7 @@
 
 import type { CallMetadata } from '@protocol/callMetadata';
 import EventEmitter from 'events';
-import { serializeError } from 'playwright-core/lib/protocol/serializers';
+import { serializeError } from 'playwright-core/lib/server/errors';
 import { BrowserContext } from 'playwright-core/lib/server/browserContext';
 import { Frame } from 'playwright-core/lib/server/frames';
 import type { Page } from 'playwright-core/lib/server/page';
