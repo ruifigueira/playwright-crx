@@ -15,11 +15,11 @@
  */
 
 import type { Worker } from '@playwright/test';
-import { test as base, chromium, type BrowserContext } from '@playwright/test';
+import { test as base, chromium } from '@playwright/test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { CrxApplication, Page } from 'playwright-crx';
+import type { CrxApplication, Page as CrxPage, BrowserContext as CrxBrowserContext } from 'playwright-crx';
 import { rimrafSync } from 'rimraf';
 
 type Server = {
@@ -29,9 +29,16 @@ type Server = {
 
 type CrxFixtures = {
   expect: typeof expect;
-  page: Page;
+  page: CrxPage;
+  context: CrxBrowserContext;
   crxApp: CrxApplication;
   server: Server;
+  _debug: Debug;
+}
+
+type Debug = {
+  enable(namespaces: string): Promise<void>;
+  disable(): Promise<void>;
 }
 
 type CrxTest = (fixtures: CrxFixtures) => Promise<void>;
@@ -41,14 +48,19 @@ declare const serviceWorker: ServiceWorker;
 // from https://playwright.dev/docs/chrome-extensions#testing
 export const test = base.extend<{
   extensionPath: string;
-  context: BrowserContext;
+  basePath: string;
   createUserDataDir: () => string;
   extensionServiceWorker: Worker;
   extensionId: string;
   runCrxTest: (testFn: CrxTest) => Promise<void>;
+  mockPaths: (paths: Record<string, string | { body: string, contentType?: string }>) => Promise<void>;
+  _extensionServiceWorkerDevtools: void;
+  _debug: Debug;
 }>({
 
   extensionPath: path.join(__dirname, '..', 'test-extension', 'dist'),
+
+  basePath: path.join(__dirname, '..', '..', 'playwright', 'tests', 'assets'),
 
   createUserDataDir: async ({}, run) => {
     const dirs: string[] = [];
@@ -60,23 +72,21 @@ export const test = base.extend<{
     rimrafSync(dirs);
   },
 
-  context: async ({ extensionPath, headless, createUserDataDir }, use) => {
+  context: async ({ extensionPath, createUserDataDir, basePath, baseURL }, use) => {
     const context = await chromium.launchPersistentContext(createUserDataDir(), {
       headless: false,
       args: [
-        ...(headless ? [`--headless=new`] : []),
         `--disable-extensions-except=${extensionPath}`,
         `--load-extension=${extensionPath}`,
       ],
     });
+    context.route(`${baseURL}/**/*`, (route, request) => route.fulfill({ path: path.join(basePath, new URL(request.url()).pathname) }));
     await use(context);
     await context.close();
   },
 
   extensionServiceWorker: async ({ context }, use) => {
-    let [worker] = context.serviceWorkers();
-    if (!worker)
-      worker = await context.waitForEvent('serviceworker');
+    const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
 
     // wait for initialization
     await worker.evaluate(() => new Promise<void>((resolve, reject) => {
@@ -98,14 +108,60 @@ export const test = base.extend<{
     await use(extensionId);
   },
 
-  runCrxTest: async ({ extensionServiceWorker, baseURL }, use) => {
-    use(async (fn) => {
-      const server: Server = {
-        PREFIX: baseURL!,
-        EMPTY_PAGE: `${baseURL}/empty.html`,
-      }
-      await extensionServiceWorker.evaluate(`_runTest(${fn.toString()}, { server: ${JSON.stringify(server)} })`);
+  runCrxTest: async ({ extensionServiceWorker }, use) => {
+    use((fn) => extensionServiceWorker.evaluate(`_runTest(${fn.toString()})`));
+  },
+
+  mockPaths: async ({ context, baseURL }, run) => {
+    await run(async (paths) => {
+      await Promise.all([
+        ...Object.entries(paths).map(([path, mockedContent]) => {
+          if (path.startsWith('/')) path = path.substring(1);
+          const { body, contentType } = typeof mockedContent === 'string' ? { body: mockedContent, contentType: undefined } : mockedContent;
+          return context.route(`${baseURL}/${path}`, route => route.fulfill({ body, contentType }));
+        })
+      ]);
     });
-  }
+  },
+
+  // we don't have a way to capture service worker logs, so this trick will open
+  // service worker dev tools for debugging purposes
+  _extensionServiceWorkerDevtools: async ({ context, extensionId, extensionServiceWorker }, run) => {
+    const extensionsPage = await context.newPage();
+    await extensionsPage.goto(`chrome://extensions/?id=${extensionId}`);
+    await extensionsPage.locator('#devMode').click();
+    await extensionsPage.getByRole('link', { name: /.*service worker.*/ }).click();
+    await extensionsPage.close();
+    // ensures devtools is open (it must stop in debugger, and user will take at least 1 sec. to continue)
+    while(true) {
+      const start = Date.now();
+      await extensionServiceWorker.evaluate(() => { debugger });
+      if (Date.now() - start > 1000) break;
+      await new Promise(r => setTimeout(r, 100));
+    }
+    await run();
+  },
+
+  _debug: async ({ extensionServiceWorker }, run) => {
+    await run({
+      async enable(namespaces: string) {
+        await extensionServiceWorker.evaluate((namespaces) => {
+          // @ts-ignore
+          const _debug = self._debug as any;
+          if (!_debug) console.warn(`_debug is not available`);
+          _debug?.enable(namespaces);
+        }, namespaces);
+      },
+
+      async disable() {
+        await extensionServiceWorker.evaluate(() => {
+          // @ts-ignore
+          const _debug = self._debug as any;
+          if (!_debug) console.warn(`_debug is not available`);
+          _debug?.disable();
+        });
+      }
+    });
+  },
 });
 export const expect = test.expect;

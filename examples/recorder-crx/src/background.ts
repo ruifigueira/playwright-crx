@@ -15,7 +15,7 @@
  */
 
 import type { CrxApplication } from 'playwright-crx';
-import { crx } from 'playwright-crx';
+import { crx, _debug, _setUnderTest } from 'playwright-crx';
 
 // we must lazy initialize it
 let crxAppPromise: Promise<CrxApplication> | undefined;
@@ -69,7 +69,7 @@ async function getCrxApp() {
 }
 
 async function attach(tab: chrome.tabs.Tab) {
-  if (!tab.id || attachedTabIds.has(tab.id)) return;
+  if (!tab?.id || attachedTabIds.has(tab.id)) return;
   const tabId = tab.id;
 
   // ensure one attachment at a time
@@ -101,4 +101,4 @@ chrome.contextMenus.onClicked.addListener(async (_, tab) => {
 });
 
 // for testing
-Object.assign(self, { attach });
+Object.assign(self, { attach, _debug, _setUnderTest });

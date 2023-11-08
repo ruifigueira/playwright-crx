@@ -26,10 +26,12 @@ export class JsonlLanguageGenerator implements LanguageGenerator {
 
   generateAction(actionInContext: ActionInContext): string {
     const locator = (actionInContext.action as any).selector ? JSON.parse(asLocator('jsonl', (actionInContext.action as any).selector)) : undefined;
+    const { pageAlias, isMainFrame, ...frame } = actionInContext.frame;
     const entry = {
       ...actionInContext.action,
-      pageAlias: actionInContext.frame.pageAlias,
+      pageAlias,
       locator,
+      frame: isMainFrame ? undefined : frame,
     };
     return JSON.stringify(entry);
   }

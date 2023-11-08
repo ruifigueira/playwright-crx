@@ -50,6 +50,7 @@ export class Debugger extends EventEmitter implements InstrumentationListener {
 
   async setMuted(muted: boolean) {
     this._muted = muted;
+    if (muted) this.resume(false);
   }
 
   async onBeforeCall(sdkObject: SdkObject, metadata: CallMetadata): Promise<void> {
@@ -71,6 +72,11 @@ export class Debugger extends EventEmitter implements InstrumentationListener {
   async onBeforeInputAction(sdkObject: SdkObject, metadata: CallMetadata): Promise<void> {
     if (this._muted)
       return;
+
+    // onBeforeCall already handles metadata.pause, we don't want to pause again
+    if (metadata.playing)
+      return;
+
     if (this._enabled && this._pauseOnNextStatement)
       await this.pause(sdkObject, metadata);
   }
@@ -128,6 +134,8 @@ function shouldPauseOnCall(sdkObject: SdkObject, metadata: CallMetadata): boolea
 }
 
 function shouldPauseBeforeStep(metadata: CallMetadata): boolean {
+  if (metadata.playing)
+    return true;
   // Don't stop on internal.
   if (!metadata.apiName)
     return false;

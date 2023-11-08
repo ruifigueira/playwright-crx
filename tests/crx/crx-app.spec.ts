@@ -88,6 +88,7 @@ test('should attach with query url as string', async ({ runCrxTest }) => {
       url: server.EMPTY_PAGE
     });
     expect(p1).toBeTruthy();
+    expect(p1.url()).toBe(server.EMPTY_PAGE);
   });
 });
 

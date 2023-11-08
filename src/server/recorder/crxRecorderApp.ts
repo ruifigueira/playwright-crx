@@ -15,10 +15,14 @@
  */
 import type { CallLog, EventData, Source } from '@recorder/recorderTypes';
 import { EventEmitter } from 'events';
+import { BrowserContext } from 'playwright-core/lib/server/browserContext';
 import type { Recorder } from 'playwright-core/lib/server/recorder';
 import type { IRecorderApp } from 'playwright-core/lib/server/recorder/recorderApp';
 import { ManualPromise } from 'playwright-core/lib/utils';
 import type * as channels from '../../protocol/channels';
+import Player, { ActionWithContext } from './crxPlayer';
+import { Script, toSource } from './script';
+import { LanguageGeneratorOptions } from 'playwright-core/lib/server/recorder/language';
 
 type Port = chrome.runtime.Port;
 type TabChangeInfo = chrome.tabs.TabChangeInfo;
@@ -35,12 +39,19 @@ export type RecorderMessage = { type: 'recorder' } & (
 
 export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   private _recorder: Recorder;
+  private _context: BrowserContext;
   private _window?: ChromeWindow;
   private _port?: Port;
+  private _player: Player;
+  private _filename?: string;
+  private _jsonlSource?: Source;
 
-  constructor(recorder: Recorder) {
+  constructor(recorder: Recorder, context: BrowserContext) {
     super();
     this._recorder = recorder;
+    this._context = context;
+    this._player = new Player(this._context);
+    this._player.on('start', () => this._recorder.clearErrors());
     chrome.windows.onRemoved.addListener(window => {
       if (this._window?.id === window)
         this.hide();
@@ -50,7 +61,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   async open(options?: channels.CrxApplicationShowRecorderParams) {
     if (!this._window) {
       const promise = new ManualPromise<number>();
-      this._window = await chrome.windows.create({ type: 'popup', url: 'index.html', });
+      this._window = await chrome.windows.create({ type: 'popup', url: 'index.html' });
       const onUpdated = (tabId: number, { status }: TabChangeInfo) => {
         if (this._window?.tabs?.find(t => t.id === tabId) && status === 'complete') {
           chrome.tabs.onUpdated.removeListener(onUpdated);
@@ -70,9 +81,10 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
 
     // set in recorder
     this._onMessage({ type: 'recorderEvent', event: 'clear', params: {} });
-    this._onMessage({ type: 'recorderEvent', event: 'fileChanged', params: { file: 'playwright-test' } });
-    // also sends event to crx recorder client
+    this._onMessage({ type: 'recorderEvent', event: 'fileChanged', params: { file: 'javascript' } });
     this._onMessage({ type: 'recorderEvent', event: 'setMode', params: { mode } });
+
+    // set in UI
     this.setMode(mode);
   }
 
@@ -117,12 +129,31 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   }
 
   async setSources(sources: Source[]) {
+    this._jsonlSource = sources.find(s => s.id === 'jsonl');
     await this._sendMessage({ type: 'recorder', method: 'setSources', sources });
   }
 
-  private _onMessage = ({ type, ...eventData }: EventData & { type: string }) => {
-    if (type === 'recorderEvent')
-      this.emit('event', eventData);
+  private _onMessage = ({ type, event, params }: (EventData | SaveEventData) & { type: string }) => {
+    if (type === 'recorderEvent') {
+      switch (event) {
+        case 'fileChanged':
+          this._filename = params.file;
+          break;
+        case 'resume':
+        case 'step':
+          this._player.play(this._getActionsWithContext()).catch(() => {});
+          break;
+        case 'setMode':
+          if (params.mode === 'none') {
+            this._player.pause().catch(() => {});
+          } else {
+            this._player.stop().catch(() => {});
+          }
+          break;
+      }
+
+      this.emit('event', { event, params });
+    }
   };
 
   async _sendMessage(msg: RecorderMessage) {
@@ -132,4 +163,26 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
       // just ignore
     }
   }
+
+  private _getActionsWithContext(): ActionWithContext[] {
+    const { header: headerJson, actions: actionsJson } = this._jsonlSource ?? {};
+    const file = this._filename;
+
+    if (!headerJson || !actionsJson || !file) return [];
+
+    const header = JSON.parse(headerJson) as LanguageGeneratorOptions;
+    const actions = actionsJson.map(a => JSON.parse(a)) as ActionWithContext[];
+    const script: Script = { header, actions, filename: file };
+    const source = toSource(script);
+
+    return script.actions.map((action, index) => {
+      const location = { file, line: sourceLine(source!, index) };
+      return { ...action, location };
+    });
+  }
+}
+
+function sourceLine({ header, actions }: Source, index: number) {
+  const numLines = (str?: string) => str ? str.split(/\r?\n/).length : 0;
+  return numLines(header) + numLines(actions?.slice(0, index).filter(Boolean).join('\n')) + 1;
 }
