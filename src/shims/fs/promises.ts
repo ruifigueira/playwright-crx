@@ -1,5 +1,37 @@
 import { promises } from "./index";
 
-export const { readFile, readlink, rename, readdir, stat, lstat } = promises;
+export const {
+  access,
+  copyFile,
+  cp,
+  open,
+  opendir,
+  rename,
+  truncate,
+  rm,
+  rmdir,
+  mkdir,
+  readdir,
+  readlink,
+  symlink,
+  lstat,
+  stat,
+  statfs,
+  link,
+  unlink,
+  chmod,
+  lchmod,
+  lchown,
+  chown,
+  utimes,
+  lutimes,
+  realpath,
+  mkdtemp,
+  writeFile,
+  appendFile,
+  readFile,
+  watch,
+  constants,
+} = promises;
 
-export const realpath = () => ({});
+export default promises;

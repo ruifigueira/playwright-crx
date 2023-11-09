@@ -14,26 +14,104 @@
  * limitations under the License.
  */
 
-import FS from '@isomorphic-git/lightning-fs';
+import { fs } from 'memfs';
 
-const fs = new FS('crx');
-const noop = () => ({});;
+export const {
+  appendFile,
+  appendFileSync,
+  access,
+  accessSync,
+  chown,
+  chownSync,
+  chmod,
+  chmodSync,
+  close,
+  closeSync,
+  copyFile,
+  copyFileSync,
+  cp,
+  cpSync,
+  createReadStream,
+  createWriteStream,
+  exists,
+  existsSync,
+  fchown,
+  fchownSync,
+  fchmod,
+  fchmodSync,
+  fdatasync,
+  fdatasyncSync,
+  fstat,
+  fstatSync,
+  fsync,
+  fsyncSync,
+  ftruncate,
+  ftruncateSync,
+  futimes,
+  futimesSync,
+  lchown,
+  lchownSync,
+  lchmod,
+  lchmodSync,
+  link,
+  linkSync,
+  lstat,
+  lstatSync,
+  lutimes,
+  lutimesSync,
+  mkdir,
+  mkdirSync,
+  mkdtemp,
+  mkdtempSync,
+  open,
+  openSync,
+  opendir,
+  opendirSync,
+  readdir,
+  readdirSync,
+  read,
+  readSync,
+  readv,
+  readvSync,
+  readFile,
+  readFileSync,
+  readlink,
+  readlinkSync,
+  realpath,
+  realpathSync,
+  rename,
+  renameSync,
+  rm,
+  rmSync,
+  rmdir,
+  rmdirSync,
+  stat,
+  statfs,
+  statSync,
+  statfsSync,
+  symlink,
+  symlinkSync,
+  truncate,
+  truncateSync,
+  unwatchFile,
+  unlink,
+  unlinkSync,
+  utimes,
+  utimesSync,
+  watch,
+  watchFile,
+  writeFile,
+  writeFileSync,
+  write,
+  writeSync,
+  writev,
+  writevSync,
+  Dirent,
+  Stats,
+  ReadStream,
+  WriteStream,
+  constants,
+  promises,
+} = fs;
 
 export default fs;
-export const { promises, readFile, readlink, rename, readdir, stat, lstat } = fs;
-
-export const chmodSync = noop;
-export const createWriteStream = noop;
-export const existsSync = noop;
-export const lstatSync = noop;
-export const mkdirSync = noop;
-export const readdirSync = noop;
-export const readFileSync = noop;
-export const readlinkSync = noop;
-export const realpathSync = noop;
-export const renameSync = noop;
-export const rmdirSync = noop;
-export const rmSync = noop;
-export const statSync = noop;
-export const unlinkSync = noop;
-export const writeFileSync = noop;

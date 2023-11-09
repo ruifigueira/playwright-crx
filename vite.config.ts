@@ -62,7 +62,6 @@ export default defineConfig({
 
       // shims
       '_util': path.resolve(__dirname, './node_modules/util'),
-      '@isomorphic-git/lightning-fs': path.resolve(__dirname, './node_modules/@isomorphic-git/lightning-fs'),
       'assert': path.resolve(__dirname, './node_modules/assert'),
       'buffer': path.resolve(__dirname, './node_modules/buffer'),
       'child_process': path.resolve(__dirname, './src/shims/child_process'),
