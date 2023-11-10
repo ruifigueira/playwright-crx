@@ -58,6 +58,8 @@ In terms of chrome extension functionality, it provides:
 - [context menu](https://developer.chrome.com/docs/extensions/reference/contextMenus/) for the same purpose
 - pages must be explicitly attached to be recordable, except if they are opened from already attached pages
 - closing the recorder window will detach all pages and uninstall injected scripts (highlights and event listeners)
+- a player that will run the recorded instructions, in any supported language*
+   - it actually doesn't run Java, Python or C#, but it uses an internal JSONL format to know which instructions it needs to run and how to map them into the current selected code. This way, it can highlight the lines being executed.
 
 ## Build
 
