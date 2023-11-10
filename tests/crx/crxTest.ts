@@ -15,24 +15,25 @@
  */
 
 import type { Worker } from '@playwright/test';
-import { test as base, chromium } from '@playwright/test';
+import { test as base, chromium, mergeTests } from '@playwright/test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { CrxApplication, Page as CrxPage, BrowserContext as CrxBrowserContext } from 'playwright-crx';
+import type { CrxApplication, BrowserContext as CrxBrowserContext, Page as CrxPage } from 'playwright-crx';
+import type * as CrxTests from 'playwright-crx/test';
 import { rimrafSync } from 'rimraf';
 
-type Server = {
+type CrxServer = {
   EMPTY_PAGE: string;
   PREFIX: string;
 };
 
 type CrxFixtures = {
-  expect: typeof expect;
+  expect: typeof CrxTests.expect;
   page: CrxPage;
   context: CrxBrowserContext;
   crxApp: CrxApplication;
-  server: Server;
+  server: CrxServer;
   _debug: Debug;
 }
 
@@ -47,8 +48,8 @@ declare const serviceWorker: ServiceWorker;
 
 // from https://playwright.dev/docs/chrome-extensions#testing
 export const test = base.extend<{
+  basePath: string,
   extensionPath: string;
-  basePath: string;
   createUserDataDir: () => string;
   extensionServiceWorker: Worker;
   extensionId: string;
@@ -58,9 +59,9 @@ export const test = base.extend<{
   _debug: Debug;
 }>({
 
-  extensionPath: path.join(__dirname, '..', 'test-extension', 'dist'),
-
   basePath: path.join(__dirname, '..', '..', 'playwright', 'tests', 'assets'),
+
+  extensionPath: path.join(__dirname, '..', 'test-extension', 'dist'),
 
   createUserDataDir: async ({}, run) => {
     const dirs: string[] = [];
@@ -72,7 +73,7 @@ export const test = base.extend<{
     rimrafSync(dirs);
   },
 
-  context: async ({ extensionPath, createUserDataDir, basePath, baseURL }, use) => {
+  context: async ({ extensionPath, createUserDataDir }, use) => {
     const context = await chromium.launchPersistentContext(createUserDataDir(), {
       headless: false,
       args: [
@@ -80,7 +81,6 @@ export const test = base.extend<{
         `--load-extension=${extensionPath}`,
       ],
     });
-    context.route(`${baseURL}/**/*`, (route, request) => route.fulfill({ path: path.join(basePath, new URL(request.url()).pathname) }));
     await use(context);
     await context.close();
   },
@@ -108,8 +108,9 @@ export const test = base.extend<{
     await use(extensionId);
   },
 
-  runCrxTest: async ({ extensionServiceWorker }, use) => {
-    use((fn) => extensionServiceWorker.evaluate(`_runTest(${fn.toString()})`));
+  runCrxTest: async ({ extensionServiceWorker, baseURL }, use) => {
+    const params = { server: { PREFIX: baseURL, EMPTY_PAGE: `${baseURL}/empty.html` } };
+    use((fn) => extensionServiceWorker.evaluate(`_runTest(${fn.toString()}, ${JSON.stringify(params)})`));
   },
 
   mockPaths: async ({ context, baseURL }, run) => {
@@ -164,4 +165,5 @@ export const test = base.extend<{
     });
   },
 });
+
 export const expect = test.expect;
