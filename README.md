@@ -6,6 +6,26 @@ For that, it relies on [`chrome.debugger`](https://developer.chrome.com/docs/ext
 
 **NOTE:** If you want to write end-to-end tests, you should use [@playwright/test](https://playwright.dev/docs/intro) instead.
 
+## Recorder / Player
+
+**Note:** This extension is available in [Chrome Web Store](https://chrome.google.com/webstore/detail/playwright-crx/jambeljnbnfbkcpnoiaedcabbgmnnlcd).
+
+A small demo of recorder and player in action:
+
+![Playwright CRX Recorder / Player](./docs/assets/recorder-player.gif)
+
+It provides playwright recorder (the same used in `playwright codegen`) bundled as a chrome extension, with no other dependencies.
+This way, with your normal chrome / chromium / edge browser, you can record playwright scripts in your prefered language.
+
+In terms of chrome extension functionality, it provides:
+
+- [action button](https://developer.chrome.com/docs/extensions/reference/action/) for attaching current tab into recorder (it opens the recorder if it's closed)
+- [context menu](https://developer.chrome.com/docs/extensions/reference/contextMenus/) for the same purpose
+- pages must be explicitly attached to be recordable, except if they are opened from already attached pages
+- closing the recorder window will detach all pages and uninstall injected scripts (highlights and event listeners)
+- a player that will run the recorded instructions, in any supported language*
+   - it actually doesn't run Java, Python or C#, but it uses an internal JSONL format to know which instructions it needs to run and how to map them into the current selected code. This way, it can highlight the lines being executed.
+
 ## API
 
 It's possible to use `playwright-crx` as a library to create new chrome extensions.
@@ -42,24 +62,6 @@ chrome.action.onClicked.addListener(async ({ id: tabId }) => {
 ```
 
 A more complete example can be found in `examples/todomvc-crx`.
-
-## Examples
-
-### Recorder
-
-**Note:** This extension is available in [Chrome Web Store](https://chrome.google.com/webstore/detail/playwright-crx/jambeljnbnfbkcpnoiaedcabbgmnnlcd).
-
-This example provides playwright recorder (the same used in `playwright codegen`) bundled as a chrome extension.
-This way, with your normal chrome / chromium / edge browser, you can record playwright scripts in your prefered language.
-
-In terms of chrome extension functionality, it provides:
-
-- [action button](https://developer.chrome.com/docs/extensions/reference/action/) for attaching current tab into recorder (it opens the recorder if it's closed)
-- [context menu](https://developer.chrome.com/docs/extensions/reference/contextMenus/) for the same purpose
-- pages must be explicitly attached to be recordable, except if they are opened from already attached pages
-- closing the recorder window will detach all pages and uninstall injected scripts (highlights and event listeners)
-- a player that will run the recorded instructions, in any supported language*
-   - it actually doesn't run Java, Python or C#, but it uses an internal JSONL format to know which instructions it needs to run and how to map them into the current selected code. This way, it can highlight the lines being executed.
 
 ## Build
 
