@@ -155,3 +155,10 @@ test.fixme('should remove page if tab is externally detached',async ({ runCrxTes
     expect(crxApp.pages()).not.toContain(page);
   });
 });
+
+test('should not block on pages with service workers', async ({ runCrxTest }) => {
+  await runCrxTest(async ({ expect, page, server }) => {
+    await page.goto(`${server.PREFIX}/serviceworkers/empty/sw.html`);
+    await expect(page.evaluate(() => window['registrationPromise'])).resolves.toBeTruthy();
+  });
+});

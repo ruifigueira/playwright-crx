@@ -58,6 +58,9 @@ export class CrxTransport implements ConnectionTransport {
       if (message.method === 'Target.setAutoAttach' && !tabId) {
         // no tab to attach, just skip for now...
         result = await Promise.resolve().then();
+      } else if (message.method === 'Target.setAutoAttach') {
+        // we need to exclude service workers, see https://github.com/ruifigueira/playwright-crx/issues/1
+        result = await this._send(message.method, { tabId, ...message.params, filter: [{ exclude: true, type: 'service_worker' }] });
       } else if (message.method === 'Target.getTargetInfo' && !tabId) {
         // most likely related with https://chromium-review.googlesource.com/c/chromium/src/+/2885888
         // See CRBrowser.connect
