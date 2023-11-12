@@ -9,7 +9,7 @@
     "build": "tsc && vite build && vite --config vite.recorder.config.ts build"
   },
   "dependencies": {
-    "playwright-crx": "0.1.0"
+    "playwright-crx": "0.1.1-next"
   },
   "devDependencies": {
     "typescript": "^5.1.3",
