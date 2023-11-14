@@ -144,7 +144,7 @@ test('should record popups', async ({ page, attachRecorder, baseURL, mockPaths, 
   await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
 });
 
-test('should record with all supported actions', async ({ context, page, recorderPage, baseURL, mockPaths, recordAction, attachRecorder, basePath }) => {
+test('should record with all supported actions and assertions', async ({ context, page, recorderPage, baseURL, mockPaths, recordAction, recordAssertion, attachRecorder, basePath }) => {
   await mockPaths({
     'root.html': `<html>
       <input type="checkbox">
@@ -152,6 +152,7 @@ test('should record with all supported actions', async ({ context, page, recorde
       <input type="text">
       <select><option>A</option><option>B</option></select>
       <input type="file">
+      <div>Some long text</div>
     </html>`,
   });
 
@@ -186,6 +187,13 @@ test('should record with all supported actions', async ({ context, page, recorde
   // closePage
   await recordAction(() => page1.close());
 
+  // record assertions
+  await recordAssertion(page.getByRole('checkbox'), 'assertChecked', false);
+  await recordAssertion(page.locator('[type=text]'), 'assertValue', 'input with value');
+  await recordAssertion(page.locator('select'), 'assertValue', 'B');
+  await recordAssertion(page.locator('div'), 'assertText', 'long text');
+  await recordAssertion(page.locator('div'), 'assertVisible', 'long text');
+
   await recorderPage.getByTitle('Record').click();
 
   const code = `const { chromium } = require('playwright');
@@ -206,6 +214,11 @@ test('should record with all supported actions', async ({ context, page, recorde
   await page.locator('input[type="file"]').setInputFiles('file-to-upload.txt');
   const page1 = await context.newPage();
   await page1.close();
+  // await expect(page.getByRole('checkbox')).not.toBeChecked();
+  // await expect(page.locator('input[type=\"text\"]')).toHaveValue('input with value');
+  // await expect(page.getByRole('combobox')).toHaveValue('B');
+  // await expect(page.getByText('Some long text')).toContainText('long text');
+  // await expect(page.getByText('Some long text')).toBeVisible();
 ​
   // ---------------------
   await context.close();
