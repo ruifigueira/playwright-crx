@@ -15,7 +15,7 @@
  */
 
 import path from 'path';
-import { Page } from 'playwright-core';
+import { Page, Locator } from 'playwright-core';
 import { test as crxTest, expect } from './crxTest';
 
 export { expect } from './crxTest';
@@ -73,6 +73,7 @@ export const test = crxTest.extend<{
   attachRecorder: (page: Page) => Promise<Page>;
   recorderPage: Page;
   recordAction<T = void>(action: () => Promise<T>): Promise<T>;
+  recordAssertion(locator: Locator, type: 'assertText'|'assertValue'|'assertChecked'|'assertVisible', param?: string|boolean): Promise<void>;
 }>({
   extensionPath: path.join(__dirname, '../../examples/recorder-crx/dist'),
 
@@ -122,4 +123,33 @@ export const test = crxTest.extend<{
       return result;
     });
   },
+
+  recordAssertion: async ({ recordAction }, run) => {
+    await run(async (locator: Locator, name: 'assertText'|'assertValue'|'assertChecked'|'assertVisible', param: string|boolean) => {
+      await recordAction(async () => {
+        const selector = await locator.evaluate(elem => (window as any).playwright.selector(elem) as string);
+        const baseAction = {
+          name,
+          signals: [],
+          selector,
+        };
+        let action;
+        switch (name) {
+          case 'assertText':
+            action = { ...baseAction, text: param, substring: true };
+            break;
+          case 'assertValue':
+            action = { ...baseAction, value: param };
+            break;
+          case 'assertChecked':
+            action = { ...baseAction, checked: !!param };
+            break;
+          case 'assertVisible':
+            action = { ...baseAction };
+            break;
+        }
+        await locator.page().evaluate(action => (window as any).__pw_recorderRecordAction(action), action);
+      });
+    });
+  }
 });

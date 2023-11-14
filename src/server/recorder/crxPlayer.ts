@@ -23,6 +23,8 @@ import type { Page } from 'playwright-core/lib/server/page';
 import type * as actions from 'playwright-core/lib/server/recorder/recorderActions';
 import { toClickOptions, toModifiers } from 'playwright-core/lib/server/recorder/utils';
 import { ManualPromise, createGuid, isUnderTest, monotonicTime } from 'playwright-core/lib/utils';
+import { toExpectedTextValues } from '@playwright/test/lib/matchers/toMatchText';
+import { FrameExpectParams } from '@protocol/channels';
 
 type Location = CallMetadata['location'];
 
@@ -204,6 +206,37 @@ export default class Player extends EventEmitter {
 
     if (action.name === 'setInputFiles')
       await perform('setInputFiles', { selector: action.selector, files: action.files }, () => Promise.reject(new Error(`player does not support setInputFiles yet`)));
+
+    async function expect(metadata: CallMetadata, selector: string, options: FrameExpectParams) {
+      const result = await frame!.expect(metadata, selector, options);
+      if (result.matches === options.isNot) {
+        const e = new Error('Expect failed');
+        e.name = 'Expect';
+        throw e;
+      }
+    }
+
+    if (action.name === 'assertText')
+      await perform('assertText', { selector: action.selector, text: action.text, substring: action.substring }, async callMetadata => {
+        const expectedText = toExpectedTextValues([action.text], { normalizeWhiteSpace: true, matchSubstring: action.substring });
+        await expect(callMetadata, action.selector, { selector: action.selector, expression: 'to.have.text', expectedText, isNot: false, timeout: kActionTimeout });
+      });
+
+    if (action.name === 'assertValue')
+      await perform('assertValue', { selector: action.selector, value: action.value }, async callMetadata => {
+        const expectedText = toExpectedTextValues([action.value]);
+        await expect(callMetadata, action.selector, { selector: action.selector, expression: 'to.have.value', expectedText, isNot: false, timeout: kActionTimeout });
+      });
+
+    if (action.name === 'assertChecked')
+      await perform('assertChecked', { selector: action.selector, checked: action.checked }, async callMetadata => {
+        await expect(callMetadata, action.selector, { selector: action.selector, expression: action.checked ? 'to.be.checked' : 'to.be.unchecked', isNot: false, timeout: kActionTimeout });
+      });
+
+    if (action.name === 'assertVisible')
+      await perform('assertVisible', { selector: action.selector }, async callMetadata => {
+        await expect(callMetadata, action.selector, { selector: action.selector, expression: 'to.be.visible', isNot: false, timeout: kActionTimeout });
+      });
   }
 
   private _checkStopped() {
