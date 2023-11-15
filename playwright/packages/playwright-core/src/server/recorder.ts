@@ -280,6 +280,10 @@ export class Recorder implements InstrumentationListener {
       page.mainFrame().evaluateExpression('window.__pw_refreshOverlay()').catch(() => {});
   }
 
+  async _uninstallInjectedRecorder(page: Page) {
+    await Promise.all(page.frames().map(f => f.evaluateExpression('window.__pw_uninstall()').catch(e => console.error(e))));
+  }
+
   async onBeforeCall(sdkObject: SdkObject, metadata: CallMetadata) {
     if (this._omitCallTracking || this._mode === 'recording' || this._mode === 'assertingText' || this._mode === 'assertingVisibility' || this._mode === 'assertingValue')
       return;
