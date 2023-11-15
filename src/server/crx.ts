@@ -191,7 +191,7 @@ export class CrxApplication extends SdkObject {
   async close() {
     await Promise.all(this._crPages().map(crPage => this._doDetach(crPage._targetId)));
     await this._transport.closeAndWait();
-    await this._browser.close();
+    await this._browser.close({});
   }
 
   private async _doDetach(targetId?: string) {
@@ -204,7 +204,10 @@ export class CrxApplication extends SdkObject {
     if (pageOrError instanceof Error) throw pageOrError;
 
     // ensure we don't have any injected highlights
-    await pageOrError.hideHighlight();
+    await Promise.all([
+      this._recorderApp?.uninstall(pageOrError),
+      pageOrError.hideHighlight(),
+    ]);
     const closed = new Promise(x => pageOrError.once(Page.Events.Close, x));
     await this._transport.detach(targetId);
     await closed;
