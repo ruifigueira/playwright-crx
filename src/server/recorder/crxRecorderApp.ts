@@ -23,6 +23,7 @@ import type * as channels from '../../protocol/channels';
 import Player, { ActionWithContext } from './crxPlayer';
 import { Script, toSource } from './script';
 import { LanguageGeneratorOptions } from 'playwright-core/lib/server/recorder/language';
+import { Page } from 'playwright-core/lib/server/page';
 
 type Port = chrome.runtime.Port;
 type TabChangeInfo = chrome.tabs.TabChangeInfo;
@@ -168,6 +169,10 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     } catch (e) {
       // just ignore
     }
+  }
+
+  async uninstall(page: Page) {
+    await this._recorder._uninstallInjectedRecorder(page);
   }
 
   private _getActionsWithContext(): ActionWithContext[] {
