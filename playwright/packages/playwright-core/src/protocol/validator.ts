@@ -175,7 +175,7 @@ scheme.APIRequestContextFetchParams = tObject({
   method: tOptional(tString),
   headers: tOptional(tArray(tType('NameValue'))),
   postData: tOptional(tBinary),
-  jsonData: tOptional(tAny),
+  jsonData: tOptional(tString),
   formData: tOptional(tArray(tType('NameValue'))),
   multipartData: tOptional(tArray(tType('FormField'))),
   timeout: tOptional(tNumber),
@@ -367,6 +367,9 @@ scheme.DebugControllerInspectRequestedEvent = tObject({
   selector: tString,
   locator: tString,
 });
+scheme.DebugControllerSetModeRequestedEvent = tObject({
+  mode: tString,
+});
 scheme.DebugControllerStateChangedEvent = tObject({
   pageCount: tNumber,
 });
@@ -521,6 +524,7 @@ scheme.BrowserTypeLaunchPersistentContextParams = tObject({
   downloadsPath: tOptional(tString),
   tracesDir: tOptional(tString),
   chromiumSandbox: tOptional(tBoolean),
+  firefoxUserPrefs: tOptional(tAny),
   noDefaultViewport: tOptional(tBoolean),
   viewport: tOptional(tObject({
     width: tNumber,
@@ -588,7 +592,9 @@ scheme.BrowserInitializer = tObject({
   name: tString,
 });
 scheme.BrowserCloseEvent = tOptional(tObject({}));
-scheme.BrowserCloseParams = tOptional(tObject({}));
+scheme.BrowserCloseParams = tObject({
+  reason: tOptional(tString),
+});
 scheme.BrowserCloseResult = tOptional(tObject({}));
 scheme.BrowserKillForTestsParams = tOptional(tObject({}));
 scheme.BrowserKillForTestsResult = tOptional(tObject({}));
@@ -831,7 +837,9 @@ scheme.BrowserContextClearCookiesParams = tOptional(tObject({}));
 scheme.BrowserContextClearCookiesResult = tOptional(tObject({}));
 scheme.BrowserContextClearPermissionsParams = tOptional(tObject({}));
 scheme.BrowserContextClearPermissionsResult = tOptional(tObject({}));
-scheme.BrowserContextCloseParams = tOptional(tObject({}));
+scheme.BrowserContextCloseParams = tObject({
+  reason: tOptional(tString),
+});
 scheme.BrowserContextCloseResult = tOptional(tObject({}));
 scheme.BrowserContextCookiesParams = tObject({
   urls: tArray(tString),
@@ -936,6 +944,7 @@ scheme.BrowserContextHarExportResult = tObject({
 });
 scheme.BrowserContextCreateTempFileParams = tObject({
   name: tString,
+  lastModifiedMs: tOptional(tNumber),
 });
 scheme.BrowserContextCreateTempFileResult = tObject({
   writableStream: tChannel(['WritableStream']),
@@ -1000,6 +1009,7 @@ scheme.PageAddInitScriptParams = tObject({
 scheme.PageAddInitScriptResult = tOptional(tObject({}));
 scheme.PageCloseParams = tObject({
   runBeforeUnload: tOptional(tBoolean),
+  reason: tOptional(tString),
 });
 scheme.PageCloseResult = tOptional(tObject({}));
 scheme.PageEmulateMediaParams = tObject({
@@ -1549,24 +1559,17 @@ scheme.FrameSetContentResult = tOptional(tObject({}));
 scheme.FrameSetInputFilesParams = tObject({
   selector: tString,
   strict: tOptional(tBoolean),
-  files: tArray(tObject({
+  payloads: tOptional(tArray(tObject({
     name: tString,
     mimeType: tOptional(tString),
     buffer: tBinary,
-  })),
-  timeout: tOptional(tNumber),
-  noWaitAfter: tOptional(tBoolean),
-});
-scheme.FrameSetInputFilesResult = tOptional(tObject({}));
-scheme.FrameSetInputFilePathsParams = tObject({
-  selector: tString,
-  strict: tOptional(tBoolean),
+  }))),
   localPaths: tOptional(tArray(tString)),
   streams: tOptional(tArray(tChannel(['WritableStream']))),
   timeout: tOptional(tNumber),
   noWaitAfter: tOptional(tBoolean),
 });
-scheme.FrameSetInputFilePathsResult = tOptional(tObject({}));
+scheme.FrameSetInputFilesResult = tOptional(tObject({}));
 scheme.FrameTapParams = tObject({
   selector: tString,
   strict: tOptional(tBoolean),
@@ -1922,22 +1925,17 @@ scheme.ElementHandleSelectTextParams = tObject({
 });
 scheme.ElementHandleSelectTextResult = tOptional(tObject({}));
 scheme.ElementHandleSetInputFilesParams = tObject({
-  files: tArray(tObject({
+  payloads: tOptional(tArray(tObject({
     name: tString,
     mimeType: tOptional(tString),
     buffer: tBinary,
-  })),
-  timeout: tOptional(tNumber),
-  noWaitAfter: tOptional(tBoolean),
-});
-scheme.ElementHandleSetInputFilesResult = tOptional(tObject({}));
-scheme.ElementHandleSetInputFilePathsParams = tObject({
+  }))),
   localPaths: tOptional(tArray(tString)),
   streams: tOptional(tArray(tChannel(['WritableStream']))),
   timeout: tOptional(tNumber),
   noWaitAfter: tOptional(tBoolean),
 });
-scheme.ElementHandleSetInputFilePathsResult = tOptional(tObject({}));
+scheme.ElementHandleSetInputFilesResult = tOptional(tObject({}));
 scheme.ElementHandleTapParams = tObject({
   force: tOptional(tBoolean),
   noWaitAfter: tOptional(tBoolean),
@@ -2156,7 +2154,7 @@ scheme.ArtifactInitializer = tObject({
 });
 scheme.ArtifactPathAfterFinishedParams = tOptional(tObject({}));
 scheme.ArtifactPathAfterFinishedResult = tObject({
-  value: tOptional(tString),
+  value: tString,
 });
 scheme.ArtifactSaveAsParams = tObject({
   path: tString,
@@ -2172,7 +2170,7 @@ scheme.ArtifactFailureResult = tObject({
 });
 scheme.ArtifactStreamParams = tOptional(tObject({}));
 scheme.ArtifactStreamResult = tObject({
-  stream: tOptional(tChannel(['Stream'])),
+  stream: tChannel(['Stream']),
 });
 scheme.ArtifactCancelParams = tOptional(tObject({}));
 scheme.ArtifactCancelResult = tOptional(tObject({}));

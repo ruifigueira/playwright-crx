@@ -22,6 +22,7 @@ import { pipeline } from 'stream';
 import zlib from 'zlib';
 import { contextTest as it, expect } from '../config/browserTest';
 import { suppressCertificateWarning } from '../config/utils';
+import { kTargetClosedErrorMessage } from 'tests/config/errors';
 
 it.skip(({ mode }) => mode !== 'default');
 
@@ -134,7 +135,7 @@ for (const method of ['fetch', 'delete', 'get', 'head', 'patch', 'post', 'put'] 
         }
       }),
     ]);
-    const params = new URLSearchParams(request.url.substr(request.url.indexOf('?')));
+    const params = new URLSearchParams(request.url!.substr(request.url!.indexOf('?')));
     expect(params.get('p1')).toEqual('v1');
     expect(params.get('парам2')).toEqual('знач2');
   });
@@ -337,7 +338,7 @@ it('should handle cookies on redirects', async ({ context, server, browserName, 
       context.request.get(`${server.PREFIX}/redirect1`),
     ]);
     expect(req1.headers.cookie).toBe('r1=v1');
-    expect(req2.headers.cookie.split(';').map(s => s.trim()).sort()).toEqual(['r1=v1', 'r2=v2']);
+    expect(req2.headers.cookie!.split(';').map(s => s.trim()).sort()).toEqual(['r1=v1', 'r2=v2']);
     expect(req3.headers.cookie).toBe('r1=v1');
   }
   const cookies = await context.cookies();
@@ -369,7 +370,7 @@ it('should return raw headers', async ({ context, page, server }) => {
   server.setRoute('/headers', (req, res) => {
     // Headers array is only supported since Node v14.14.0 so we write directly to the socket.
     // res.writeHead(200, ['name-a', 'v1','name-b', 'v4','Name-a', 'v2', 'name-A', 'v3']);
-    const conn = res.connection;
+    const conn = res.connection!;
     conn.write('HTTP/1.1 200 OK\r\n');
     conn.write('Name-A: v1\r\n');
     conn.write('name-b: v4\r\n');
@@ -773,7 +774,7 @@ it('should throw on a redirect with an invalid URL', async ({ context, server })
   server.setRedirect('/redirect', '/test');
   server.setRoute('/test', (req, res) => {
     // Node.js prevents us from responding with an invalid header, therefore we manually write the response.
-    const conn = res.connection;
+    const conn = res.connection!;
     conn.write('HTTP/1.1 302\r\n');
     conn.write('Location: https://здравствуйте/\r\n');
     conn.write('\r\n');
@@ -920,7 +921,7 @@ it('should support multipart/form-data', async function({ context, server }) {
   expect(response.status()).toBe(200);
 });
 
-it('should support multipart/form-data with ReadSream values', async function({ context, page, asset, server }) {
+it('should support multipart/form-data with ReadStream values', async function({ context, page, asset, server }) {
   const formReceived = new Promise<{error: any, fields: formidable.Fields, files: Record<string, formidable.File>, serverRequest: IncomingMessage}>(resolve => {
     server.setRoute('/empty.html', async (serverRequest, res) => {
       const form = new formidable.IncomingForm();
@@ -950,6 +951,35 @@ it('should support multipart/form-data with ReadSream values', async function({ 
   expect(files['readStream'].originalFilename).toBe('simplezip.json');
   expect(files['readStream'].mimetype).toBe('application/json');
   expect(fs.readFileSync(files['readStream'].filepath).toString()).toBe(fs.readFileSync(asset('simplezip.json')).toString());
+  expect(response.status()).toBe(200);
+});
+
+it('should support multipart/form-data and keep the order', async function({ context, page, asset, server }) {
+  const given = {
+    firstName: 'John',
+    lastName: 'Doe',
+    age: 27,
+  };
+  given['foo']  = 'bar';
+  const givenKeys = Object.keys(given);
+  const formReceived = new Promise<{error: any, fields: formidable.Fields}>(resolve => {
+    server.setRoute('/empty.html', async (serverRequest, res) => {
+      const form = new formidable.IncomingForm();
+      form.parse(serverRequest, (error, fields, files) => {
+        server.serveFile(serverRequest, res);
+        resolve({ error, fields });
+      });
+    });
+  });
+  const [{ error, fields }, response] = await Promise.all([
+    formReceived,
+    context.request.post(server.EMPTY_PAGE, {
+      multipart: given,
+    })
+  ]);
+  expect(error).toBeFalsy();
+  const actualKeys = Object.keys(fields);
+  expect(actualKeys).toEqual(givenKeys);
   expect(response.status()).toBe(200);
 });
 
@@ -1029,7 +1059,7 @@ it('should accept bool and numeric params', async ({ page, server }) => {
       'bool2': false,
     }
   });
-  const params = new URLSearchParams(request.url.substr(request.url.indexOf('?')));
+  const params = new URLSearchParams(request!.url.substr(request!.url.indexOf('?')));
   expect(params.get('str')).toEqual('s');
   expect(params.get('num')).toEqual('10');
   expect(params.get('bool')).toEqual('true');
@@ -1049,7 +1079,7 @@ it('should abort requests when browser context closes', async ({ contextFactory,
     server.waitForRequest('/empty.html').then(() => context.close())
   ]);
   expect(error instanceof Error).toBeTruthy();
-  expect(error.message).toContain('Request context disposed');
+  expect(error.message).toContain(kTargetClosedErrorMessage);
   await connectionClosed;
 });
 
@@ -1162,4 +1192,10 @@ it('should update host header on redirect', async ({ context, server }) => {
   expect(await response.text()).toBe('Hello!');
 
   expect((await reqPromise).headers.host).toBe(new URL(server.CROSS_PROCESS_PREFIX).host);
+});
+
+it('should not work after dispose', async ({ context, server }) => {
+  it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/27822' });
+  await context.request.dispose();
+  expect(await context.request.get(server.EMPTY_PAGE).catch(e => e.message)).toContain(kTargetClosedErrorMessage);
 });

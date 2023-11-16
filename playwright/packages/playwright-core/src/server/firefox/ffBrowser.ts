@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { kBrowserClosedError } from '../../common/errors';
+import { TargetClosedError } from '../errors';
 import { assert } from '../../utils';
 import type { BrowserOptions } from '../browser';
 import { Browser } from '../browser';
@@ -43,7 +43,7 @@ export class FFBrowser extends Browser {
     const browser = new FFBrowser(parent, connection, options);
     if ((options as any).__testHookOnConnectToBrowser)
       await (options as any).__testHookOnConnectToBrowser();
-    let firefoxUserPrefs = options.persistent ? {} : options.originalLaunchOptions.firefoxUserPrefs ?? {};
+    let firefoxUserPrefs = options.originalLaunchOptions.firefoxUserPrefs ?? {};
     if (Object.keys(kBandaidFirefoxUserPrefs).length)
       firefoxUserPrefs = { ...kBandaidFirefoxUserPrefs, ...firefoxUserPrefs };
     const promises: Promise<any>[] = [
@@ -159,7 +159,7 @@ export class FFBrowser extends Browser {
 
   _onDisconnect() {
     for (const video of this._idToVideo.values())
-      video.artifact.reportFinished(kBrowserClosedError);
+      video.artifact.reportFinished(new TargetClosedError());
     this._idToVideo.clear();
     for (const ffPage of this._ffPages.values())
       ffPage.didClose();
@@ -376,7 +376,7 @@ export class FFBrowserContext extends BrowserContext {
     await this._browser.session.send('Browser.clearCache');
   }
 
-  async doClose() {
+  async doClose(reason: string | undefined) {
     if (!this._browserContextId) {
       if (this._options.recordVideo) {
         await this._browser.session.send('Browser.setVideoRecordingOptions', {
@@ -385,7 +385,7 @@ export class FFBrowserContext extends BrowserContext {
         });
       }
       // Closing persistent context should close the browser.
-      await this._browser.close();
+      await this._browser.close({ reason });
     } else {
       await this._browser.session.send('Browser.removeBrowserContext', { browserContextId: this._browserContextId });
       this._browser._contexts.delete(this._browserContextId);

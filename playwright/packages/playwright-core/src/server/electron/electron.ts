@@ -78,6 +78,7 @@ export class ElectronApplication extends SdkObject {
       });
     });
     this._browserContext.setCustomCloseHandler(async () => {
+      await this._browserContext.stopVideoRecording();
       const electronHandle = await this._nodeElectronHandlePromise;
       await electronHandle.evaluate(({ app }) => app.quit()).catch(() => {});
     });
@@ -100,7 +101,7 @@ export class ElectronApplication extends SdkObject {
   async close() {
     const progressController = new ProgressController(serverSideCallMetadata(), this);
     const closed = progressController.run(progress => helper.waitForEvent(progress, this, ElectronApplication.Events.Close).promise);
-    await this._browserContext.close(serverSideCallMetadata());
+    await this._browserContext.close({ reason: 'Application exited' });
     this._nodeConnection.close();
     await closed;
   }

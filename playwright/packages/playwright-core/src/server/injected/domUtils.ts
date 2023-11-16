@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+let browserNameForWorkarounds = '';
+export function setBrowserName(name: string) {
+  browserNameForWorkarounds = name;
+}
+
 export function isInsideScope(scope: Node, element: Element | undefined): boolean {
   while (element) {
     if (scope.contains(element))
@@ -21,6 +26,12 @@ export function isInsideScope(scope: Node, element: Element | undefined): boolea
     element = enclosingShadowHost(element);
   }
   return false;
+}
+
+export function enclosingElement(node: Node) {
+  if (node.nodeType === 1 /* Node.ELEMENT_NODE */)
+    return node as Element;
+  return node.parentElement ?? undefined;
 }
 
 export function parentElementOrShadowHost(element: Element): Element | undefined {
@@ -69,9 +80,10 @@ export function isElementStyleVisibilityVisible(element: Element, style?: CSSSty
   // Element.checkVisibility checks for content-visibility and also looks at
   // styles up the flat tree including user-agent ShadowRoots, such as the
   // details element for example.
-  // @ts-ignore Typescript doesn't know that checkVisibility exists yet.
-  if (Element.prototype.checkVisibility) {
-    // @ts-ignore Typescript doesn't know that checkVisibility exists yet.
+  // All the browser implement it, but WebKit has a bug which prevents us from using it:
+  // https://bugs.webkit.org/show_bug.cgi?id=264733
+  // @ts-ignore
+  if (Element.prototype.checkVisibility && browserNameForWorkarounds !== 'webkit') {
     if (!element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: false }))
       return false;
   } else {

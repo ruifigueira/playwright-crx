@@ -38,10 +38,10 @@ import type { InjectedScript, ElementStateWithoutStable, FrameExpectParams, Inje
 import { isSessionClosedError } from './protocolError';
 import { type ParsedSelector, isInvalidSelectorError } from '../utils/isomorphic/selectorParser';
 import type { ScreenshotOptions } from './screenshotter';
-import type { InputFilesItems } from './dom';
 import { asLocator } from '../utils/isomorphic/locatorGenerators';
 import { FrameSelectors } from './frameSelectors';
-import { TimeoutError } from '../common/errors';
+import { TimeoutError } from './errors';
+import { prepareFilesForUpload } from './fileUploadUtils';
 
 type ContextData = {
   contextPromise: ManualPromise<dom.FrameExecutionContext | { destroyedReason: string }>;
@@ -834,7 +834,7 @@ export class Frame extends SdkObject {
   async evalOnSelector(selector: string, strict: boolean, expression: string, isFunction: boolean | undefined, arg: any, scope?: dom.ElementHandle): Promise<any> {
     const handle = await this.selectors.query(selector, { strict }, scope);
     if (!handle)
-      throw new Error(`Error: failed to find element matching selector "${selector}"`);
+      throw new Error(`Failed to find element matching selector "${selector}"`);
     const result = await handle.evaluateExpression(expression, { isFunction }, arg);
     handle.dispose();
     return result;
@@ -1319,11 +1319,12 @@ export class Frame extends SdkObject {
     }, this._page._timeoutSettings.timeout(options));
   }
 
-  async setInputFiles(metadata: CallMetadata, selector: string, items: InputFilesItems, options: types.NavigatingActionWaitOptions = {}): Promise<channels.FrameSetInputFilesResult> {
+  async setInputFiles(metadata: CallMetadata, selector: string, params: channels.FrameSetInputFilesParams): Promise<channels.FrameSetInputFilesResult> {
+    const inputFileItems = await prepareFilesForUpload(this, params);
     const controller = new ProgressController(metadata, this);
     return controller.run(async progress => {
-      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, handle => handle._setInputFiles(progress, items, options)));
-    }, this._page._timeoutSettings.timeout(options));
+      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, params.strict, handle => handle._setInputFiles(progress, inputFileItems, params)));
+    }, this._page._timeoutSettings.timeout(params));
   }
 
   async type(metadata: CallMetadata, selector: string, text: string, options: { delay?: number } & types.NavigatingActionWaitOptions = {}) {
@@ -1532,7 +1533,7 @@ export class Frame extends SdkObject {
 
   _onDetached() {
     this._stopNetworkIdleTimer();
-    this._detachedScope.close('Frame was detached');
+    this._detachedScope.close(new Error('Frame was detached'));
     for (const data of this._contextData.values()) {
       if (data.context)
         data.context.contextDestroyed('Frame was detached');
