@@ -20,7 +20,8 @@ import type { StackFrame } from '@protocol/channels';
 import util from 'util';
 import path from 'path';
 import url from 'url';
-import { colors, debug, minimatch, parseStackTraceLine } from 'playwright-core/lib/utilsBundle';
+import { debug, minimatch, parseStackTraceLine } from 'playwright-core/lib/utilsBundle';
+import { formatCallLog } from 'playwright-core/lib/utils';
 import type { TestInfoError } from './../types/test';
 import type { Location } from './../types/testReporter';
 import { calculateSha1, isRegExp, isString, sanitizeForFilePath, stringifyStackFrames } from 'playwright-core/lib/utils';
@@ -31,11 +32,11 @@ const PLAYWRIGHT_CORE_PATH = path.dirname(require.resolve('playwright-core/packa
 
 export function filterStackTrace(e: Error): { message: string, stack: string } {
   if (process.env.PWDEBUGIMPL)
-    return { message: e.message, stack: e.stack || '' };
+    return { message: e.name + ': ' + e.message, stack: e.stack || '' };
 
   const stackLines = stringifyStackFrames(filteredStackTrace(e.stack?.split('\n') || []));
   return {
-    message: e.message,
+    message: e.name + ': ' + e.message,
     stack: `${e.name}: ${e.message}\n${stackLines.join('\n')}`
   };
 }
@@ -213,14 +214,7 @@ export function getContainedPath(parentPath: string, subPath: string = ''): stri
 
 export const debugTest = debug('pw:test');
 
-export function callLogText(log: string[] | undefined): string {
-  if (!log)
-    return '';
-  return `
-Call log:
-  ${colors.dim('- ' + (log || []).join('\n  - '))}
-`;
-}
+export const callLogText = formatCallLog;
 
 const folderToPackageJsonPath = new Map<string, string>();
 

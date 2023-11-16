@@ -59,6 +59,8 @@ export class CRBrowser extends Browser {
     const connection = new CRConnection(transport, options.protocolLogger, options.browserLogsCollector);
     const browser = new CRBrowser(parent, connection, options);
     browser._devtools = devtools;
+    if (browser.isClank())
+      browser._isCollocatedWithServer = false;
     const session = connection.rootSession;
     if ((options as any).__testHookOnConnectToBrowser)
       await (options as any).__testHookOnConnectToBrowser();
@@ -269,7 +271,7 @@ export class CRBrowser extends Browser {
     if (payload.state === 'completed')
       this._downloadFinished(payload.guid, '');
     if (payload.state === 'canceled')
-      this._downloadFinished(payload.guid, 'canceled');
+      this._downloadFinished(payload.guid, this._closeReason || 'canceled');
   }
 
   async _closePage(crPage: CRPage) {
@@ -510,7 +512,7 @@ export class CRBrowserContext extends BrowserContext {
       await (sw as CRServiceWorker).updateRequestInterception();
   }
 
-  async doClose() {
+  async doClose(reason: string | undefined) {
     // Headful chrome cannot dispose browser context with opened 'beforeunload'
     // dialogs, so we should close all that are currently opened.
     // We also won't get new ones since `Target.disposeBrowserContext` does not trigger
@@ -523,9 +525,9 @@ export class CRBrowserContext extends BrowserContext {
     await Promise.all(openedBeforeUnloadDialogs.map(dialog => dialog.dismiss()));
 
     if (!this._browserContextId) {
-      await Promise.all(this._crPages().map(crPage => crPage._mainFrameSession._stopVideoRecording()));
+      await this.stopVideoRecording();
       // Closing persistent context should close the browser.
-      await this._browser.close();
+      await this._browser.close({ reason });
       return;
     }
 
@@ -541,6 +543,10 @@ export class CRBrowserContext extends BrowserContext {
       serviceWorker.didClose();
       this._browser._serviceWorkers.delete(targetId);
     }
+  }
+
+  async stopVideoRecording() {
+    await Promise.all(this._crPages().map(crPage => crPage._mainFrameSession._stopVideoRecording()));
   }
 
   onClosePersistent() {

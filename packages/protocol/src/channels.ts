@@ -317,7 +317,7 @@ export type APIRequestContextFetchParams = {
   method?: string,
   headers?: NameValue[],
   postData?: Binary,
-  jsonData?: any,
+  jsonData?: string,
   formData?: NameValue[],
   multipartData?: FormField[],
   timeout?: number,
@@ -330,7 +330,7 @@ export type APIRequestContextFetchOptions = {
   method?: string,
   headers?: NameValue[],
   postData?: Binary,
-  jsonData?: any,
+  jsonData?: string,
   formData?: NameValue[],
   multipartData?: FormField[],
   timeout?: number,
@@ -636,6 +636,7 @@ export type RecorderSource = {
 export type DebugControllerInitializer = {};
 export interface DebugControllerEventTarget {
   on(event: 'inspectRequested', callback: (params: DebugControllerInspectRequestedEvent) => void): this;
+  on(event: 'setModeRequested', callback: (params: DebugControllerSetModeRequestedEvent) => void): this;
   on(event: 'stateChanged', callback: (params: DebugControllerStateChangedEvent) => void): this;
   on(event: 'sourceChanged', callback: (params: DebugControllerSourceChangedEvent) => void): this;
   on(event: 'paused', callback: (params: DebugControllerPausedEvent) => void): this;
@@ -657,6 +658,9 @@ export interface DebugControllerChannel extends DebugControllerEventTarget, Chan
 export type DebugControllerInspectRequestedEvent = {
   selector: string,
   locator: string,
+};
+export type DebugControllerSetModeRequestedEvent = {
+  mode: string,
 };
 export type DebugControllerStateChangedEvent = {
   pageCount: number,
@@ -732,6 +736,7 @@ export type DebugControllerCloseAllBrowsersResult = void;
 
 export interface DebugControllerEvents {
   'inspectRequested': DebugControllerInspectRequestedEvent;
+  'setModeRequested': DebugControllerSetModeRequestedEvent;
   'stateChanged': DebugControllerStateChangedEvent;
   'sourceChanged': DebugControllerSourceChangedEvent;
   'paused': DebugControllerPausedEvent;
@@ -929,6 +934,7 @@ export type BrowserTypeLaunchPersistentContextParams = {
   downloadsPath?: string,
   tracesDir?: string,
   chromiumSandbox?: boolean,
+  firefoxUserPrefs?: any,
   noDefaultViewport?: boolean,
   viewport?: {
     width: number,
@@ -1000,6 +1006,7 @@ export type BrowserTypeLaunchPersistentContextOptions = {
   downloadsPath?: string,
   tracesDir?: string,
   chromiumSandbox?: boolean,
+  firefoxUserPrefs?: any,
   noDefaultViewport?: boolean,
   viewport?: {
     width: number,
@@ -1080,7 +1087,7 @@ export interface BrowserEventTarget {
 }
 export interface BrowserChannel extends BrowserEventTarget, Channel {
   _type_Browser: boolean;
-  close(params?: BrowserCloseParams, metadata?: CallMetadata): Promise<BrowserCloseResult>;
+  close(params: BrowserCloseParams, metadata?: CallMetadata): Promise<BrowserCloseResult>;
   killForTests(params?: BrowserKillForTestsParams, metadata?: CallMetadata): Promise<BrowserKillForTestsResult>;
   defaultUserAgentForTest(params?: BrowserDefaultUserAgentForTestParams, metadata?: CallMetadata): Promise<BrowserDefaultUserAgentForTestResult>;
   newContext(params: BrowserNewContextParams, metadata?: CallMetadata): Promise<BrowserNewContextResult>;
@@ -1091,8 +1098,12 @@ export interface BrowserChannel extends BrowserEventTarget, Channel {
   stopTracing(params?: BrowserStopTracingParams, metadata?: CallMetadata): Promise<BrowserStopTracingResult>;
 }
 export type BrowserCloseEvent = {};
-export type BrowserCloseParams = {};
-export type BrowserCloseOptions = {};
+export type BrowserCloseParams = {
+  reason?: string,
+};
+export type BrowserCloseOptions = {
+  reason?: string,
+};
 export type BrowserCloseResult = void;
 export type BrowserKillForTestsParams = {};
 export type BrowserKillForTestsOptions = {};
@@ -1426,7 +1437,7 @@ export interface BrowserContextChannel extends BrowserContextEventTarget, EventT
   addInitScript(params: BrowserContextAddInitScriptParams, metadata?: CallMetadata): Promise<BrowserContextAddInitScriptResult>;
   clearCookies(params?: BrowserContextClearCookiesParams, metadata?: CallMetadata): Promise<BrowserContextClearCookiesResult>;
   clearPermissions(params?: BrowserContextClearPermissionsParams, metadata?: CallMetadata): Promise<BrowserContextClearPermissionsResult>;
-  close(params?: BrowserContextCloseParams, metadata?: CallMetadata): Promise<BrowserContextCloseResult>;
+  close(params: BrowserContextCloseParams, metadata?: CallMetadata): Promise<BrowserContextCloseResult>;
   cookies(params: BrowserContextCookiesParams, metadata?: CallMetadata): Promise<BrowserContextCookiesResult>;
   exposeBinding(params: BrowserContextExposeBindingParams, metadata?: CallMetadata): Promise<BrowserContextExposeBindingResult>;
   grantPermissions(params: BrowserContextGrantPermissionsParams, metadata?: CallMetadata): Promise<BrowserContextGrantPermissionsResult>;
@@ -1524,8 +1535,12 @@ export type BrowserContextClearCookiesResult = void;
 export type BrowserContextClearPermissionsParams = {};
 export type BrowserContextClearPermissionsOptions = {};
 export type BrowserContextClearPermissionsResult = void;
-export type BrowserContextCloseParams = {};
-export type BrowserContextCloseOptions = {};
+export type BrowserContextCloseParams = {
+  reason?: string,
+};
+export type BrowserContextCloseOptions = {
+  reason?: string,
+};
 export type BrowserContextCloseResult = void;
 export type BrowserContextCookiesParams = {
   urls: string[],
@@ -1694,9 +1709,10 @@ export type BrowserContextHarExportResult = {
 };
 export type BrowserContextCreateTempFileParams = {
   name: string,
+  lastModifiedMs?: number,
 };
 export type BrowserContextCreateTempFileOptions = {
-
+  lastModifiedMs?: number,
 };
 export type BrowserContextCreateTempFileResult = {
   writableStream: WritableStreamChannel,
@@ -1841,9 +1857,11 @@ export type PageAddInitScriptOptions = {
 export type PageAddInitScriptResult = void;
 export type PageCloseParams = {
   runBeforeUnload?: boolean,
+  reason?: string,
 };
 export type PageCloseOptions = {
   runBeforeUnload?: boolean,
+  reason?: string,
 };
 export type PageCloseResult = void;
 export type PageEmulateMediaParams = {
@@ -2291,7 +2309,6 @@ export interface FrameChannel extends FrameEventTarget, Channel {
   selectOption(params: FrameSelectOptionParams, metadata?: CallMetadata): Promise<FrameSelectOptionResult>;
   setContent(params: FrameSetContentParams, metadata?: CallMetadata): Promise<FrameSetContentResult>;
   setInputFiles(params: FrameSetInputFilesParams, metadata?: CallMetadata): Promise<FrameSetInputFilesResult>;
-  setInputFilePaths(params: FrameSetInputFilePathsParams, metadata?: CallMetadata): Promise<FrameSetInputFilePathsResult>;
   tap(params: FrameTapParams, metadata?: CallMetadata): Promise<FrameTapResult>;
   textContent(params: FrameTextContentParams, metadata?: CallMetadata): Promise<FrameTextContentResult>;
   title(params?: FrameTitleParams, metadata?: CallMetadata): Promise<FrameTitleResult>;
@@ -2778,36 +2795,29 @@ export type FrameSetContentResult = void;
 export type FrameSetInputFilesParams = {
   selector: string,
   strict?: boolean,
-  files: {
+  payloads?: {
     name: string,
     mimeType?: string,
     buffer: Binary,
   }[],
+  localPaths?: string[],
+  streams?: WritableStreamChannel[],
   timeout?: number,
   noWaitAfter?: boolean,
 };
 export type FrameSetInputFilesOptions = {
   strict?: boolean,
+  payloads?: {
+    name: string,
+    mimeType?: string,
+    buffer: Binary,
+  }[],
+  localPaths?: string[],
+  streams?: WritableStreamChannel[],
   timeout?: number,
   noWaitAfter?: boolean,
 };
 export type FrameSetInputFilesResult = void;
-export type FrameSetInputFilePathsParams = {
-  selector: string,
-  strict?: boolean,
-  localPaths?: string[],
-  streams?: WritableStreamChannel[],
-  timeout?: number,
-  noWaitAfter?: boolean,
-};
-export type FrameSetInputFilePathsOptions = {
-  strict?: boolean,
-  localPaths?: string[],
-  streams?: WritableStreamChannel[],
-  timeout?: number,
-  noWaitAfter?: boolean,
-};
-export type FrameSetInputFilePathsResult = void;
 export type FrameTapParams = {
   selector: string,
   strict?: boolean,
@@ -3100,7 +3110,6 @@ export interface ElementHandleChannel extends ElementHandleEventTarget, JSHandle
   selectOption(params: ElementHandleSelectOptionParams, metadata?: CallMetadata): Promise<ElementHandleSelectOptionResult>;
   selectText(params: ElementHandleSelectTextParams, metadata?: CallMetadata): Promise<ElementHandleSelectTextResult>;
   setInputFiles(params: ElementHandleSetInputFilesParams, metadata?: CallMetadata): Promise<ElementHandleSetInputFilesResult>;
-  setInputFilePaths(params: ElementHandleSetInputFilePathsParams, metadata?: CallMetadata): Promise<ElementHandleSetInputFilePathsResult>;
   tap(params: ElementHandleTapParams, metadata?: CallMetadata): Promise<ElementHandleTapResult>;
   textContent(params?: ElementHandleTextContentParams, metadata?: CallMetadata): Promise<ElementHandleTextContentResult>;
   type(params: ElementHandleTypeParams, metadata?: CallMetadata): Promise<ElementHandleTypeResult>;
@@ -3408,32 +3417,28 @@ export type ElementHandleSelectTextOptions = {
 };
 export type ElementHandleSelectTextResult = void;
 export type ElementHandleSetInputFilesParams = {
-  files: {
+  payloads?: {
     name: string,
     mimeType?: string,
     buffer: Binary,
   }[],
+  localPaths?: string[],
+  streams?: WritableStreamChannel[],
   timeout?: number,
   noWaitAfter?: boolean,
 };
 export type ElementHandleSetInputFilesOptions = {
+  payloads?: {
+    name: string,
+    mimeType?: string,
+    buffer: Binary,
+  }[],
+  localPaths?: string[],
+  streams?: WritableStreamChannel[],
   timeout?: number,
   noWaitAfter?: boolean,
 };
 export type ElementHandleSetInputFilesResult = void;
-export type ElementHandleSetInputFilePathsParams = {
-  localPaths?: string[],
-  streams?: WritableStreamChannel[],
-  timeout?: number,
-  noWaitAfter?: boolean,
-};
-export type ElementHandleSetInputFilePathsOptions = {
-  localPaths?: string[],
-  streams?: WritableStreamChannel[],
-  timeout?: number,
-  noWaitAfter?: boolean,
-};
-export type ElementHandleSetInputFilePathsResult = void;
 export type ElementHandleTapParams = {
   force?: boolean,
   noWaitAfter?: boolean,
@@ -3852,7 +3857,7 @@ export interface ArtifactChannel extends ArtifactEventTarget, Channel {
 export type ArtifactPathAfterFinishedParams = {};
 export type ArtifactPathAfterFinishedOptions = {};
 export type ArtifactPathAfterFinishedResult = {
-  value?: string,
+  value: string,
 };
 export type ArtifactSaveAsParams = {
   path: string,
@@ -3874,7 +3879,7 @@ export type ArtifactFailureResult = {
 export type ArtifactStreamParams = {};
 export type ArtifactStreamOptions = {};
 export type ArtifactStreamResult = {
-  stream?: StreamChannel,
+  stream: StreamChannel,
 };
 export type ArtifactCancelParams = {};
 export type ArtifactCancelOptions = {};

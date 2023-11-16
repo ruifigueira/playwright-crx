@@ -24,7 +24,6 @@ import { Dispatcher } from './dispatcher';
 import type { CRBrowser } from '../chromium/crBrowser';
 import type { PageDispatcher } from './pageDispatcher';
 import type { CallMetadata } from '../instrumentation';
-import { serverSideCallMetadata } from '../instrumentation';
 import { BrowserContext } from '../browserContext';
 import { Selectors } from '../selectors';
 import type { BrowserTypeDispatcher } from './browserTypeDispatcher';
@@ -56,11 +55,13 @@ export class BrowserDispatcher extends Dispatcher<Browser, channels.BrowserChann
     await this._object.stopPendingOperations(params.reason);
   }
 
-  async close(): Promise<void> {
-    await this._object.close();
+  async close(params: channels.BrowserCloseParams, metadata: CallMetadata): Promise<void> {
+    metadata.potentiallyClosesScope = true;
+    await this._object.close(params);
   }
 
-  async killForTests(): Promise<void> {
+  async killForTests(_: any, metadata: CallMetadata): Promise<void> {
+    metadata.potentiallyClosesScope = true;
     await this._object.killForTests();
   }
 
@@ -155,7 +156,7 @@ export class ConnectedBrowserDispatcher extends Dispatcher<Browser, channels.Bro
   }
 
   async cleanupContexts() {
-    await Promise.all(Array.from(this._contexts).map(context => context.close(serverSideCallMetadata())));
+    await Promise.all(Array.from(this._contexts).map(context => context.close({ reason: 'Global context cleanup (connection terminated)' })));
   }
 }
 
