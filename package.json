@@ -1,6 +1,6 @@
 {
   "name": "playwright-crx",
-  "version": "0.2.0",
+  "version":"0.2.1-next",
   "engines": {
     "node": ">=16"
   },
