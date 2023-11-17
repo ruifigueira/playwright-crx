@@ -18,7 +18,8 @@ import type { JSONReport, JSONReportSpec, JSONReportSuite, JSONReportTest, JSONR
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { rimraf, PNG } from 'playwright-core/lib/utilsBundle';
+import { PNG } from 'playwright-core/lib/utilsBundle';
+import { removeFolders } from '../../packages/playwright-core/src/utils/fileUtils';
 import type { CommonFixtures, CommonWorkerFixtures, TestChildProcess } from '../config/commonFixtures';
 import { commonFixtures } from '../config/commonFixtures';
 import type { ServerFixtures, ServerWorkerOptions } from '../config/serverFixtures';
@@ -43,6 +44,7 @@ export type RunResult = {
   flaky: number,
   skipped: number,
   interrupted: number,
+  didNotRun: number,
   report: JSONReport,
   results: any[],
 };
@@ -261,7 +263,7 @@ export const test = base
           const baseDir = await writeFiles(testInfo, files, true);
           return await runPlaywrightTest(childProcess, baseDir, params, { ...env, PWTEST_CACHE_DIR: cacheDir }, options, files, mergeReports, useIntermediateMergeReport);
         });
-        await rimraf(cacheDir);
+        await removeFolders([cacheDir]);
       },
 
       runListFiles: async ({ childProcess }, use, testInfo: TestInfo) => {
@@ -270,7 +272,7 @@ export const test = base
           const baseDir = await writeFiles(testInfo, files, true);
           return await runPlaywrightListFiles(childProcess, baseDir, { PWTEST_CACHE_DIR: cacheDir });
         });
-        await rimraf(cacheDir);
+        await removeFolders([cacheDir]);
       },
 
       runWatchTest: async ({ interactWithTestRunner }, use, testInfo: TestInfo) => {
@@ -286,7 +288,7 @@ export const test = base
           return testProcess;
         });
         await testProcess?.kill();
-        await rimraf(cacheDir);
+        await removeFolders([cacheDir]);
       },
 
       runTSC: async ({ childProcess }, use, testInfo) => {
@@ -417,6 +419,7 @@ export function parseTestRunnerOutput(output: string) {
   const flaky = summary(/(\d+) flaky/g);
   const skipped = summary(/(\d+) skipped/g);
   const interrupted = summary(/(\d+) interrupted/g);
+  const didNotRun = summary(/(\d+) did not run/g);
 
   const strippedOutput = stripAnsi(output);
   return {
@@ -428,5 +431,6 @@ export function parseTestRunnerOutput(output: string) {
     flaky,
     skipped,
     interrupted,
+    didNotRun,
   };
 }

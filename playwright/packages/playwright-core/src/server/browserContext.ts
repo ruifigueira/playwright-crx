@@ -86,6 +86,7 @@ export abstract class BrowserContext extends SdkObject {
   readonly initScripts: string[] = [];
   private _routesInFlight = new Set<network.Route>();
   private _debugger!: Debugger;
+  _closeReason: string | undefined;
 
   constructor(browser: Browser, options: channels.BrowserNewContextParams, browserContextId: string | undefined) {
     super(browser, 'browser-context');
@@ -239,13 +240,7 @@ export abstract class BrowserContext extends SdkObject {
       // at the same time.
       return;
     }
-    const gotClosedGracefully = this._closedStatus === 'closing';
-    this._closedStatus = 'closed';
-    if (!gotClosedGracefully) {
-      this._deleteAllDownloads();
-      this._downloads.clear();
-    }
-    this.tracing.dispose().catch(() => {});
+    this.tracing.abort();
     if (this._isPersistentContext)
       this.onClosePersistent();
     this._closePromiseFulfill!(new Error('Context closed'));
@@ -272,7 +267,7 @@ export abstract class BrowserContext extends SdkObject {
   protected abstract doExposeBinding(binding: PageBinding): Promise<void>;
   protected abstract doRemoveExposedBindings(): Promise<void>;
   protected abstract doUpdateRequestInterception(): Promise<void>;
-  protected abstract doClose(): Promise<void>;
+  protected abstract doClose(reason: string | undefined): Promise<void>;
   protected abstract onClosePersistent(): void;
 
   async cookies(urls: string | string[] | undefined = []): Promise<channels.NetworkCookie[]> {
@@ -412,14 +407,16 @@ export abstract class BrowserContext extends SdkObject {
     this._customCloseHandler = handler;
   }
 
-  async close(metadata: CallMetadata) {
+  async close(options: { reason?: string }) {
     if (this._closedStatus === 'open') {
+      if (options.reason)
+        this._closeReason = options.reason;
       this.emit(BrowserContext.Events.BeforeClose);
       this._closedStatus = 'closing';
 
       for (const harRecorder of this._harRecorders.values())
         await harRecorder.flush();
-      await this.tracing.dispose();
+      await this.tracing.flush();
 
       // Cleanup.
       const promises: Promise<void>[] = [];
@@ -433,7 +430,7 @@ export abstract class BrowserContext extends SdkObject {
         await this._customCloseHandler();
       } else {
         // Close the context.
-        await this.doClose();
+        await this.doClose(options.reason);
       }
 
       // We delete downloads after context closure
