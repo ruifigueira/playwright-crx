@@ -35,7 +35,7 @@ export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'setMode', mode: Mode }
   | { method: 'setSources', sources: Source[] }
   | { method: 'setFileIfNeeded', file: string }
-  | { method: 'setSelector', selector: string, userGesture: string }
+  | { method: 'setSelector', selector: string, userGesture?: boolean }
 );
 
 export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
@@ -46,6 +46,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   private _player: Player;
   private _filename?: string;
   private _jsonlSource?: Source;
+  private _mode: Mode = 'none';
 
   constructor(recorder: Recorder, context: BrowserContext) {
     super();
@@ -112,6 +113,15 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   }
 
   async setMode(mode: Mode) {
+    if (['none', 'standby'].includes(mode)) {
+      this._player.pause().catch(() => {});
+    } else {
+      this._player.stop().catch(() => {});
+    }
+    if (this._mode !== mode) {
+      this._mode = mode;
+      this.emit('modeChanged', { mode });
+    }
     await this._sendMessage({ type: 'recorder', method: 'setMode', mode });
   }
 
@@ -151,10 +161,10 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
           this._player.play(this._getActionsWithContext()).catch(() => {});
           break;
         case 'setMode':
-          if (['none', 'standby'].includes(params.mode)) {
-            this._player.pause().catch(() => {});
-          } else {
-            this._player.stop().catch(() => {});
+          const { mode } = params;
+          if (this._mode !== mode) {
+            this._mode = mode;
+            this.emit('modeChanged', { mode });
           }
           break;
       }
