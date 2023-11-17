@@ -94,9 +94,8 @@ export class CrxApplication extends SdkObject {
         this._recorderApp = new CrxRecorderApp(recorder, this._context());
         this._recorderApp.on('show', () => this.emit(CrxApplication.Events.RecorderShow));
         this._recorderApp.on('hide', () => this.emit(CrxApplication.Events.RecorderHide));
-        this._recorderApp.on('event', ({ event, params }) => {
-          if (event === 'setMode')
-            this.emit(CrxApplication.Events.ModeChanged, params);
+        this._recorderApp.on('modeChanged', (event) => {
+          this.emit(CrxApplication.Events.ModeChanged, event);
         });
       }
       return this._recorderApp;
