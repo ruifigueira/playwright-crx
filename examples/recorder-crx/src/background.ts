@@ -19,6 +19,9 @@ import { crx, _debug, _setUnderTest } from 'playwright-crx';
 
 type Mode = 'none' | 'recording' | 'inspecting' | 'assertingText' | 'recording-inspecting' | 'standby' | 'assertingVisibility' | 'assertingValue';
 
+const stoppedModes = ['none', 'standby', 'detached'];
+const recordingModes = ['recording', 'assertingText', 'assertingVisibility', 'assertingValue'];
+
 // we must lazy initialize it
 let crxAppPromise: Promise<CrxApplication> | undefined;
 
@@ -26,7 +29,7 @@ const attachedTabIds = new Set<number>();
 
 async function changeAction(tabId: number, mode: Mode | 'detached') {
   // detached basically implies recorder windows was closed
-  if (mode === 'detached' || mode === 'none') {
+  if (stoppedModes.includes(mode)) {
     await Promise.all([
       chrome.action.setTitle({ title: mode === 'none' ? 'Stopped' : 'Record', tabId }),
       chrome.action.setBadgeText({ text: '', tabId }),
@@ -34,7 +37,7 @@ async function changeAction(tabId: number, mode: Mode | 'detached') {
     return;
   }
 
-  const { text, title, color, bgColor } = mode === 'recording' ?
+  const { text, title, color, bgColor } = recordingModes.includes(mode) ?
     { text: 'REC', title: 'Recording', color: 'white', bgColor: 'darkred' } :
     { text: 'INS', title: 'Inspecting', color: 'white', bgColor: 'dodgerblue' };
 
@@ -77,14 +80,16 @@ async function attach(tab: chrome.tabs.Tab) {
   // ensure one attachment at a time
   chrome.action.disable();
 
+  const crxApp = await getCrxApp();
+
   try {
-    const crxApp = await getCrxApp();
     if (crxApp.recorder.isHidden())
       await crxApp.recorder.show({ mode: 'recording' });
 
     await crxApp.attach(tabId);
   } catch (e) {
-    // nothing much to do...
+    // we just open a new page and attach it
+    await crxApp.newPage();
   } finally {
     chrome.action.enable();
   }
