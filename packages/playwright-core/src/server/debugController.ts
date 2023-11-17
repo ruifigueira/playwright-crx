@@ -35,6 +35,7 @@ export class DebugController extends SdkObject {
     InspectRequested: 'inspectRequested',
     SourceChanged: 'sourceChanged',
     Paused: 'paused',
+    SetModeRequested: 'setModeRequested',
   };
 
   private _autoCloseTimer: NodeJS.Timeout | undefined;
@@ -122,7 +123,7 @@ export class DebugController extends SdkObject {
     // Toggle the mode.
     for (const recorder of await this._allRecorders()) {
       recorder.hideHighlightedSelector();
-      if (params.mode === 'recording')
+      if (params.mode !== 'inspecting')
         recorder.setOutput(this._codegenId, params.file);
       recorder.setMode(params.mode);
     }
@@ -172,7 +173,7 @@ export class DebugController extends SdkObject {
   }
 
   async closeAllBrowsers() {
-    await Promise.all(this.allBrowsers().map(browser => browser.close()));
+    await Promise.all(this.allBrowsers().map(browser => browser.close({ reason: 'Close all browsers requested' })));
   }
 
   private _emitSnapshot() {
@@ -210,10 +211,10 @@ export class DebugController extends SdkObject {
     for (const browser of this._playwright.allBrowsers()) {
       for (const context of browser.contexts()) {
         if (!context.pages().length)
-          await context.close(serverSideCallMetadata());
+          await context.close({ reason: 'Browser collected' });
       }
       if (!browser.contexts())
-        await browser.close();
+        await browser.close({ reason: 'Browser collected' });
     }
   }
 }
@@ -239,5 +240,9 @@ class InspectingRecorderApp extends EmptyRecorderApp {
 
   override async setPaused(paused: boolean) {
     this._debugController.emit(DebugController.Events.Paused, { paused });
+  }
+
+  override async setMode(mode: Mode) {
+    this._debugController.emit(DebugController.Events.SetModeRequested, { mode });
   }
 }

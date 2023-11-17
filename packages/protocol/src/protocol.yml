@@ -288,7 +288,7 @@ APIRequestContext:
           type: array?
           items: NameValue
         postData: binary?
-        jsonData: json?
+        jsonData: string?
         formData:
           type: array?
           items: NameValue
@@ -411,6 +411,7 @@ LaunchOptions:
     downloadsPath: string?
     tracesDir: string?
     chromiumSandbox: boolean?
+    firefoxUserPrefs: json?
 
 
 ContextOptions:
@@ -762,6 +763,10 @@ DebugController:
         selector: string
         locator: string
 
+    setModeRequested:
+      parameters:
+        mode: string
+
     stateChanged:
       parameters:
         pageCount: number
@@ -868,7 +873,6 @@ BrowserType:
     launch:
       parameters:
         $mixin: LaunchOptions
-        firefoxUserPrefs: json?
         slowMo: number?
       returns:
         browser: Browser
@@ -904,6 +908,8 @@ Browser:
   commands:
 
     close:
+      parameters:
+        reason: string?
 
     killForTests:
 
@@ -1030,6 +1036,8 @@ BrowserContext:
     clearPermissions:
 
     close:
+      parameters:
+        reason: string?
 
     cookies:
       parameters:
@@ -1158,6 +1166,7 @@ BrowserContext:
     createTempFile:
       parameters:
         name: string
+        lastModifiedMs: number?
       returns:
         writableStream: WritableStream
 
@@ -1282,6 +1291,7 @@ Page:
     close:
       parameters:
         runBeforeUnload: boolean?
+        reason: string?
 
     emulateMedia:
       parameters:
@@ -2104,27 +2114,15 @@ Frame:
       parameters:
         selector: string
         strict: boolean?
-        files:
-          type: array
+        # Only one of payloads, localPaths and streams should be present.
+        payloads:
+          type: array?
           items:
             type: object
             properties:
               name: string
               mimeType: string?
               buffer: binary
-        timeout: number?
-        noWaitAfter: boolean?
-      flags:
-        slowMo: true
-        snapshot: true
-        pausesBeforeInput: true
-
-    # This method should be used if one of the files is large (>50Mb).
-    setInputFilePaths:
-      parameters:
-        selector: string
-        strict: boolean?
-        # Only one of localPaths and streams should be present.
         localPaths:
           type: array?
           items: string
@@ -2672,25 +2670,15 @@ ElementHandle:
 
     setInputFiles:
       parameters:
-        files:
-          type: array
+        # Only one of payloads, localPaths and streams should be present.
+        payloads:
+          type: array?
           items:
             type: object
             properties:
               name: string
               mimeType: string?
               buffer: binary
-        timeout: number?
-        noWaitAfter: boolean?
-      flags:
-        slowMo: true
-        snapshot: true
-        pausesBeforeInput: true
-
-    # This method should be used if one of the files is large (>50Mb).
-    setInputFilePaths:
-      parameters:
-        # Only one of localPaths and streams should be present.
         localPaths:
           type: array?
           items: string
@@ -3051,7 +3039,7 @@ Artifact:
 
     pathAfterFinished:
       returns:
-        value: string?
+        value: string
 
     # Blocks path/failure/delete/context.close until saved to the local |path|.
     saveAs:
@@ -3069,7 +3057,7 @@ Artifact:
 
     stream:
       returns:
-        stream: Stream?
+        stream: Stream
 
     cancel:
 

@@ -18,6 +18,7 @@ import os from 'os';
 import * as util from 'util';
 import { getPlaywrightVersion } from '../../packages/playwright-core/lib/utils/userAgent';
 import { expect, playwrightTest as it } from '../config/browserTest';
+import { kTargetClosedErrorMessage } from 'tests/config/errors';
 
 it.skip(({ mode }) => mode !== 'default');
 
@@ -226,7 +227,7 @@ it('should abort requests when context is disposed', async ({ playwright, server
   ]);
   for (const result of results.slice(0, -1)) {
     expect(result instanceof Error).toBeTruthy();
-    expect(result.message).toContain('Request context disposed');
+    expect(result.message).toContain(kTargetClosedErrorMessage);
   }
   await connectionClosed;
 });
@@ -242,7 +243,7 @@ it('should abort redirected requests when context is disposed', async ({ playwri
     server.waitForRequest('/test').then(() => request.dispose())
   ]);
   expect(result instanceof Error).toBeTruthy();
-  expect(result.message).toContain('Request context disposed');
+  expect(result.message).toContain(kTargetClosedErrorMessage);
   await connectionClosed;
 });
 
@@ -429,4 +430,32 @@ it('should keep headers capitalization', async ({ playwright, server }) => {
   expect(serverRequest.rawHeaders).toContain('X-fOo');
   expect(serverRequest.rawHeaders).toContain('vaLUE');
   await request.dispose();
+});
+
+it('should serialize post data on the client', async ({ playwright, server }) => {
+  const request = await playwright.request.newContext();
+  const serverReq = server.waitForRequest('/empty.html');
+  let onStack: boolean = true;
+  const postReq = request.post(server.EMPTY_PAGE, {
+    data: {
+      toJSON() {
+        if (!onStack)
+          throw new Error('Should not be called on the server');
+        return { 'foo': 'bar' };
+      }
+    }
+  });
+  onStack = false;
+  await postReq;
+  const body = await (await serverReq).postBody;
+  expect(body.toString()).toBe('{"foo":"bar"}');
+  // expect(serverRequest.rawHeaders).toContain('vaLUE');
+  await request.dispose();
+});
+
+it('should throw after dispose', async ({ playwright, server }) => {
+  it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/27822' });
+  const request = await playwright.request.newContext();
+  await request.dispose();
+  await expect(request.get(server.EMPTY_PAGE)).rejects.toThrow('Target page, context or browser has been closed');
 });

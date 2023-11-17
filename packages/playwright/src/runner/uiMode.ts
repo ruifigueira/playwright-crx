@@ -46,6 +46,7 @@ class UIMode {
     process.env.PW_LIVE_TRACE_STACKS = '1';
     config.cliListOnly = false;
     config.cliPassWithNoTests = true;
+    config.config.preserveOutput = 'always';
 
     for (const p of config.projects) {
       p.project.retries = 0;
@@ -179,9 +180,12 @@ class UIMode {
     await reporter.onExit();
 
     const projectDirs = new Set<string>();
-    for (const p of this._config.projects)
+    const projectOutputs = new Set<string>();
+    for (const p of this._config.projects) {
       projectDirs.add(p.project.testDir);
-    this._globalWatcher.update([...projectDirs], false);
+      projectOutputs.add(p.project.outputDir);
+    }
+    this._globalWatcher.update([...projectDirs], [...projectOutputs], false);
   }
 
   private async _runTests(testIds: string[], projects: string[]) {
@@ -217,7 +221,7 @@ class UIMode {
       files.add(fileName);
       dependenciesForTestFile(fileName).forEach(file => files.add(file));
     }
-    this._testWatcher.update([...files], true);
+    this._testWatcher.update([...files], [], true);
   }
 
   private async _stopTests() {
@@ -259,6 +263,7 @@ type FSEvent = { event: 'add' | 'addDir' | 'change' | 'unlink' | 'unlinkDir', fi
 class Watcher {
   private _onChange: (events: FSEvent[]) => void;
   private _watchedFiles: string[] = [];
+  private _ignoredFolders: string[] = [];
   private _collector: FSEvent[] = [];
   private _fsWatcher: FSWatcher | undefined;
   private _throttleTimer: NodeJS.Timeout | undefined;
@@ -269,14 +274,15 @@ class Watcher {
     this._onChange = onChange;
   }
 
-  update(watchedFiles: string[], reportPending: boolean) {
-    if (JSON.stringify(this._watchedFiles) === JSON.stringify(watchedFiles))
+  update(watchedFiles: string[], ignoredFolders: string[], reportPending: boolean) {
+    if (JSON.stringify([this._watchedFiles, this._ignoredFolders]) === JSON.stringify(watchedFiles, ignoredFolders))
       return;
 
     if (reportPending)
       this._reportEventsIfAny();
 
     this._watchedFiles = watchedFiles;
+    this._ignoredFolders = ignoredFolders;
     void this._fsWatcher?.close();
     this._fsWatcher = undefined;
     this._collector.length = 0;
@@ -286,7 +292,7 @@ class Watcher {
     if (!this._watchedFiles.length)
       return;
 
-    this._fsWatcher = chokidar.watch(watchedFiles, { ignoreInitial: true }).on('all', async (event, file) => {
+    this._fsWatcher = chokidar.watch(watchedFiles, { ignoreInitial: true, ignored: this._ignoredFolders }).on('all', async (event, file) => {
       if (this._throttleTimer)
         clearTimeout(this._throttleTimer);
       if (this._mode === 'flat' && event !== 'add' && event !== 'change')

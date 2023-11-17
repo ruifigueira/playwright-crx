@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { kTargetClosedErrorMessage } from '../config/errors';
 import { browserTest as test, expect } from '../config/browserTest';
 
 test('should return browserType', function({ browser, browserType }) {
@@ -36,10 +37,10 @@ test('should create new page @smoke', async function({ browser }) {
 
 test('should throw upon second create new page', async function({ browser }) {
   const page = await browser.newPage();
-  let error;
+  let error: Error;
   await page.context().newPage().catch(e => error = e);
   await page.close();
-  expect(error.message).toContain('Please use browser.newContext()');
+  expect(error!.message).toContain('Please use browser.newContext()');
 });
 
 test('version should work', async function({ browser, browserName }) {
@@ -59,5 +60,5 @@ test('should dispatch page.on(close) upon browser.close and reject evaluate', as
   await browser.close();
   expect(closed).toBe(true);
   const error = await promise;
-  expect(error.message).toMatch(/(Target|Browser) closed/);
+  expect(error.message).toContain(kTargetClosedErrorMessage);
 });

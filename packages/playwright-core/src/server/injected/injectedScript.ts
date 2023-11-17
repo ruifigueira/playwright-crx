@@ -24,7 +24,7 @@ import type { NestedSelectorBody, ParsedSelector, ParsedSelectorPart } from '../
 import { visitAllSelectorParts, parseSelector, stringifySelector } from '../../utils/isomorphic/selectorParser';
 import { type TextMatcher, elementMatchesText, elementText, type ElementText, getElementLabels } from './selectorUtils';
 import { SelectorEvaluatorImpl, sortInDOMOrder } from './selectorEvaluator';
-import { enclosingShadowRootOrDocument, isElementVisible, parentElementOrShadowHost } from './domUtils';
+import { enclosingShadowRootOrDocument, isElementVisible, parentElementOrShadowHost, setBrowserName } from './domUtils';
 import type { CSSComplexSelectorList } from '../../utils/isomorphic/cssParser';
 import { generateSelector, type GenerateSelectorOptions } from './selectorGenerator';
 import type * as channels from '@protocol/channels';
@@ -33,7 +33,7 @@ import { getChecked, getAriaDisabled, getAriaRole, getElementAccessibleName } fr
 import { kLayoutSelectorNames, type LayoutSelectorName, layoutSelectorScore } from './layoutSelectorUtils';
 import { asLocator } from '../../utils/isomorphic/locatorGenerators';
 import type { Language } from '../../utils/isomorphic/locatorGenerators';
-import { normalizeWhiteSpace } from '../../utils/isomorphic/stringUtils';
+import { normalizeWhiteSpace, trimStringWithEllipsis } from '../../utils/isomorphic/stringUtils';
 
 type Predicate<T> = (progress: InjectedScriptProgress) => T | symbol;
 
@@ -66,6 +66,14 @@ export type ElementState = ElementStateWithoutStable | 'stable';
 export type HitTargetInterceptionResult = {
   stop: () => 'done' | { hitTargetDescription: string };
 };
+
+interface WebKitLegacyDeviceOrientationEvent extends DeviceOrientationEvent {
+  readonly initDeviceOrientationEvent: (type: string, bubbles: boolean, cancelable: boolean, alpha: number, beta: number, gamma: number, absolute: boolean) => void;
+}
+
+interface WebKitLegacyDeviceMotionEvent extends DeviceMotionEvent {
+  readonly initDeviceMotionEvent: (type: string, bubbles: boolean, cancelable: boolean, acceleration: DeviceMotionEventAcceleration, accelerationIncludingGravity: DeviceMotionEventAcceleration, rotationRate: DeviceMotionEventRotationRate, interval: number) => void;
+}
 
 export class InjectedScript {
   private _engines: Map<string, SelectorEngine>;
@@ -129,6 +137,7 @@ export class InjectedScript {
 
     this._stableRafCount = stableRafCount;
     this._browserName = browserName;
+    setBrowserName(browserName);
 
     this._setupGlobalListenersRemovalDetection();
     this._setupHitTargetInterceptors();
@@ -824,7 +833,7 @@ export class InjectedScript {
     return 'done';
   }
 
-  setInputFiles(node: Node, payloads: { name: string, mimeType: string, buffer: string }[]) {
+  setInputFiles(node: Node, payloads: { name: string, mimeType: string, buffer: string, lastModifiedMs?: number }[]) {
     if (node.nodeType !== Node.ELEMENT_NODE)
       return 'Node is not of type HTMLElement';
     const element: Element | undefined = node as Element;
@@ -837,7 +846,7 @@ export class InjectedScript {
 
     const files = payloads.map(file => {
       const bytes = Uint8Array.from(atob(file.buffer), c => c.charCodeAt(0));
-      return new File([bytes], file.name, { type: file.mimeType });
+      return new File([bytes], file.name, { type: file.mimeType, lastModified: file.lastModifiedMs });
     });
     const dt = new DataTransfer();
     for (const file of files)
@@ -1036,6 +1045,24 @@ export class InjectedScript {
       case 'focus': event = new FocusEvent(type, eventInit); break;
       case 'drag': event = new DragEvent(type, eventInit); break;
       case 'wheel': event = new WheelEvent(type, eventInit); break;
+      case 'deviceorientation':
+        try {
+          event = new DeviceOrientationEvent(type, eventInit);
+        } catch {
+          const { bubbles, cancelable, alpha, beta, gamma, absolute } = eventInit as {bubbles: boolean, cancelable: boolean, alpha: number, beta: number, gamma: number, absolute: boolean};
+          event = this.document.createEvent('DeviceOrientationEvent') as WebKitLegacyDeviceOrientationEvent;
+          event.initDeviceOrientationEvent(type, bubbles, cancelable, alpha, beta, gamma, absolute);
+        }
+        break;
+      case 'devicemotion':
+        try {
+          event = new DeviceMotionEvent(type, eventInit);
+        } catch {
+          const { bubbles, cancelable, acceleration, accelerationIncludingGravity, rotationRate, interval } = eventInit as {bubbles: boolean, cancelable: boolean, acceleration: DeviceMotionEventAcceleration, accelerationIncludingGravity: DeviceMotionEventAcceleration, rotationRate: DeviceMotionEventRotationRate, interval: number};
+          event = this.document.createEvent('DeviceMotionEvent') as WebKitLegacyDeviceMotionEvent;
+          event.initDeviceMotionEvent(type, bubbles, cancelable, acceleration, accelerationIncludingGravity, rotationRate, interval);
+        }
+        break;
       default: event = new Event(type, eventInit); break;
     }
     node.dispatchEvent(event);
@@ -1059,9 +1086,7 @@ export class InjectedScript {
         attrs.push(` ${name}="${value}"`);
     }
     attrs.sort((a, b) => a.length - b.length);
-    let attrText = attrs.join('');
-    if (attrText.length > 50)
-      attrText = attrText.substring(0, 49) + '\u2026';
+    const attrText = trimStringWithEllipsis(attrs.join(''), 50);
     if (autoClosingTags.has(element.nodeName))
       return oneLine(`<${element.nodeName.toLowerCase()}${attrText}/>`);
 
@@ -1072,10 +1097,8 @@ export class InjectedScript {
       for (let i = 0; i < children.length; i++)
         onlyText = onlyText && children[i].nodeType === Node.TEXT_NODE;
     }
-    let text = onlyText ? (element.textContent || '') : (children.length ? '\u2026' : '');
-    if (text.length > 50)
-      text = text.substring(0, 49) + '\u2026';
-    return oneLine(`<${element.nodeName.toLowerCase()}${attrText}>${text}</${element.nodeName.toLowerCase()}>`);
+    const text = onlyText ? (element.textContent || '') : (children.length ? '\u2026' : '');
+    return oneLine(`<${element.nodeName.toLowerCase()}${attrText}>${trimStringWithEllipsis(text, 50)}</${element.nodeName.toLowerCase()}>`);
   }
 
   strictModeViolationError(selector: ParsedSelector, matches: Element[]): Error {
@@ -1371,7 +1394,7 @@ function oneLine(s: string): string {
   return s.replace(/\n/g, '↵').replace(/\t/g, '⇆');
 }
 
-const eventType = new Map<string, 'mouse' | 'keyboard' | 'touch' | 'pointer' | 'focus' | 'drag' | 'wheel'>([
+const eventType = new Map<string, 'mouse' | 'keyboard' | 'touch' | 'pointer' | 'focus' | 'drag' | 'wheel' | 'deviceorientation' | 'devicemotion'>([
   ['auxclick', 'mouse'],
   ['click', 'mouse'],
   ['dblclick', 'mouse'],
@@ -1419,6 +1442,11 @@ const eventType = new Map<string, 'mouse' | 'keyboard' | 'touch' | 'pointer' | '
   ['drop', 'drag'],
 
   ['wheel', 'wheel'],
+
+  ['deviceorientation', 'deviceorientation'],
+  ['deviceorientationabsolute', 'deviceorientation'],
+
+  ['devicemotion', 'devicemotion'],
 ]);
 
 const kHoverHitTargetInterceptorEvents = new Set(['mousemove']);

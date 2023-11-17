@@ -130,7 +130,6 @@ export class TestTracing {
       type: 'after',
       callId,
       endTime: monotonicTime(),
-      log: [],
       attachments: serializeAttachments(attachments),
       error,
     });
@@ -204,15 +203,18 @@ export async function mergeTraceFiles(fileName: string, temporaryTraceFiles: str
         } else if (entry.fileName.match(/[\d-]*trace\./)) {
           entryName = i + '-' + entry.fileName;
         }
+        if (entryNames.has(entryName)) {
+          if (--pendingEntries === 0)
+            promise.resolve();
+          return;
+        }
+        entryNames.add(entryName);
         inZipFile.openReadStream(entry, (err, readStream) => {
           if (err) {
             promise.reject(err);
             return;
           }
-          if (!entryNames.has(entryName)) {
-            entryNames.add(entryName);
-            zipFile.addReadStream(readStream!, entryName);
-          }
+          zipFile.addReadStream(readStream!, entryName);
           if (--pendingEntries === 0)
             promise.resolve();
         });
@@ -225,7 +227,7 @@ export async function mergeTraceFiles(fileName: string, temporaryTraceFiles: str
     zipFile.outputStream.pipe(fs.createWriteStream(fileName)).on('close', () => {
       void Promise.all(temporaryTraceFiles.map(tempFile => fs.promises.unlink(tempFile))).then(() => {
         mergePromise.resolve();
-      });
+      }).catch(error => mergePromise.reject(error));
     }).on('error', error => mergePromise.reject(error));
   });
   await mergePromise;
