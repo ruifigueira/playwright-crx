@@ -76,8 +76,8 @@ npm run build
 
 Playwright is nested as a git subtree.
 
-To update it, just run the following command (replace `v1.38.1` with the desired release tag):
+To update it, just run the following command (replace `v1.40.0` with the desired release tag):
 
 ```bash
-git subtree pull --prefix=playwright git@github.com:microsoft/playwright.git v1.38.1 --squash
+git subtree pull --prefix=playwright git@github.com:microsoft/playwright.git v1.40.0 --squash
 ```
