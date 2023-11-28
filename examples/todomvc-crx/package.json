@@ -1,6 +1,6 @@
 {
   "name": "todomvc-crx",
-  "version":"0.2.1",
+  "version":"0.3.0-next",
   "type": "module",
   "keywords": [],
   "author": "",
@@ -9,7 +9,7 @@
     "build": "tsc && vite build"
   },
   "dependencies": {
-    "playwright-crx":"0.2.1"
+    "playwright-crx":"0.3.0-next"
   },
   "devDependencies": {
     "typescript": "^5.1.3",
