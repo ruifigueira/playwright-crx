@@ -26,10 +26,17 @@ const recordingModes = ['recording', 'assertingText', 'assertingVisibility', 'as
 let crxAppPromise: Promise<CrxApplication> | undefined;
 
 const attachedTabIds = new Set<number>();
+let currentMode: Mode | 'detached' | undefined;
 
-async function changeAction(tabId: number, mode: Mode | 'detached') {
+async function changeAction(tabId: number, mode?: Mode | 'detached') {
+  if (!mode) {
+    mode = attachedTabIds.has(tabId) ? currentMode : 'detached';
+  } else if (mode !== 'detached') {
+    currentMode = mode;
+  }
+
   // detached basically implies recorder windows was closed
-  if (stoppedModes.includes(mode)) {
+  if (!mode || stoppedModes.includes(mode)) {
     await Promise.all([
       chrome.action.setTitle({ title: mode === 'none' ? 'Stopped' : 'Record', tabId }),
       chrome.action.setBadgeText({ text: '', tabId }),
@@ -48,6 +55,10 @@ async function changeAction(tabId: number, mode: Mode | 'detached') {
     chrome.action.setBadgeBackgroundColor({ color: bgColor, tabId }),
   ]).catch(() => {});
 }
+
+// action state per tab is reset every time a navigation occurs
+// https://bugs.chromium.org/p/chromium/issues/detail?id=1450904
+chrome.tabs.onUpdated.addListener(tabId => changeAction(tabId));
 
 async function getCrxApp() {
   if (!crxAppPromise) {
