@@ -22,7 +22,7 @@ import { ConfigLoader } from '../common/configLoader';
 import type { Suite, TestCase } from '../common/test';
 import type { Annotation, FullConfigInternal, FullProjectInternal } from '../common/config';
 import { FixtureRunner } from './fixtureRunner';
-import { ManualPromise, captureLibraryStackTrace, gracefullyCloseAll, removeFolders } from 'playwright-core/lib/utils';
+import { ManualPromise, gracefullyCloseAll, removeFolders } from 'playwright-core/lib/utils';
 import { TestInfoImpl } from './testInfo';
 import { TimeoutManager, type TimeSlot } from './timeoutManager';
 import { ProcessRunner } from '../common/process';
@@ -170,7 +170,7 @@ export class WorkerMain extends ProcessRunner {
     // and unhandled errors - both lead to the test failing. This is good for regular tests,
     // so that you can, e.g. expect() from inside an event handler. The test fails,
     // and we restart the worker.
-    this._currentTest._failWithError(serializeError(error), true /* isHardError */);
+    this._currentTest._failWithError(error, true /* isHardError */);
 
     // For tests marked with test.fail(), this might be a problem when unhandled error
     // is not coming from the user test code (legit failure), but from fixtures or test runner.
@@ -372,7 +372,7 @@ export class WorkerMain extends ProcessRunner {
         return;
       }
 
-      const error = await testInfo._runAndFailOnError(async () => {
+      await testInfo._runAndFailOnError(async () => {
         // Now run the test itself.
         debugTest(`test function started`);
         const fn = test.fn; // Extract a variable to get a better stack trace ("myTest" vs "TestCase.myTest [as fn]").
@@ -380,17 +380,8 @@ export class WorkerMain extends ProcessRunner {
         debugTest(`test function finished`);
       }, 'allowSkips');
 
-      // If there are no steps with errors in the test, but the test has an error - append artificial trace entry.
-      if (error && !testInfo._steps.some(s => !!s.error)) {
-        const frames = error.stack ? captureLibraryStackTrace(error.stack.split('\n')).frames : [];
-        const step = testInfo._addStep({
-          wallTime: Date.now(),
-          title: error.message || 'error',
-          category: 'hook',
-          location: frames[0],
-        });
-        step.complete({ error });
-      }
+      for (const error of testInfo.errors)
+        testInfo._tracing.appendForError(error);
     });
 
     if (didFailBeforeAllForSuite) {
@@ -404,7 +395,7 @@ export class WorkerMain extends ProcessRunner {
     const afterHooksSlot = testInfo._didTimeout ? { timeout: this._project.project.timeout, elapsed: 0 } : undefined;
     await testInfo._runAsStepWithRunnable({ category: 'hook', title: 'After Hooks', runnableType: 'afterHooks', runnableSlot: afterHooksSlot }, async step => {
       testInfo._afterHooksStep = step;
-      let firstAfterHooksError: TestInfoError | undefined;
+      let firstAfterHooksError: Error | undefined;
       await testInfo._runWithTimeout(async () => {
         // Note: do not wrap all teardown steps together, because failure in any of them
         // does not prevent further teardown steps from running.
@@ -550,11 +541,11 @@ export class WorkerMain extends ProcessRunner {
       throw beforeAllError;
   }
 
-  private async _runAfterAllHooksForSuite(suite: Suite, testInfo: TestInfoImpl) {
+  private async _runAfterAllHooksForSuite(suite: Suite, testInfo: TestInfoImpl): Promise<Error | undefined> {
     if (!this._activeSuites.has(suite))
       return;
     this._activeSuites.delete(suite);
-    let firstError: TestInfoError | undefined;
+    let firstError: Error | undefined;
     for (const hook of suite._hooks) {
       if (hook.type !== 'afterAll')
         continue;

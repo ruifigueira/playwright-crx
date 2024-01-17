@@ -19,7 +19,7 @@ import type { APIRequestContext, Browser, BrowserContext, BrowserContextOptions,
 export * from 'playwright-core';
 
 export type ReporterDescription =
-  ['blob'] | ['blob', { outputDir?: string }] |
+  ['blob'] | ['blob', { outputDir?: string, fileName?: string }] |
   ['dot'] |
   ['line'] |
   ['list'] | ['list', { printSteps?: boolean }] |
@@ -662,6 +662,11 @@ interface TestConfig {
        * to `"css"`.
        */
       scale?: "css"|"device";
+
+      /**
+       * See `style` in [page.screenshot([options])](https://playwright.dev/docs/api/class-page#page-screenshot).
+       */
+      stylePath?: string|Array<string>;
     };
 
     /**
@@ -2031,7 +2036,7 @@ export interface TestInfo {
    * (i.e. `test-results/a-test-title`), otherwise it will throw.
    * @param pathSegments Path segments to append at the end of the resulting path.
    */
-  outputPath(...pathSegments: Array<string>): string;
+  outputPath(...pathSegments: ReadonlyArray<string>): string;
 
   /**
    * Changes the timeout for the currently running test. Zero means no timeout. Learn more about
@@ -2093,7 +2098,7 @@ export interface TestInfo {
    * @param pathSegments The name of the snapshot or the path segments to define the snapshot file path. Snapshots with the same name in the
    * same test file are expected to be the same.
    */
-  snapshotPath(...pathSegments: Array<string>): string;
+  snapshotPath(...pathSegments: ReadonlyArray<string>): string;
 
   /**
    * The list of annotations applicable to the current test. Includes annotations from the test, annotations from all
@@ -3072,6 +3077,8 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
    * You can access all the same {@link Fixtures} as the test function itself, and also the {@link TestInfo} object that
    * gives a lot of useful information. For example, you can navigate the page before starting the test.
    *
+   * Playwright will continue running all applicable hooks even if some of them have failed.
+   *
    * You can use [test.afterEach(hookFunction)](https://playwright.dev/docs/api/class-test#test-after-each-1) to
    * teardown any resources set up in `beforeEach`.
    *
@@ -3096,6 +3103,10 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
   beforeEach(inner: (args: TestArgs & WorkerArgs, testInfo: TestInfo) => Promise<any> | any): void;
   /**
    * Declares a `beforeEach` hook with a title that is executed before each test.
+   *
+   * **Details**
+   *
+   * See [test.beforeEach(hookFunction)](https://playwright.dev/docs/api/class-test#test-before-each-1).
    *
    * **Usage**
    *
@@ -3129,6 +3140,8 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
    * You can access all the same {@link Fixtures} as the test function itself, and also the {@link TestInfo} object that
    * gives a lot of useful information. For example, you can check whether the test succeeded or failed.
    *
+   * Playwright will continue running all applicable hooks even if some of them have failed.
+   *
    * **Usage**
    *
    * ```js
@@ -3152,6 +3165,10 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
   afterEach(inner: (args: TestArgs & WorkerArgs, testInfo: TestInfo) => Promise<any> | any): void;
   /**
    * Declares an `afterEach` hook with a title that is executed after each test.
+   *
+   * **Details**
+   *
+   * See [test.afterEach(hookFunction)](https://playwright.dev/docs/api/class-test#test-after-each-1).
    *
    * **Usage**
    *
@@ -3187,6 +3204,8 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
    * Note that worker process is restarted on test failures, and `beforeAll` hook runs again in the new worker. Learn
    * more about [workers and failures](https://playwright.dev/docs/test-retries).
    *
+   * Playwright will continue running all applicable hooks even if some of them have failed.
+   *
    * You can use [test.afterAll(hookFunction)](https://playwright.dev/docs/api/class-test#test-after-all-1) to teardown
    * any resources set up in `beforeAll`.
    *
@@ -3214,6 +3233,10 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
   beforeAll(inner: (args: TestArgs & WorkerArgs, testInfo: TestInfo) => Promise<any> | any): void;
   /**
    * Declares a `beforeAll` hook with a title that is executed once per worker process before all tests.
+   *
+   * **Details**
+   *
+   * See [test.beforeAll(hookFunction)](https://playwright.dev/docs/api/class-test#test-before-all-1).
    *
    * **Usage**
    *
@@ -3246,6 +3269,8 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
    * Note that worker process is restarted on test failures, and `afterAll` hook runs again in the new worker. Learn
    * more about [workers and failures](https://playwright.dev/docs/test-retries).
    *
+   * Playwright will continue running all applicable hooks even if some of them have failed.
+   *
    * **Usage**
    *
    * ```js
@@ -3260,6 +3285,10 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
   afterAll(inner: (args: TestArgs & WorkerArgs, testInfo: TestInfo) => Promise<any> | any): void;
   /**
    * Declares an `afterAll` hook with a title that is executed once per worker after all tests.
+   *
+   * **Details**
+   *
+   * See [test.afterAll(hookFunction)](https://playwright.dev/docs/api/class-test#test-after-all-1).
    *
    * **Usage**
    *
@@ -3743,6 +3772,8 @@ export interface PlaywrightWorkerOptions {
    * options [testOptions.headless](https://playwright.dev/docs/api/class-testoptions#test-options-headless) and
    * [testOptions.channel](https://playwright.dev/docs/api/class-testoptions#test-options-channel) take priority over
    * this.
+   *
+   * **NOTE** Use custom browser args at your own risk, as some of them may break Playwright functionality.
    *
    * **Usage**
    *
@@ -5394,7 +5425,8 @@ interface APIResponseAssertions {
  */
 interface LocatorAssertions {
   /**
-   * Ensures that {@link Locator} points to an [attached](https://playwright.dev/docs/actionability#attached) DOM node.
+   * Ensures that {@link Locator} points to an element that is
+   * [connected](https://developer.mozilla.org/en-US/docs/Web/API/Node/isConnected) to a Document or a ShadowRoot.
    *
    * **Usage**
    *
@@ -5589,8 +5621,7 @@ interface LocatorAssertions {
   }): Promise<void>;
 
   /**
-   * Ensures that {@link Locator} points to an [attached](https://playwright.dev/docs/actionability#attached) and
-   * [visible](https://playwright.dev/docs/actionability#visible) DOM node.
+   * Ensures that {@link Locator} points to an attached and [visible](https://playwright.dev/docs/actionability#visible) DOM node.
    *
    * To check that at least one element from the list is visible, use
    * [locator.first()](https://playwright.dev/docs/api/class-locator#locator-first).
@@ -5624,8 +5655,8 @@ interface LocatorAssertions {
   }): Promise<void>;
 
   /**
-   * Ensures the {@link Locator} points to an element that contains the given text. You can use regular expressions for
-   * the value as well.
+   * Ensures the {@link Locator} points to an element that contains the given text. All nested elements will be
+   * considered when computing the text content of the element. You can use regular expressions for the value as well.
    *
    * **Details**
    *
@@ -5675,7 +5706,7 @@ interface LocatorAssertions {
    * @param expected Expected substring or RegExp or a list of those.
    * @param options
    */
-  toContainText(expected: string|RegExp|Array<string|RegExp>, options?: {
+  toContainText(expected: string|RegExp|ReadonlyArray<string|RegExp>, options?: {
     /**
      * Whether to perform case-insensitive match. `ignoreCase` option takes precedence over the corresponding regular
      * expression flag if specified.
@@ -5766,7 +5797,7 @@ interface LocatorAssertions {
    * @param expected Expected class or RegExp or a list of those.
    * @param options
    */
-  toHaveClass(expected: string|RegExp|Array<string|RegExp>, options?: {
+  toHaveClass(expected: string|RegExp|ReadonlyArray<string|RegExp>, options?: {
     /**
      * Time to retry the assertion for in milliseconds. Defaults to `timeout` in `TestConfig.expect`.
      */
@@ -5871,7 +5902,7 @@ interface LocatorAssertions {
    * @param name Snapshot name.
    * @param options
    */
-  toHaveScreenshot(name: string|Array<string>, options?: {
+  toHaveScreenshot(name: string|ReadonlyArray<string>, options?: {
     /**
      * When set to `"disabled"`, stops CSS animations, CSS transitions and Web Animations. Animations get different
      * treatment depending on their duration:
@@ -5926,6 +5957,13 @@ interface LocatorAssertions {
      * Defaults to `"css"`.
      */
     scale?: "css"|"device";
+
+    /**
+     * File name containing the stylesheet to apply while making the screenshot. This is where you can hide dynamic
+     * elements, make elements invisible or change their properties to help you creating repeatable screenshots. This
+     * stylesheet pierces the Shadow DOM and applies to the inner frames.
+     */
+    stylePath?: string|Array<string>;
 
     /**
      * An acceptable perceived color difference in the [YIQ color space](https://en.wikipedia.org/wiki/YIQ) between the
@@ -6011,6 +6049,13 @@ interface LocatorAssertions {
     scale?: "css"|"device";
 
     /**
+     * File name containing the stylesheet to apply while making the screenshot. This is where you can hide dynamic
+     * elements, make elements invisible or change their properties to help you creating repeatable screenshots. This
+     * stylesheet pierces the Shadow DOM and applies to the inner frames.
+     */
+    stylePath?: string|Array<string>;
+
+    /**
      * An acceptable perceived color difference in the [YIQ color space](https://en.wikipedia.org/wiki/YIQ) between the
      * same pixel in compared images, between zero (strict) and one (lax), default is configurable with
      * `TestConfig.expect`. Defaults to `0.2`.
@@ -6024,8 +6069,8 @@ interface LocatorAssertions {
   }): Promise<void>;
 
   /**
-   * Ensures the {@link Locator} points to an element with the given text. You can use regular expressions for the value
-   * as well.
+   * Ensures the {@link Locator} points to an element with the given text. All nested elements will be considered when
+   * computing the text content of the element. You can use regular expressions for the value as well.
    *
    * **Details**
    *
@@ -6074,7 +6119,7 @@ interface LocatorAssertions {
    * @param expected Expected string or RegExp or a list of those.
    * @param options
    */
-  toHaveText(expected: string|RegExp|Array<string|RegExp>, options?: {
+  toHaveText(expected: string|RegExp|ReadonlyArray<string|RegExp>, options?: {
     /**
      * Whether to perform case-insensitive match. `ignoreCase` option takes precedence over the corresponding regular
      * expression flag if specified.
@@ -6138,7 +6183,7 @@ interface LocatorAssertions {
    * @param values Expected options currently selected.
    * @param options
    */
-  toHaveValues(values: Array<string|RegExp>, options?: {
+  toHaveValues(values: ReadonlyArray<string|RegExp>, options?: {
     /**
      * Time to retry the assertion for in milliseconds. Defaults to `timeout` in `TestConfig.expect`.
      */
@@ -6187,7 +6232,7 @@ interface PageAssertions {
    * @param name Snapshot name.
    * @param options
    */
-  toHaveScreenshot(name: string|Array<string>, options?: {
+  toHaveScreenshot(name: string|ReadonlyArray<string>, options?: {
     /**
      * When set to `"disabled"`, stops CSS animations, CSS transitions and Web Animations. Animations get different
      * treatment depending on their duration:
@@ -6273,6 +6318,13 @@ interface PageAssertions {
      * Defaults to `"css"`.
      */
     scale?: "css"|"device";
+
+    /**
+     * File name containing the stylesheet to apply while making the screenshot. This is where you can hide dynamic
+     * elements, make elements invisible or change their properties to help you creating repeatable screenshots. This
+     * stylesheet pierces the Shadow DOM and applies to the inner frames.
+     */
+    stylePath?: string|Array<string>;
 
     /**
      * An acceptable perceived color difference in the [YIQ color space](https://en.wikipedia.org/wiki/YIQ) between the
@@ -6388,6 +6440,13 @@ interface PageAssertions {
     scale?: "css"|"device";
 
     /**
+     * File name containing the stylesheet to apply while making the screenshot. This is where you can hide dynamic
+     * elements, make elements invisible or change their properties to help you creating repeatable screenshots. This
+     * stylesheet pierces the Shadow DOM and applies to the inner frames.
+     */
+    stylePath?: string|Array<string>;
+
+    /**
      * An acceptable perceived color difference in the [YIQ color space](https://en.wikipedia.org/wiki/YIQ) between the
      * same pixel in compared images, between zero (strict) and one (lax), default is configurable with
      * `TestConfig.expect`. Defaults to `0.2`.
@@ -6492,7 +6551,7 @@ interface SnapshotAssertions {
    * @param name Snapshot name.
    * @param options
    */
-  toMatchSnapshot(name: string|Array<string>, options?: {
+  toMatchSnapshot(name: string|ReadonlyArray<string>, options?: {
     /**
      * An acceptable ratio of pixels that are different to the total amount of pixels, between `0` and `1`. Default is
      * configurable with `TestConfig.expect`. Unset by default.
@@ -6737,6 +6796,11 @@ interface TestProject {
        * to `"css"`.
        */
       scale?: "css"|"device";
+
+      /**
+       * See `style` in [page.screenshot([options])](https://playwright.dev/docs/api/class-page#page-screenshot).
+       */
+      stylePath?: string|Array<string>;
     };
 
     /**
