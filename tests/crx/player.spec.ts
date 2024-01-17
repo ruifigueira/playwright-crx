@@ -202,6 +202,10 @@ test('should resume with multiple pages', async ({ context, attachRecorder, reco
 
   await recorderPage.getByTitle('Record').click();
 
+  // TODO
+  // test is flaky without this
+  await recorderPage.waitForTimeout(500);
+
   await recorderPage.getByTitle('Resume (F8)').click();
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
     `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,

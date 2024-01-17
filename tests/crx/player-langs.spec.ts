@@ -29,9 +29,9 @@ const langs = {
   'python-pytest': { line: `    page.locator("textarea").click()`, linenumber: 6 },
   'python': { line: `    page.locator("textarea").click()`, linenumber: 9 },
   'python-async': { line: `    await page.locator("textarea").click()`, linenumber: 11 },
-  'csharp-mstest': { line: `        await Page.Locator("textarea").ClickAsync();`, linenumber: 12 },
-  'csharp-nunit': { line: `        await Page.Locator("textarea").ClickAsync();`, linenumber: 13 },
-  'csharp': { line: `        await page.Locator("textarea").ClickAsync();`, linenumber: 20 },
+  'csharp-mstest': { line: `        await Page.Locator("textarea").ClickAsync();`, linenumber: 11 },
+  'csharp-nunit': { line: `        await Page.Locator("textarea").ClickAsync();`, linenumber: 12 },
+  'csharp': { line: `        await page.Locator("textarea").ClickAsync();`, linenumber: 14 },
 };
 
 for (const [lang, { linenumber, line }] of Object.entries(langs)) {
