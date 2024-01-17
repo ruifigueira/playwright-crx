@@ -70,7 +70,7 @@ async function __pwResolveComponent(component) {
   if (componentFactory)
     __pwRegistry.set(component.type, await componentFactory());
 
-  if ('children' in component)
+  if (component.children?.length)
     await Promise.all(component.children.map(child => __pwResolveComponent(child)));
 }
 
@@ -90,12 +90,13 @@ function __renderChild(child) {
  */
 function __pwRender(component) {
   const componentFunc = __pwRegistry.get(component.type);
-  const children = component.children.map(child => __renderChild(child)).filter(child => {
+  const children = component.children?.map(child => __renderChild(child)).filter(child => {
     if (typeof child === 'string')
       return !!child.trim();
     return true;
   });
-  return __pwReact.createElement(componentFunc || component.type, component.props, children);
+  const reactChildren = Array.isArray(children) && children.length === 1 ? children[0] : children;
+  return __pwReact.createElement(componentFunc || component.type, component.props, reactChildren);
 }
 
 window.playwrightMount = async (component, rootElement, hooksConfig) => {

@@ -403,7 +403,7 @@ Expected options currently selected.
 * langs:
   - alias-java: isAttached
 
-Ensures that [Locator] points to an [attached](../actionability.md#attached) DOM node.
+Ensures that [Locator] points to an element that is [connected](https://developer.mozilla.org/en-US/docs/Web/API/Node/isConnected) to a Document or a ShadowRoot.
 
 **Usage**
 
@@ -837,7 +837,7 @@ element should intersect viewport at any positive ratio. Defaults to `0`.
 * langs:
   - alias-java: isVisible
 
-Ensures that [Locator] points to an [attached](../actionability.md#attached) and [visible](../actionability.md#visible) DOM node.
+Ensures that [Locator] points to an attached and [visible](../actionability.md#visible) DOM node.
 
 To check that at least one element from the list is visible, use [`method: Locator.first`].
 
@@ -933,7 +933,7 @@ await Expect(
 * langs:
   - alias-java: containsText
 
-Ensures the [Locator] points to an element that contains the given text. You can use regular expressions for the value as well.
+Ensures the [Locator] points to an element that contains the given text. All nested elements will be considered when computing the text content of the element. You can use regular expressions for the value as well.
 
 **Details**
 
@@ -1541,6 +1541,9 @@ Snapshot name.
 ### option: LocatorAssertions.toHaveScreenshot#1.maskColor = %%-screenshot-option-mask-color-%%
 * since: v1.35
 
+### option: LocatorAssertions.toHaveScreenshot#1.stylePath = %%-screenshot-option-style-path-%%
+* since: v1.41
+
 ### option: LocatorAssertions.toHaveScreenshot#1.omitBackground = %%-screenshot-option-omit-background-%%
 * since: v1.23
 
@@ -1587,6 +1590,9 @@ Note that screenshot assertions only work with Playwright test runner.
 ### option: LocatorAssertions.toHaveScreenshot#2.maskColor = %%-screenshot-option-mask-color-%%
 * since: v1.35
 
+### option: LocatorAssertions.toHaveScreenshot#2.stylePath = %%-screenshot-option-style-path-%%
+* since: v1.41
+
 ### option: LocatorAssertions.toHaveScreenshot#2.omitBackground = %%-screenshot-option-omit-background-%%
 * since: v1.23
 
@@ -1607,7 +1613,7 @@ Note that screenshot assertions only work with Playwright test runner.
 * langs:
   - alias-java: hasText
 
-Ensures the [Locator] points to an element with the given text. You can use regular expressions for the value as well.
+Ensures the [Locator] points to an element with the given text. All nested elements will be considered when computing the text content of the element. You can use regular expressions for the value as well.
 
 **Details**
 

@@ -254,7 +254,7 @@ const playwrightFixtures: Fixtures<TestFixtures, WorkerFixtures> = ({
     const csiListener: ClientInstrumentationListener = {
       onApiCallBegin: (apiName: string, params: Record<string, any>, frames: StackFrame[], wallTime: number, userData: any) => {
         const testInfo = currentTestInfo();
-        if (!testInfo || apiName.startsWith('expect.') || apiName.includes('setTestIdAttribute'))
+        if (!testInfo || apiName.includes('setTestIdAttribute'))
           return { userObject: null };
         const step = testInfo._addStep({
           location: frames[0] as any,
@@ -729,7 +729,7 @@ function renderApiCall(apiName: string, params: any) {
         continue;
       let value;
       if (name === 'selector' && isString(params[name]) && params[name].startsWith('internal:')) {
-        const getter = asLocator('javascript', params[name], false, true);
+        const getter = asLocator('javascript', params[name]);
         apiName = apiName.replace(/^locator\./, 'locator.' + getter + '.');
         apiName = apiName.replace(/^page\./, 'page.' + getter + '.');
         apiName = apiName.replace(/^frame\./, 'frame.' + getter + '.');
@@ -748,5 +748,3 @@ export const test = _baseTest.extend<TestFixtures, WorkerFixtures>(playwrightFix
 export { defineConfig } from './common/configLoader';
 export { mergeTests } from './common/testType';
 export { mergeExpects } from './matchers/expect';
-
-export default test;
