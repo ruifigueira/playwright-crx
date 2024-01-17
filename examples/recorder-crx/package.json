@@ -1,6 +1,6 @@
 {
   "name": "recorder-crx",
-  "version":"0.3.0-next",
+  "version":"0.3.0",
   "type": "module",
   "keywords": [],
   "author": "",
@@ -9,7 +9,7 @@
     "build": "tsc && vite build && vite --config vite.recorder.config.ts build"
   },
   "dependencies": {
-    "playwright-crx":"0.3.0-next"
+    "playwright-crx":"0.3.0"
   },
   "devDependencies": {
     "typescript": "^5.1.3",
