@@ -14,26 +14,9 @@
  * limitations under the License.
  */
 
-function jsx(type, props) {
-  return {
-    __pw_type: 'jsx',
-    type,
-    props,
-  };
-}
+import { ImportRegistry } from './importRegistry';
+import { transformObject, unwrapObject } from './serializers';
 
-function jsxs(type, props) {
-  return {
-    __pw_type: 'jsx',
-    type,
-    props,
-  };
-}
-
-const Fragment = {};
-
-module.exports = {
-  Fragment,
-  jsx,
-  jsxs,
-};
+window.__pwRegistry = new ImportRegistry();
+window.__pwUnwrapObject = unwrapObject;
+window.__pwTransformObject = transformObject;
