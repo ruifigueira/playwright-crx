@@ -1,0 +1,26 @@
+{
+  "name": "Playwright Bot",
+  "version": "0.3.1",
+  "manifest_version": 3,
+  "icons": {
+    "16": "pwbot-16.png",
+    "32": "pwbot-32.png",
+    "48": "pwbot-48.png",
+    "128": "pwbot-128.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_icon": {
+      "16": "pwbot-16.png",
+      "32": "pwbot-32.png"
+    },
+    "default_title": "Playwright Bot"
+  },
+  "permissions": ["debugger", "tabs", "storage", "sidePanel"]
+}

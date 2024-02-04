@@ -1,0 +1,46 @@
+.user-script-list {
+  margin: 8px;
+  border-radius: 12px;
+  background-color: white;
+  padding: 12px 0 12px 0;
+}
+
+.user-script-list.empty-state {
+  text-align: center;
+}
+
+.user-script-list .item:hover {
+  background-color: #ededed;
+}
+
+.user-script-list .item {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 16px 4px 16px;
+}
+
+.user-script-list .play-circle .codicon {
+  font-size: 24px;
+}
+
+.user-script-list .play-circle:not(:disabled) .codicon {
+  color: #a1260d;
+}
+
+.user-script-list .item.running {
+  animation: colorChange 2s linear infinite;
+}
+
+@keyframes colorChange {
+  0% {
+    background-color: white;
+  }
+
+  50% {
+    background-color: #fdc4c4;
+  }
+
+  100% {
+    background-color: white;
+  }
+}

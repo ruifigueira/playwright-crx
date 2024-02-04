@@ -24,6 +24,12 @@ jobs:
             examples/recorder-crx/dist/
           retention-days: 5
       - uses: actions/upload-artifact@v3
+        with:
+          name: pwbot-crx
+          path: |
+            examples/pwbot-crx/dist/
+          retention-days: 5
+      - uses: actions/upload-artifact@v3
         if: always()
         with:
           name: playwright-report
