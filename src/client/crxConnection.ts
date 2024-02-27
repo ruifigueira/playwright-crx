@@ -22,6 +22,7 @@ import { findValidator } from 'playwright-core/lib/protocol/validatorPrimitives'
 export class CrxConnection extends Connection {
   constructor() {
     super(undefined, undefined);
+    this.useRawBuffers();
   }
 
   dispatch(message: object): void {

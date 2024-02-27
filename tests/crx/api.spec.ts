@@ -162,3 +162,13 @@ test('should not block on pages with service workers', async ({ runCrxTest }) =>
     await expect(page.evaluate(() => window['registrationPromise'])).resolves.toBeTruthy();
   });
 });
+
+// https://github.com/ruifigueira/playwright-crx/issues/14
+test("should take screenshot", async ({ runCrxTest }) => {
+  await runCrxTest(async ({ expect, page }) => {
+    await page.goto('about:blank');
+    await page.setContent('<h1>Hello World!</h1>');
+    const screenshot = await page.screenshot();
+    expect(screenshot).not.toBeNull();
+  });
+});
