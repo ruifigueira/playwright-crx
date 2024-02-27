@@ -14,19 +14,14 @@
  * limitations under the License.
  */
 
-import { test, expect } from './playwright-test-fixtures';
+import { test, expect, playwrightCtConfigText } from './playwright-test-fixtures';
 import fs from 'fs';
 
 test.describe.configure({ mode: 'parallel' });
 
-const playwrightConfig = `
-  import { defineConfig } from '@playwright/experimental-ct-react';
-  export default defineConfig({ projects: [{name: 'foo'}] });
-`;
-
 test('should work with the empty component list', async ({ runInlineTest }, testInfo) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.js"></script>`,
     'playwright/index.js': ``,
 
@@ -39,7 +34,7 @@ test('should work with the empty component list', async ({ runInlineTest }, test
   expect(result.passed).toBe(1);
   const output = result.output;
   expect(output).toContain('transforming...');
-  expect(output.replace(/\\+/g, '/')).toContain('playwright/.cache/playwright/index.html');
+  expect(output.replace(/\\+/g, '/')).toContain('.cache/index.html');
 
   const metainfo = JSON.parse(fs.readFileSync(testInfo.outputPath('playwright/.cache/metainfo.json'), 'utf-8'));
   expect(metainfo.version).toEqual(require('playwright-core/package.json').version);
@@ -50,7 +45,7 @@ test('should work with the empty component list', async ({ runInlineTest }, test
 
 test('should extract component list', async ({ runInlineTest }, testInfo) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
     'playwright/index.ts': ``,
 
@@ -131,38 +126,38 @@ test('should extract component list', async ({ runInlineTest }, testInfo) => {
 
   const metainfo = JSON.parse(fs.readFileSync(testInfo.outputPath('playwright/.cache/metainfo.json'), 'utf-8'));
   metainfo.components.sort((a, b) => {
-    return (a.importPath + '/' + a.importedName).localeCompare(b.importPath + '/' + b.importedName);
+    return (a.importSource + '/' + a.importedName).localeCompare(b.importSource + '/' + b.importedName);
   });
 
   expect(metainfo.components).toEqual([{
-    id: expect.stringContaining('playwright_test_src_button_tsx_Button'),
+    id: expect.stringContaining('button_Button'),
     remoteName: 'Button',
-    importPath: expect.stringContaining('button.tsx'),
-    isModuleOrAlias: false,
+    importSource: expect.stringContaining('./button'),
+    filename: expect.stringContaining('one-import.spec.tsx'),
   }, {
-    id: expect.stringContaining('playwright_test_src_clashingNames1_tsx_ClashingName'),
+    id: expect.stringContaining('clashingNames1_ClashingName'),
     remoteName: 'ClashingName',
-    importPath: expect.stringContaining('clashingNames1.tsx'),
-    isModuleOrAlias: false,
+    importSource: expect.stringContaining('./clashingNames1'),
+    filename: expect.stringContaining('clashing-imports.spec.tsx'),
   }, {
-    id: expect.stringContaining('playwright_test_src_clashingNames2_tsx_ClashingName'),
+    id: expect.stringContaining('clashingNames2_ClashingName'),
     remoteName: 'ClashingName',
-    importPath: expect.stringContaining('clashingNames2.tsx'),
-    isModuleOrAlias: false,
+    importSource: expect.stringContaining('./clashingNames2'),
+    filename: expect.stringContaining('clashing-imports.spec.tsx'),
   }, {
-    id: expect.stringContaining('playwright_test_src_components_tsx_Component1'),
+    id: expect.stringContaining('components_Component1'),
     remoteName: 'Component1',
-    importPath: expect.stringContaining('components.tsx'),
-    isModuleOrAlias: false,
+    importSource: expect.stringContaining('./components'),
+    filename: expect.stringContaining('named-imports.spec.tsx'),
   }, {
-    id: expect.stringContaining('playwright_test_src_components_tsx_Component2'),
+    id: expect.stringContaining('components_Component2'),
     remoteName: 'Component2',
-    importPath: expect.stringContaining('components.tsx'),
-    isModuleOrAlias: false,
+    importSource: expect.stringContaining('./components'),
+    filename: expect.stringContaining('named-imports.spec.tsx'),
   }, {
-    id: expect.stringContaining('playwright_test_src_defaultExport_tsx'),
-    importPath: expect.stringContaining('defaultExport.tsx'),
-    isModuleOrAlias: false,
+    id: expect.stringContaining('defaultExport'),
+    importSource: expect.stringContaining('./defaultExport'),
+    filename: expect.stringContaining('default-import.spec.tsx'),
   }]);
 
   for (const [, value] of Object.entries(metainfo.deps))
@@ -197,7 +192,7 @@ test('should cache build', async ({ runInlineTest }, testInfo) => {
 
   await test.step('original test', async () => {
     const result = await runInlineTest({
-      'playwright.config.ts': playwrightConfig,
+      'playwright.config.ts': playwrightCtConfigText,
       'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
       'playwright/index.ts': ``,
 
@@ -224,7 +219,7 @@ test('should cache build', async ({ runInlineTest }, testInfo) => {
 
   await test.step('re-run same test', async () => {
     const result = await runInlineTest({
-      'playwright.config.ts': playwrightConfig,
+      'playwright.config.ts': playwrightCtConfigText,
     }, { workers: 1 });
     expect(result.exitCode).toBe(0);
     expect(result.passed).toBe(1);
@@ -234,7 +229,7 @@ test('should cache build', async ({ runInlineTest }, testInfo) => {
 
   await test.step('modify test', async () => {
     const result = await runInlineTest({
-      'playwright.config.ts': playwrightConfig,
+      'playwright.config.ts': playwrightCtConfigText,
       'src/button.test.tsx': `
           import { test, expect } from '@playwright/experimental-ct-react';
         import { Button } from './button.tsx';
@@ -253,7 +248,7 @@ test('should cache build', async ({ runInlineTest }, testInfo) => {
 
   await test.step('modify source', async () => {
     const result = await runInlineTest({
-      'playwright.config.ts': playwrightConfig,
+      'playwright.config.ts': playwrightCtConfigText,
       'src/button.tsx': `
         export const Button = () => <button>Button 2</button>;
       `,
@@ -270,7 +265,7 @@ test('should grow cache', async ({ runInlineTest }, testInfo) => {
 
   await test.step('original test', async () => {
     const result = await runInlineTest({
-      'playwright.config.ts': playwrightConfig,
+      'playwright.config.ts': playwrightCtConfigText,
       'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
       'playwright/index.ts': ``,
       'src/button1.tsx': `
@@ -305,7 +300,7 @@ test('should grow cache', async ({ runInlineTest }, testInfo) => {
 
   await test.step('run second test', async () => {
     const result = await runInlineTest({
-      'playwright.config.ts': playwrightConfig,
+      'playwright.config.ts': playwrightCtConfigText,
     }, { workers: 1 }, undefined, { additionalArgs: ['button2'] });
     expect(result.exitCode).toBe(0);
     expect(result.passed).toBe(1);
@@ -315,7 +310,7 @@ test('should grow cache', async ({ runInlineTest }, testInfo) => {
 
   await test.step('run first test again', async () => {
     const result = await runInlineTest({
-      'playwright.config.ts': playwrightConfig,
+      'playwright.config.ts': playwrightCtConfigText,
     }, { workers: 1 }, undefined, { additionalArgs: ['button2'] });
     expect(result.exitCode).toBe(0);
     expect(result.passed).toBe(1);
@@ -326,7 +321,7 @@ test('should grow cache', async ({ runInlineTest }, testInfo) => {
 
 test('should not use global config for preview', async ({ runInlineTest }) => {
   const result1 = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.js"></script>`,
     'playwright/index.js': ``,
     'vite.config.js': `
@@ -347,7 +342,7 @@ test('should not use global config for preview', async ({ runInlineTest }) => {
   expect(result1.passed).toBe(1);
 
   const result2 = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
   }, { workers: 1 });
   expect(result2.exitCode).toBe(0);
   expect(result2.passed).toBe(1);
@@ -386,7 +381,7 @@ test('should work with https enabled', async ({ runInlineTest }) => {
 
 test('list compilation cache should not clash with the run one', async ({ runInlineTest }) => {
   const listResult = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
     'playwright/index.ts': ``,
     'src/button.tsx': `
@@ -414,7 +409,7 @@ test('should retain deps when test changes', async ({ runInlineTest }, testInfo)
 
   await test.step('original test', async () => {
     const result = await runInlineTest({
-      'playwright.config.ts': playwrightConfig,
+      'playwright.config.ts': playwrightCtConfigText,
       'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
       'playwright/index.ts': ``,
       'src/button.tsx': `
@@ -456,10 +451,10 @@ test('should retain deps when test changes', async ({ runInlineTest }, testInfo)
   const metainfo = JSON.parse(fs.readFileSync(testInfo.outputPath('playwright/.cache/metainfo.json'), 'utf-8'));
 
   expect(metainfo.components).toEqual([{
-    id: expect.stringContaining('playwright_test_src_button_tsx_Button'),
+    id: expect.stringContaining('button_tsx_Button'),
     remoteName: 'Button',
-    importPath: expect.stringContaining('button.tsx'),
-    isModuleOrAlias: false,
+    importSource: expect.stringContaining('button.tsx'),
+    filename: expect.stringContaining('button.test.tsx'),
   }]);
 
   for (const [, value] of Object.entries(metainfo.deps))
@@ -478,7 +473,7 @@ test('should retain deps when test changes', async ({ runInlineTest }, testInfo)
 
 test('should render component via re-export', async ({ runInlineTest }, testInfo) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
     'playwright/index.ts': ``,
     'src/button.tsx': `
@@ -504,7 +499,7 @@ test('should render component via re-export', async ({ runInlineTest }, testInfo
 
 test('should render component exported via fixture', async ({ runInlineTest }, testInfo) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
     'playwright/index.ts': ``,
     'src/button.tsx': `
@@ -534,7 +529,7 @@ test('should render component exported via fixture', async ({ runInlineTest }, t
 
 test('should pass imported images from test to component', async ({ runInlineTest }, testInfo) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
     'playwright/index.ts': ``,
     'src/image.png': Buffer.from('iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAQAAAD9CzEMAAACMElEQVRYw+1XT0tCQRD/9Qci0Cw7mp1C6BMYnt5niMhPEEFCh07evNk54XnuGkhFehA/QxHkqYMEFWXpscMTipri7fqeu+vbfY+EoBkQ3Zn5zTo7MzsL/NNfoClkUUQNN3jCJ/ETfavRSpYkkSmFQzz8wMr4gaSp8OBJ2HCU4Iwd0kqGgd9GPxCccZ+0jWgWVW1wxlWy0qR51I3hv7lOllq7b4SC/+aGzr+QBadjEKgAykvzJGXwr/Lj4JfRk5hUSLKIa00HPUJRki0xeMWSWxVXmi5sddXKymqTyxdwquXAUVV3WREeLx3gTcNFWQY/jXtB8QIzgt4qTvAR4OCe0ATKCmrnmFMEM0Pp2BvrIisaFUdUjgKKZgYWSjjDLR5J+x13lATHuHSti6JBzQP+gq2QHXjfRaiJojbPgYqbmGFow0VpiyIW0/VIF9QKLzeBWA2MHmwCu8QJQV++Ps/joHQQH4HpuO0uobUeVztgIcr4Vnf4we9orWfUIWKHbEVyYKkPmaVpIVKICuo0ZYXWjHTITXWhsVYxkIDpUoKsla1i2Oz2QjvYG9fshu36GbFQ8DGyHNOuvRdOKZSDUtCFM7wyHeSM4XN8e7bOpd9F2gg+TRYal753bGkbuEjzMg0YW/yDV1czUDm+e43Byz86OnRwsYDMKXlmkYbeAOwffrtU/nGpXpwkXfPhVza+D9AiMAtrtOMYfVr0q8Wr1nh8n8ADZCJPqAk8AifyjP2n36cvkA6/Wln9MokAAAAASUVORK5CYII=', 'base64'),
@@ -554,7 +549,7 @@ test('should pass imported images from test to component', async ({ runInlineTes
 
 test('should pass dates, regex, urls and bigints', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
     'playwright/index.ts': ``,
     'src/button.tsx': `
@@ -591,7 +586,7 @@ test('should pass dates, regex, urls and bigints', async ({ runInlineTest }) => 
 
 test('should pass undefined value as param', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
     'playwright/index.ts': ``,
     'src/component.tsx': `

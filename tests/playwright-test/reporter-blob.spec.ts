@@ -904,7 +904,7 @@ test('onError in the report', async ({ runInlineTest, mergeReports, showReport, 
       test.skip('skipped 3', async ({}) => {});
     `
   };
-  const result = await runInlineTest(files, { shard: `1/3` });
+  const result = await runInlineTest(files, { shard: `1/3` }, { PWTEST_BOT_NAME: 'macos-node16-ttest' });
   expect(result.exitCode).toBe(1);
 
   const { exitCode } = await mergeReports(reportDir, { 'PW_TEST_HTML_REPORT_OPEN': 'never' }, { additionalArgs: ['--reporter', 'html'] });
@@ -917,6 +917,7 @@ test('onError in the report', async ({ runInlineTest, mergeReports, showReport, 
   await expect(page.locator('.subnav-item:has-text("Failed") .counter')).toHaveText('0');
   await expect(page.locator('.subnav-item:has-text("Flaky") .counter')).toHaveText('0');
   await expect(page.locator('.subnav-item:has-text("Skipped") .counter')).toHaveText('1');
+  await expect(page.getByTestId('report-errors')).toContainText('(macos-node16-ttest) Error: Error in teardown');
 });
 
 test('preserve config fields', async ({ runInlineTest, mergeReports }) => {
@@ -1675,4 +1676,35 @@ test('merge reports without --config preserves path separators', async ({ runInl
   expect(output).toContain(`test title: ${'tests1' + otherSeparator + 'a.test.js'}`);
   expect(output).toContain(`test: ${test.info().outputPath('dir1', 'tests2', 'b.test.js').replaceAll(path.sep, otherSeparator)}`);
   expect(output).toContain(`test title: ${'tests2' + otherSeparator + 'b.test.js'}`);
+});
+
+test('TestSuite.project() should return owning project', async ({ runInlineTest, mergeReports }) => {
+  test.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/29173' });
+  const files1 = {
+    'echo-reporter.js': `
+      export default class EchoReporter {
+        onTestBegin(test) {
+          console.log('test project:', test.parent?.project()?.name);
+        }
+      };
+    `,
+    'merge.config.ts': `module.exports = {
+      testDir: 'mergeRoot',
+      reporter: './echo-reporter.js'
+     };`,
+    'playwright.config.ts': `module.exports = {
+      testDir: 'tests',
+      reporter: [['blob', { outputDir: 'blob-report' }]],
+      projects: [{name: 'my-project'}]
+    };`,
+    'tests/a.test.js': `
+      import { test, expect } from '@playwright/test';
+      test('math 1', async ({}) => { });
+    `,
+  };
+  await runInlineTest(files1);
+
+  const { exitCode, output } = await mergeReports(test.info().outputPath('blob-report'), undefined, { additionalArgs: ['--config', 'merge.config.ts'] });
+  expect(exitCode).toBe(0);
+  expect(output).toContain(`test project: my-project`);
 });

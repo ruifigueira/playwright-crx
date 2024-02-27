@@ -25,6 +25,7 @@ import { constructURLBasedOnBaseURL, isRegExp, isTextualMimeType, pollAgainstDea
 import { currentTestInfo } from '../common/globals';
 import { TestInfoImpl } from '../worker/testInfo';
 import type { ExpectMatcherContext } from './expect';
+import { takeFirst } from '../common/config';
 
 interface LocatorEx extends Locator {
   _expect(expression: string, options: Omit<FrameExpectOptions, 'expectedValue'> & { expectedValue?: any }): Promise<{ matches: boolean, received?: any, log?: string[], timedOut?: boolean }>;
@@ -39,7 +40,7 @@ export function toBeAttached(
   locator: LocatorEx,
   options?: { attached?: boolean, timeout?: number },
 ) {
-  const attached = !options || options.attached === undefined || options.attached === true;
+  const attached = !options || options.attached === undefined || options.attached;
   const expected = attached ? 'attached' : 'detached';
   const unexpected = attached ? 'detached' : 'attached';
   const arg = attached ? '' : '{ attached: false }';
@@ -53,7 +54,7 @@ export function toBeChecked(
   locator: LocatorEx,
   options?: { checked?: boolean, timeout?: number },
 ) {
-  const checked = !options || options.checked === undefined || options.checked === true;
+  const checked = !options || options.checked === undefined || options.checked;
   const expected = checked ? 'checked' : 'unchecked';
   const unexpected = checked ? 'unchecked' : 'checked';
   const arg = checked ? '' : '{ checked: false }';
@@ -77,7 +78,7 @@ export function toBeEditable(
   locator: LocatorEx,
   options?: { editable?: boolean, timeout?: number },
 ) {
-  const editable = !options || options.editable === undefined || options.editable === true;
+  const editable = !options || options.editable === undefined || options.editable;
   const expected = editable ? 'editable' : 'readOnly';
   const unexpected = editable ? 'readOnly' : 'editable';
   const arg = editable ? '' : '{ editable: false }';
@@ -101,7 +102,7 @@ export function toBeEnabled(
   locator: LocatorEx,
   options?: { enabled?: boolean, timeout?: number },
 ) {
-  const enabled = !options || options.enabled === undefined || options.enabled === true;
+  const enabled = !options || options.enabled === undefined || options.enabled;
   const expected = enabled ? 'enabled' : 'disabled';
   const unexpected = enabled ? 'disabled' : 'enabled';
   const arg = enabled ? '' : '{ enabled: false }';
@@ -135,7 +136,7 @@ export function toBeVisible(
   locator: LocatorEx,
   options?: { visible?: boolean, timeout?: number },
 ) {
-  const visible = !options || options.visible === undefined || options.visible === true;
+  const visible = !options || options.visible === undefined || options.visible;
   const expected = visible ? 'visible' : 'hidden';
   const unexpected = visible ? 'hidden' : 'visible';
   const arg = visible ? '' : '{ visible: false }';
@@ -367,7 +368,7 @@ export async function toPass(
   } = {},
 ) {
   const testInfo = currentTestInfo();
-  const timeout = options.timeout !== undefined ? options.timeout : 0;
+  const timeout = takeFirst(options.timeout, testInfo?._projectInternal.expect?.toPass?.timeout, 0);
 
   const { deadline, timeoutMessage } = testInfo ? testInfo._deadlineForMatcher(timeout) : TestInfoImpl._defaultDeadlineForMatcher(timeout);
   const result = await pollAgainstDeadline<Error|undefined>(async () => {

@@ -5,7 +5,7 @@ title: "Docker"
 
 ## Introduction
 
-[Dockerfile.jammy] can be used to run Playwright scripts in Docker environment. These image includes all the dependencies needed to run browsers in a Docker container, and also include the browsers themselves.
+[Dockerfile.jammy] can be used to run Playwright scripts in Docker environment. These image includes the [Playwright browsers](./browsers.md#install-browsers) and [browser system dependencies](./browsers.md#install-system-dependencies). The Playwright package/dependency is not included in the image and should be installed separately.
 
 ## Usage
 
@@ -107,15 +107,12 @@ See our [Continuous Integration guides](./ci.md) for sample configs.
 
 See [all available image tags].
 
-Docker images are published automatically by GitHub Actions. We currently publish images with the
-following tags:
+We currently publish images with the following tags:
 - `:next` - tip-of-tree image version based on Ubuntu 22.04 LTS (Jammy Jellyfish).
 - `:next-jammy` - tip-of-tree image version based on Ubuntu 22.04 LTS (Jammy Jellyfish).
 - `:v%%VERSION%%` - Playwright v%%VERSION%% release docker image based on Ubuntu 22.04 LTS (Jammy Jellyfish).
 - `:v%%VERSION%%-jammy` - Playwright v%%VERSION%% release docker image based on Ubuntu 22.04 LTS (Jammy Jellyfish).
 - `:v%%VERSION%%-focal` - Playwright v%%VERSION%% release docker image based on Ubuntu 20.04 LTS (Focal Fossa).
-- `:sha-XXXXXXX` - docker image for every commit that changed
-  docker files or browsers, marked with a [short sha](https://git-scm.com/book/en/v2/Git-Tools-Revision-Selection#Short-SHA-1) (first 7 digits of the SHA commit).
 
 :::note
 It is recommended to always pin your Docker image to a specific version if possible. If the Playwright version in your Docker image does not match the version in your project/tests, Playwright will be unable to locate browser executables.
@@ -140,10 +137,8 @@ You can use the [.NET install script](https://learn.microsoft.com/en-us/dotnet/c
 curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --install-dir /usr/share/dotnet --channel 6.0
 ```
 
-## Development
+## Build your own image
 * langs: js
-
-### Build the image
 
 To run Playwright inside Docker, you need to have Node.js, [Playwright browsers](./browsers.md#install-browsers) and [browser system dependencies](./browsers.md#install-system-dependencies) installed. See the following Dockerfile:
 
@@ -153,15 +148,14 @@ FROM node:20-bookworm
 RUN npx -y playwright@%%VERSION%% install --with-deps
 ```
 
-Note: official images published to [Microsoft Artifact Registry] are built using [`//utils/docker/build.sh`](https://github.com/microsoft/playwright/blob/main/utils/docker/build.sh) script.
+## Build your own image
+* langs: python
 
-```txt
-./utils/docker/build.sh jammy playwright:localbuild-jammy
+To run Playwright inside Docker, you need to have Python, [Playwright browsers](./browsers.md#install-browsers) and [browser system dependencies](./browsers.md#install-system-dependencies) installed. See the following Dockerfile:
+
+```Dockerfile
+FROM python:3.12-bookworm
+
+RUN pip install playwright==@%%VERSION%% && \
+    playwright install --with-deps
 ```
-
-The image will be tagged as `playwright:localbuild-jammy` and could be run as:
-
-```txt
-docker run --rm -it playwright:localbuild /bin/bash
-```
-

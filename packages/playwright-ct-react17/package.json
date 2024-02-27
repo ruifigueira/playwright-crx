@@ -1,6 +1,6 @@
 {
   "name": "@playwright/experimental-ct-react17",
-  "version": "1.41.1",
+  "version": "1.42.0",
   "description": "Playwright Component Testing for React",
   "repository": {
     "type": "git",
@@ -29,10 +29,11 @@
     }
   },
   "dependencies": {
-    "@playwright/experimental-ct-core": "1.41.1",
-    "@vitejs/plugin-react": "^4.0.0"
+    "@playwright/experimental-ct-core": "1.42.0",
+    "@vitejs/plugin-react": "^4.2.1"
   },
   "bin": {
-    "playwright": "cli.js"
+    "playwright": "cli.js",
+    "pw-react17": "cli.js"
   }
 }

@@ -14,16 +14,11 @@
  * limitations under the License.
  */
 
-import { test, expect } from './playwright-test-fixtures';
-
-const playwrightConfig = `
-  import { defineConfig } from '@playwright/experimental-ct-react';
-  export default defineConfig({ projects: [{name: 'foo'}] });
-`;
+import { test, expect, playwrightCtConfigText } from './playwright-test-fixtures';
 
 test('should work with TSX', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
     'playwright/index.ts': `
     `,
@@ -47,7 +42,7 @@ test('should work with TSX', async ({ runInlineTest }) => {
 
 test('should work with JSX', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.js"></script>`,
     'playwright/index.js': `
     `,
@@ -73,7 +68,7 @@ test('should work with JSX', async ({ runInlineTest }) => {
 
 test('should work with JSX in JS', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.js"></script>`,
     'playwright/index.js': `
     `,
@@ -99,7 +94,7 @@ test('should work with JSX in JS', async ({ runInlineTest }) => {
 
 test('should work with JSX in JS and in JSX', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.js"></script>`,
     'playwright/index.js': `
     `,
@@ -136,7 +131,7 @@ test('should work with JSX in JS and in JSX', async ({ runInlineTest }) => {
 
 test('should work with stray TSX import', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
     'playwright/index.ts': `
     `,
@@ -167,7 +162,7 @@ test('should work with stray TSX import', async ({ runInlineTest }) => {
 
 test('should work with stray JSX import', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.js"></script>`,
     'playwright/index.js': `
     `,
@@ -198,7 +193,7 @@ test('should work with stray JSX import', async ({ runInlineTest }) => {
 
 test('should work with stray JS import', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.js"></script>`,
     'playwright/index.js': `
     `,
@@ -229,7 +224,7 @@ test('should work with stray JS import', async ({ runInlineTest }) => {
 
 test('should work with JSX in variable', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.js"></script>`,
     'playwright/index.js': `
     `,
@@ -257,7 +252,7 @@ test('should work with JSX in variable', async ({ runInlineTest }) => {
 
 test('should return root locator for fragments', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.js"></script>`,
     'playwright/index.js': ``,
 
@@ -283,7 +278,7 @@ test('should return root locator for fragments', async ({ runInlineTest }) => {
 
 test('should respect default property values', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
     'playwright/index.ts': ``,
     'src/label.tsx': `
@@ -307,7 +302,7 @@ test('should respect default property values', async ({ runInlineTest }) => {
 
 test('should bundle public folder', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
     'playwright/index.ts': `
     `,
@@ -340,7 +335,7 @@ test('should bundle public folder', async ({ runInlineTest }) => {
 
 test('should work with property expressions in JSX', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
     'playwright/index.ts': `
     `,
@@ -420,7 +415,8 @@ test('should handle the vite host config', async ({ runInlineTest }) => {
 
       test('pass component', async ({ page, mount }) => {
         const component = await mount(<Component />);
-        await expect(page).toHaveURL('http://127.0.0.1:3100/');
+        const host = await page.evaluate(() => window.location.hostname);
+        await expect(host).toBe('127.0.0.1');
       });
     `,
   }, { workers: 1 });
@@ -464,7 +460,7 @@ test('should prioritize the vite host config over the baseUrl config', async ({ 
 
 test('should normalize children', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
     'playwright/index.ts': ``,
     'src/component.tsx': `
@@ -498,7 +494,7 @@ test('should normalize children', async ({ runInlineTest }) => {
 
 test('should allow props children', async ({ runInlineTest }) => {
   const result = await runInlineTest({
-    'playwright.config.ts': playwrightConfig,
+    'playwright.config.ts': playwrightCtConfigText,
     'playwright/index.html': `<script type="module" src="./index.ts"></script>`,
     'playwright/index.ts': ``,
     'src/component.spec.tsx': `

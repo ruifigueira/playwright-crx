@@ -73,6 +73,7 @@ export type JsonTestCase = {
   title: string;
   location: JsonLocation;
   retries: number;
+  tags?: string[];
 };
 
 export type JsonTestEnd = {
@@ -209,8 +210,8 @@ export class TeleReporterReceiver {
       this._rootSuite.suites.push(projectSuite);
       projectSuite.parent = this._rootSuite;
     }
-    const p = this._parseProject(project);
-    projectSuite.project = () => p;
+    // Always update project in watch mode.
+    projectSuite._project = this._parseProject(project);
     this._mergeSuitesInto(project.suites, projectSuite);
 
     // Remove deleted tests when listing. Empty suites will be auto-filtered
@@ -394,6 +395,7 @@ export class TeleReporterReceiver {
     test.id = payload.testId;
     test.location = this._absoluteLocation(payload.location);
     test.retries = payload.retries;
+    test.tags = payload.tags ?? [];
     return test;
   }
 
@@ -428,6 +430,7 @@ export class TeleSuite implements SuitePrivate {
   _timeout: number | undefined;
   _retries: number | undefined;
   _fileId: string | undefined;
+  _project: TeleFullProject | undefined;
   _parallelMode: 'none' | 'default' | 'serial' | 'parallel' = 'none';
   readonly _type: 'root' | 'project' | 'file' | 'describe';
 
@@ -459,7 +462,7 @@ export class TeleSuite implements SuitePrivate {
   }
 
   project(): TeleFullProject | undefined {
-    return undefined;
+    return this._project ?? this.parent?.project();
   }
 }
 
@@ -474,6 +477,7 @@ export class TeleTestCase implements reporterTypes.TestCase {
   timeout = 0;
   annotations: Annotation[] = [];
   retries = 0;
+  tags: string[] = [];
   repeatEachIndex = 0;
   id: string;
 

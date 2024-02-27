@@ -20,11 +20,10 @@ import fs from 'fs';
 import path from 'path';
 import type { TransformCallback } from 'stream';
 import { Transform } from 'stream';
-import { toPosixPath } from './json';
 import { codeFrameColumns } from '../transform/babelBundle';
 import type { FullResult, FullConfig, Location, Suite, TestCase as TestCasePublic, TestResult as TestResultPublic, TestStep as TestStepPublic, TestError } from '../../types/testReporter';
 import type { SuitePrivate } from '../../types/reporterPrivate';
-import { HttpServer, assert, calculateSha1, copyFileAndMakeWritable, gracefullyProcessExitDoNotHang, removeFolders, sanitizeForFilePath } from 'playwright-core/lib/utils';
+import { HttpServer, assert, calculateSha1, copyFileAndMakeWritable, gracefullyProcessExitDoNotHang, removeFolders, sanitizeForFilePath, toPosixPath } from 'playwright-core/lib/utils';
 import { colors, formatError, formatResultFailure, stripAnsiEscapes } from './base';
 import { resolveReporterOutputPath } from '../util';
 import type { Metadata } from '../../types/test';
@@ -182,6 +181,7 @@ export async function showHTMLReport(reportFolder: string | undefined, host: str
   console.log(colors.cyan(`  Serving HTML report at ${url}. Press Ctrl+C to quit.`));
   if (testId)
     url += `#?testId=${testId}`;
+  url = url.replace('0.0.0.0', 'localhost');
   await open(url, { wait: true }).catch(() => {});
   await new Promise(() => {});
 }
@@ -361,7 +361,9 @@ class HtmlBuilder {
         botName,
         location,
         duration,
-        annotations: test.annotations,
+        // Annotations can be pushed directly, with a wrong type.
+        annotations: test.annotations.map(a => ({ type: a.type, description: a.description ? String(a.description) : a.description })),
+        tags: test.tags,
         outcome: test.outcome(),
         path,
         results,
@@ -374,7 +376,9 @@ class HtmlBuilder {
         botName,
         location,
         duration,
-        annotations: test.annotations,
+        // Annotations can be pushed directly, with a wrong type.
+        annotations: test.annotations.map(a => ({ type: a.type, description: a.description ? String(a.description) : a.description })),
+        tags: test.tags,
         outcome: test.outcome(),
         path,
         ok: test.outcome() === 'expected' || test.outcome() === 'flaky',

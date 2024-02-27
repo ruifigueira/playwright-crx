@@ -785,23 +785,6 @@ DebugController:
       parameters:
         paused: boolean
 
-    # Deprecated
-    browsersChanged:
-      parameters:
-        browsers:
-          type: array
-          items:
-            type: object
-            properties:
-              contexts:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    pages:
-                      type: array
-                      items: string
-
 SocksSupport:
   type: interface
 
@@ -986,6 +969,21 @@ Browser:
   events:
 
     close:
+
+ConsoleMessage:
+  type: mixin
+  properties:
+    type: string
+    text: string
+    args:
+      type: array
+      items: JSHandle
+    location:
+      type: object
+      properties:
+        url: string
+        lineNumber: number
+        columnNumber: number
 
 
 EventTarget:
@@ -1192,18 +1190,8 @@ BrowserContext:
 
     console:
       parameters:
+        $mixin: ConsoleMessage
         page: Page
-        type: string
-        text: string
-        args:
-          type: array
-          items: JSHandle
-        location:
-          type: object
-          properties:
-            url: string
-            lineNumber: number
-            columnNumber: number
 
     close:
 
@@ -1349,6 +1337,16 @@ Page:
         slowMo: true
         snapshot: true
 
+    registerLocatorHandler:
+      parameters:
+        selector: string
+      returns:
+        uid: number
+
+    resolveLocatorHandlerNoReply:
+      parameters:
+        uid: number
+
     reload:
       parameters:
         timeout: number?
@@ -1369,19 +1367,13 @@ Page:
           properties:
             frame: Frame
             selector: string
-        comparatorOptions:
-          type: object?
-          properties:
-            comparator: string?
-            maxDiffPixels: number?
-            maxDiffPixelRatio: number?
-            threshold: number?
-        screenshotOptions:
-          type: object?
-          properties:
-            fullPage: boolean?
-            clip: Rect?
-            $mixin: CommonScreenshotOptions
+        comparator: string?
+        maxDiffPixels: number?
+        maxDiffPixelRatio: number?
+        threshold: number?
+        fullPage: boolean?
+        clip: Rect?
+        $mixin: CommonScreenshotOptions
       returns:
         diff: binary?
         errorMessage: string?
@@ -1568,6 +1560,8 @@ Page:
             bottom: string?
             left: string?
             right: string?
+        tagged: boolean?
+        outline: boolean?
       returns:
         pdf: binary
 
@@ -1667,6 +1661,10 @@ Page:
     frameDetached:
       parameters:
         frame: Frame
+
+    locatorHandlerTriggered:
+      parameters:
+        uid: number
 
     route:
       parameters:
@@ -3211,11 +3209,21 @@ ElectronApplication:
       returns:
         handle: JSHandle
 
+    updateSubscription:
+      parameters:
+        event:
+          type: enum
+          literals:
+          - console
+        enabled: boolean
+
     close:
 
   events:
     close:
-
+    console:
+      parameters: 
+        $mixin: ConsoleMessage
 
 Android:
   type: interface
