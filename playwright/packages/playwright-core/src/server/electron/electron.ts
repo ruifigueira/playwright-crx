@@ -30,7 +30,8 @@ import { TimeoutSettings } from '../../common/timeoutSettings';
 import { ManualPromise, wrapInASCIIBox } from '../../utils';
 import { WebSocketTransport } from '../transport';
 import { launchProcess, envArrayToObject } from '../../utils/processLauncher';
-import { BrowserContext, validateBrowserContextOptions } from '../browserContext';
+import type { BrowserContext } from '../browserContext';
+import { validateBrowserContextOptions } from '../browserContext';
 import type { BrowserWindow } from 'electron';
 import type { Progress } from '../progress';
 import { ProgressController } from '../progress';
@@ -40,15 +41,18 @@ import type { BrowserOptions, BrowserProcess } from '../browser';
 import type { Playwright } from '../playwright';
 import type * as childProcess from 'child_process';
 import * as readline from 'readline';
-import { RecentLogsCollector } from '../../common/debugLogger';
+import { RecentLogsCollector } from '../../utils/debugLogger';
 import { serverSideCallMetadata, SdkObject } from '../instrumentation';
 import type * as channels from '@protocol/channels';
+import { toConsoleMessageLocation } from '../chromium/crProtocolHelper';
+import { ConsoleMessage } from '../console';
 
 const ARTIFACTS_FOLDER = path.join(os.tmpdir(), 'playwright-artifacts-');
 
 export class ElectronApplication extends SdkObject {
   static Events = {
     Close: 'close',
+    Console: 'console',
   };
 
   private _browserContext: CRBrowserContext;
@@ -63,10 +67,6 @@ export class ElectronApplication extends SdkObject {
     super(parent, 'electron-app');
     this._process = process;
     this._browserContext = browser._defaultContext as CRBrowserContext;
-    this._browserContext.on(BrowserContext.Events.Close, () => {
-      // Emit application closed after context closed.
-      Promise.resolve().then(() => this.emit(ElectronApplication.Events.Close));
-    });
     this._nodeConnection = nodeConnection;
     this._nodeSession = nodeConnection.rootSession;
     this._nodeSession.on('Runtime.executionContextCreated', async (event: Protocol.Runtime.executionContextCreatedPayload) => {
@@ -82,11 +82,39 @@ export class ElectronApplication extends SdkObject {
       });
       this._nodeElectronHandlePromise.resolve(new js.JSHandle(this._nodeExecutionContext!, 'object', 'ElectronModule', remoteObject.objectId!));
     });
+    this._nodeSession.on('Runtime.consoleAPICalled', event => this._onConsoleAPI(event));
+    const appClosePromise = new Promise(f => this.once(ElectronApplication.Events.Close, f));
     this._browserContext.setCustomCloseHandler(async () => {
       await this._browserContext.stopVideoRecording();
       const electronHandle = await this._nodeElectronHandlePromise;
       await electronHandle.evaluate(({ app }) => app.quit()).catch(() => {});
+      this._nodeConnection.close();
+      await appClosePromise;
     });
+  }
+
+  async _onConsoleAPI(event: Protocol.Runtime.consoleAPICalledPayload) {
+    if (event.executionContextId === 0) {
+      // DevTools protocol stores the last 1000 console messages. These
+      // messages are always reported even for removed execution contexts. In
+      // this case, they are marked with executionContextId = 0 and are
+      // reported upon enabling Runtime agent.
+      //
+      // Ignore these messages since:
+      // - there's no execution context we can use to operate with message
+      //   arguments
+      // - these messages are reported before Playwright clients can subscribe
+      //   to the 'console'
+      //   page event.
+      //
+      // @see https://github.com/GoogleChrome/puppeteer/issues/3865
+      return;
+    }
+    if (!this._nodeExecutionContext)
+      return;
+    const args = event.args.map(arg => this._nodeExecutionContext!.createHandle(arg));
+    const message = new ConsoleMessage(null, event.type, undefined, args, toConsoleMessageLocation(event.stackTrace));
+    this.emit(ElectronApplication.Events.Console, message);
   }
 
   async initialize() {
@@ -104,11 +132,8 @@ export class ElectronApplication extends SdkObject {
   }
 
   async close() {
-    const progressController = new ProgressController(serverSideCallMetadata(), this);
-    const closed = progressController.run(progress => helper.waitForEvent(progress, this, ElectronApplication.Events.Close).promise);
+    // This will call BrowserContext.setCustomCloseHandler.
     await this._browserContext.close({ reason: 'Application exited' });
-    this._nodeConnection.close();
-    await closed;
   }
 
   async browserWindow(page: Page): Promise<js.JSHandle<BrowserWindow>> {
@@ -135,12 +160,13 @@ export class Electron extends SdkObject {
     controller.setLogName('browser');
     return controller.run(async progress => {
       let app: ElectronApplication | undefined = undefined;
+      // --remote-debugging-port=0 must be the last playwright's argument, loader.ts relies on it.
       const electronArguments = ['--inspect=0', '--remote-debugging-port=0', ...args];
 
       if (os.platform() === 'linux') {
         const runningAsRoot = process.geteuid && process.geteuid() === 0;
         if (runningAsRoot && electronArguments.indexOf('--no-sandbox') === -1)
-          electronArguments.push('--no-sandbox');
+          electronArguments.unshift('--no-sandbox');
       }
 
       const artifactsDir = await fs.promises.mkdtemp(ARTIFACTS_FOLDER);
@@ -189,7 +215,7 @@ export class Electron extends SdkObject {
         handleSIGINT: true,
         handleSIGTERM: true,
         handleSIGHUP: true,
-        onExit: () => {},
+        onExit: () => app?.emit(ElectronApplication.Events.Close),
       });
 
       const waitForXserverError = new Promise(async (resolve, reject) => {

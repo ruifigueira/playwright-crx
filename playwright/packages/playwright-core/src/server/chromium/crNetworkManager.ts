@@ -28,6 +28,7 @@ import type * as types from '../types';
 import type { CRPage } from './crPage';
 import { assert, headersObjectToArray } from '../../utils';
 import type { CRServiceWorker } from './crServiceWorker';
+import { isProtocolError } from '../protocolError';
 
 type SessionInfo = {
   session: CRSession;
@@ -286,11 +287,8 @@ export class CRNetworkManager {
     if (requestPausedEvent) {
       // We do not support intercepting redirects.
       if (redirectedFrom || (!this._userRequestInterceptionEnabled && this._protocolRequestInterceptionEnabled)) {
-        let headers = undefined;
-        const previousHeaderOverrides = redirectedFrom?._originalRequestRoute?._alreadyContinuedParams?.headers;
         // Chromium does not preserve header overrides between redirects, so we have to do it ourselves.
-        if (previousHeaderOverrides)
-          headers = network.mergeHeaders([headersObjectToArray(requestPausedEvent.request.headers, '\n'), previousHeaderOverrides]);
+        const headers = redirectedFrom?._originalRequestRoute?._alreadyContinuedParams?.headers;
         this._session._sendMayFail('Fetch.continueRequest', { requestId: requestPausedEvent.requestId, headers });
       } else {
         route = new RouteImpl(this._session, requestPausedEvent.requestId);
@@ -571,33 +569,49 @@ class RouteImpl implements network.RouteDelegate {
       method: overrides.method,
       postData: overrides.postData ? overrides.postData.toString('base64') : undefined
     };
-    await this._session.send('Fetch.continueRequest', this._alreadyContinuedParams);
+    await catchDisallowedErrors(async () => {
+      await this._session.send('Fetch.continueRequest', this._alreadyContinuedParams);
+    });
   }
 
   async fulfill(response: types.NormalizedFulfillResponse) {
     const body = response.isBase64 ? response.body : Buffer.from(response.body).toString('base64');
 
     const responseHeaders = splitSetCookieHeader(response.headers);
-    await this._session.send('Fetch.fulfillRequest', {
-      requestId: this._interceptionId!,
-      responseCode: response.status,
-      responsePhrase: network.STATUS_TEXTS[String(response.status)],
-      responseHeaders,
-      body,
+    await catchDisallowedErrors(async () => {
+      await this._session.send('Fetch.fulfillRequest', {
+        requestId: this._interceptionId!,
+        responseCode: response.status,
+        responsePhrase: network.STATUS_TEXTS[String(response.status)],
+        responseHeaders,
+        body,
+      });
     });
   }
 
   async abort(errorCode: string = 'failed') {
     const errorReason = errorReasons[errorCode];
     assert(errorReason, 'Unknown error code: ' + errorCode);
-    // In certain cases, protocol will return error if the request was already canceled
-    // or the page was closed. We should tolerate these errors.
-    await this._session._sendMayFail('Fetch.failRequest', {
-      requestId: this._interceptionId!,
-      errorReason
+    await catchDisallowedErrors(async () => {
+      await this._session.send('Fetch.failRequest', {
+        requestId: this._interceptionId!,
+        errorReason
+      });
     });
   }
 }
+
+// In certain cases, protocol will return error if the request was already canceled
+// or the page was closed. We should tolerate these errors but propagate other.
+async function catchDisallowedErrors(callback: () => Promise<void>) {
+  try {
+    return await callback();
+  } catch (e) {
+    if (isProtocolError(e) && e.message.includes('Invalid http status code or phrase'))
+      throw e;
+  }
+}
+
 
 function splitSetCookieHeader(headers: types.HeadersArray): types.HeadersArray {
   const index = headers.findIndex(({ name }) => name.toLowerCase() === 'set-cookie');

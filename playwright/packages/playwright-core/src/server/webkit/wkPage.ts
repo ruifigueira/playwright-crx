@@ -42,7 +42,7 @@ import { RawKeyboardImpl, RawMouseImpl, RawTouchscreenImpl } from './wkInput';
 import { WKInterceptableRequest, WKRouteImpl } from './wkInterceptableRequest';
 import { WKProvisionalPage } from './wkProvisionalPage';
 import { WKWorkers } from './wkWorkers';
-import { debugLogger } from '../../common/debugLogger';
+import { debugLogger } from '../../utils/debugLogger';
 import { ManualPromise } from '../../utils/manualPromise';
 import { BrowserContext } from '../browserContext';
 import { TargetClosedError } from '../errors';
@@ -786,7 +786,7 @@ export class WKPage implements PageDelegate {
       scripts.push('delete window.ondevicemotion');
       scripts.push('delete window.ondeviceorientation');
     }
-    scripts.push('if (!window.safari) window.safari = {};');
+    scripts.push('if (!window.safari) window.safari = { pushNotification: { toString() { return "[object SafariRemoteNotification]"; } } };');
     scripts.push('if (!window.GestureEvent) window.GestureEvent = function GestureEvent() {};');
 
     for (const binding of this._page.allBindings())

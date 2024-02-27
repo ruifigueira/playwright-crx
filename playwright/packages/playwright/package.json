@@ -1,6 +1,6 @@
 {
   "name": "playwright",
-  "version": "1.41.1",
+  "version": "1.42.0",
   "description": "A high-level API to automate web browsers",
   "repository": {
     "type": "git",
@@ -18,11 +18,14 @@
       "require": "./index.js",
       "default": "./index.js"
     },
-    "./cli": "./cli.js",
     "./package.json": "./package.json",
-    "./lib/cli": "./lib/cli.js",
+    "./lib/common/configLoader": "./lib/common/configLoader.js",
+    "./lib/fsWatcher": "./lib/fsWatcher.js",
+    "./lib/program": "./lib/program.js",
     "./lib/transform/babelBundle": "./lib/transform/babelBundle.js",
     "./lib/transform/compilationCache": "./lib/transform/compilationCache.js",
+    "./lib/runner/runner": "./lib/runner/runner.js",
+    "./lib/runner/testServer": "./lib/runner/testServer.js",
     "./lib/transform/esmLoader": "./lib/transform/esmLoader.js",
     "./lib/transform/transform": "./lib/transform/transform.js",
     "./lib/internalsForTest": "./lib/internalsForTest.js",
@@ -55,7 +58,7 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "playwright-core": "1.41.1"
+    "playwright-core": "1.42.0"
   },
   "optionalDependencies": {
     "fsevents": "2.3.2"

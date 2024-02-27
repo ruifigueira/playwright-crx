@@ -14,17 +14,12 @@
  * limitations under the License.
  */
 
-import type * as actions from '../recorder/recorderActions';
-import type { InjectedScript } from '../injected/injectedScript';
-import { generateSelector } from '../injected/selectorGenerator';
-import type { Point } from '../../common/types';
+import type * as actions from '../../recorder/recorderActions';
+import type { InjectedScript } from '../injectedScript';
+import type { Point } from '../../../common/types';
 import type { Mode, OverlayState, UIState } from '@recorder/recorderTypes';
-import { Highlight, type HighlightOptions } from '../injected/highlight';
-import { isInsideScope } from './domUtils';
-import { elementText } from './selectorUtils';
-import type { ElementText } from './selectorUtils';
-import { asLocator } from '../../utils/isomorphic/locatorGenerators';
-import { normalizeWhiteSpace } from '@isomorphic/stringUtils';
+import type { ElementText } from '../selectorUtils';
+import type { Highlight, HighlightOptions } from '../highlight';
 
 interface RecorderDelegate {
   performAction?(action: actions.Action): Promise<void>;
@@ -40,6 +35,7 @@ interface RecorderTool {
   cursor(): string;
   cleanup?(): void;
   onClick?(event: MouseEvent): void;
+  onContextMenu?(event: MouseEvent): void;
   onDragStart?(event: DragEvent): void;
   onInput?(event: Event): void;
   onKeyDown?(event: KeyboardEvent): void;
@@ -65,6 +61,7 @@ class InspectTool implements RecorderTool {
   private _recorder: Recorder;
   private _hoveredModel: HighlightModel | null = null;
   private _hoveredElement: HTMLElement | null = null;
+  private _hoveredSelectors: string[] | null = null;
   private _assertVisibility: boolean;
 
   constructor(recorder: Recorder, assertVisibility: boolean) {
@@ -79,22 +76,31 @@ class InspectTool implements RecorderTool {
   cleanup() {
     this._hoveredModel = null;
     this._hoveredElement = null;
+    this._hoveredSelectors = null;
   }
 
   onClick(event: MouseEvent) {
     consumeEvent(event);
-    if (this._assertVisibility) {
-      if (this._hoveredModel?.selector) {
-        this._recorder.delegate.recordAction?.({
-          name: 'assertVisible',
-          selector: this._hoveredModel.selector,
-          signals: [],
-        });
-        this._recorder.delegate.setMode?.('recording');
-        this._recorder.overlay?.flashToolSucceeded('assertingVisibility');
-      }
-    } else {
-      this._recorder.delegate.setSelector?.(this._hoveredModel ? this._hoveredModel.selector : '');
+    if (event.button !== 0)
+      return;
+    if (this._hoveredModel?.selector)
+      this._commit(this._hoveredModel.selector);
+  }
+
+  onContextMenu(event: MouseEvent) {
+    if (this._hoveredModel && !this._hoveredModel.tooltipListItemSelected
+        && this._hoveredSelectors && this._hoveredSelectors.length > 1) {
+      consumeEvent(event);
+      const selectors = this._hoveredSelectors;
+      this._hoveredModel.tooltipFooter = undefined;
+      this._hoveredModel.tooltipList = selectors.map(selector => this._recorder.injectedScript.utils.asLocator(this._recorder.state.language, selector));
+      this._hoveredModel.tooltipListItemSelected = (index: number | undefined) => {
+        if (index === undefined)
+          this._reset(true);
+        else
+          this._commit(selectors[index]);
+      };
+      this._recorder.updateHighlight(this._hoveredModel, true);
     }
   }
 
@@ -122,11 +128,26 @@ class InspectTool implements RecorderTool {
     if (this._hoveredElement === target)
       return;
     this._hoveredElement = target;
-    const model = this._hoveredElement ? generateSelector(this._recorder.injectedScript, this._hoveredElement, { testIdAttributeName: this._recorder.state.testIdAttributeName }) : null;
+
+    let model: HighlightModel | null = null;
+    let selectors: string[] = [];
+    if (this._hoveredElement) {
+      const generated = this._recorder.injectedScript.generateSelector(this._hoveredElement, { testIdAttributeName: this._recorder.state.testIdAttributeName, multiple: false });
+      selectors = generated.selectors;
+      model = {
+        selector: generated.selector,
+        elements: generated.elements,
+        tooltipText: this._recorder.injectedScript.utils.asLocator(this._recorder.state.language, generated.selector),
+        tooltipFooter: selectors.length > 1 ? `Click to select, right-click for more options` : undefined,
+        color: this._assertVisibility ? '#8acae480' : undefined,
+      };
+    }
+
     if (this._hoveredModel?.selector === model?.selector)
       return;
     this._hoveredModel = model;
-    this._recorder.updateHighlight(model, true, { color: this._assertVisibility ? '#8acae480' : undefined });
+    this._hoveredSelectors = selectors;
+    this._recorder.updateHighlight(model, true);
   }
 
   onMouseEnter(event: MouseEvent) {
@@ -137,17 +158,18 @@ class InspectTool implements RecorderTool {
     consumeEvent(event);
     const window = this._recorder.injectedScript.window;
     // Leaving iframe.
-    if (window.top !== window && this._recorder.deepEventTarget(event).nodeType === Node.DOCUMENT_NODE) {
-      this._hoveredElement = null;
-      this._hoveredModel = null;
-      this._recorder.updateHighlight(null, true);
-    }
+    if (window.top !== window && this._recorder.deepEventTarget(event).nodeType === Node.DOCUMENT_NODE)
+      this._reset(true);
   }
 
   onKeyDown(event: KeyboardEvent) {
     consumeEvent(event);
-    if (this._assertVisibility && event.key === 'Escape')
-      this._recorder.delegate.setMode?.('recording');
+    if (event.key === 'Escape') {
+      if (this._hoveredModel?.tooltipListItemSelected)
+        this._reset(true);
+      else if (this._assertVisibility)
+        this._recorder.delegate.setMode?.('recording');
+    }
   }
 
   onKeyUp(event: KeyboardEvent) {
@@ -155,9 +177,28 @@ class InspectTool implements RecorderTool {
   }
 
   onScroll(event: Event) {
+    this._reset(false);
+  }
+
+  private _commit(selector: string) {
+    if (this._assertVisibility) {
+      this._recorder.delegate.recordAction?.({
+        name: 'assertVisible',
+        selector,
+        signals: [],
+      });
+      this._recorder.delegate.setMode?.('recording');
+      this._recorder.overlay?.flashToolSucceeded('assertingVisibility');
+    } else {
+      this._recorder.delegate.setSelector?.(selector);
+    }
+  }
+
+  private _reset(userGesture: boolean) {
     this._hoveredElement = null;
     this._hoveredModel = null;
-    this._recorder.updateHighlight(null, false);
+    this._hoveredSelectors = null;
+    this._recorder.updateHighlight(null, userGesture);
   }
 }
 
@@ -185,6 +226,10 @@ class RecordActionTool implements RecorderTool {
   }
 
   onClick(event: MouseEvent) {
+    // in webkit, sliding a range element may trigger a click event with a different target if the mouse is released outside the element bounding box.
+    // So we check the hovered element instead, and if it is a range input, we skip click handling
+    if (isRangeInput(this._hoveredElement))
+      return;
     if (this._shouldIgnoreMouseEvent(event))
       return;
     if (this._actionInProgress(event))
@@ -277,6 +322,17 @@ class RecordActionTool implements RecorderTool {
       return;
     }
 
+    if (isRangeInput(target)) {
+      this._recorder.delegate.recordAction?.({
+        name: 'fill',
+        // must use hoveredModel instead of activeModel for it to work in webkit
+        selector: this._hoveredModel!.selector,
+        signals: [],
+        text: target.value,
+      });
+      return;
+    }
+
     if (['INPUT', 'TEXTAREA'].includes(target.nodeName) || target.isContentEditable) {
       if (target.nodeName === 'INPUT' && ['checkbox', 'radio'].includes((target as HTMLInputElement).type.toLowerCase())) {
         // Checkbox is handled in click, we can't let input trigger on checkbox - that would mean we dispatched click events while recording.
@@ -362,7 +418,7 @@ class RecordActionTool implements RecorderTool {
     // We'd like to ignore this stray event.
     if (userGesture && activeElement === this._recorder.document.body)
       return;
-    const result = activeElement ? generateSelector(this._recorder.injectedScript, activeElement, { testIdAttributeName: this._recorder.state.testIdAttributeName }) : null;
+    const result = activeElement ? this._recorder.injectedScript.generateSelector(activeElement, { testIdAttributeName: this._recorder.state.testIdAttributeName }) : null;
     this._activeModel = result && result.selector ? result : null;
     if (userGesture)
       this._hoveredElement = activeElement as HTMLElement | null;
@@ -374,7 +430,7 @@ class RecordActionTool implements RecorderTool {
     const nodeName = target.nodeName;
     if (nodeName === 'SELECT' || nodeName === 'OPTION')
       return true;
-    if (nodeName === 'INPUT' && ['date'].includes((target as HTMLInputElement).type))
+    if (nodeName === 'INPUT' && ['date', 'range'].includes((target as HTMLInputElement).type))
       return true;
     return false;
   }
@@ -459,11 +515,11 @@ class RecordActionTool implements RecorderTool {
       this._recorder.updateHighlight(null, true);
       return;
     }
-    const { selector, elements } = generateSelector(this._recorder.injectedScript, this._hoveredElement, { testIdAttributeName: this._recorder.state.testIdAttributeName });
+    const { selector, elements } = this._recorder.injectedScript.generateSelector(this._hoveredElement, { testIdAttributeName: this._recorder.state.testIdAttributeName });
     if (this._hoveredModel && this._hoveredModel.selector === selector)
       return;
-    this._hoveredModel = selector ? { selector, elements } : null;
-    this._recorder.updateHighlight(this._hoveredModel, true, { color: '#dc6f6f7f' });
+    this._hoveredModel = selector ? { selector, elements, color: '#dc6f6f7f' } : null;
+    this._recorder.updateHighlight(this._hoveredModel, true);
   }
 }
 
@@ -507,12 +563,7 @@ class TextAssertionTool implements RecorderTool {
   onClick(event: MouseEvent) {
     consumeEvent(event);
     if (this._kind === 'value') {
-      const action = this._generateAction();
-      if (action) {
-        this._recorder.delegate.recordAction?.(action);
-        this._recorder.delegate.setMode?.('recording');
-        this._recorder.overlay?.flashToolSucceeded('assertingValue');
-      }
+      this._commitAssertValue();
     } else {
       if (!this._dialogElement)
         this._showDialog();
@@ -525,6 +576,15 @@ class TextAssertionTool implements RecorderTool {
       event.preventDefault();
   }
 
+  onPointerUp(event: PointerEvent) {
+    const target = this._hoverHighlight?.elements[0];
+    if (this._kind === 'value' && target && target.nodeName === 'INPUT' && (target as HTMLInputElement).disabled) {
+      // Click on a disabled input does not produce a "click" event, but we still want
+      // to assert the value.
+      this._commitAssertValue();
+    }
+  }
+
   onMouseMove(event: MouseEvent) {
     if (this._dialogElement)
       return;
@@ -532,10 +592,12 @@ class TextAssertionTool implements RecorderTool {
     if (this._hoverHighlight?.elements[0] === target)
       return;
     if (this._kind === 'text')
-      this._hoverHighlight = elementText(this._textCache, target).full ? { elements: [target], selector: '' } : null;
+      this._hoverHighlight = this._recorder.injectedScript.utils.elementText(this._textCache, target).full ? { elements: [target], selector: '' } : null;
     else
-      this._hoverHighlight = this._elementHasValue(target) ? generateSelector(this._recorder.injectedScript, target, { testIdAttributeName: this._recorder.state.testIdAttributeName }) : null;
-    this._recorder.updateHighlight(this._hoverHighlight, true, { color: '#8acae480' });
+      this._hoverHighlight = this._elementHasValue(target) ? this._recorder.injectedScript.generateSelector(target, { testIdAttributeName: this._recorder.state.testIdAttributeName }) : null;
+    if (this._hoverHighlight)
+      this._hoverHighlight.color = '#8acae480';
+    this._recorder.updateHighlight(this._hoverHighlight, true);
   }
 
   onKeyDown(event: KeyboardEvent) {
@@ -545,7 +607,7 @@ class TextAssertionTool implements RecorderTool {
   }
 
   onScroll(event: Event) {
-    this._recorder.updateHighlight(this._hoverHighlight, false, { color: '#8acae480' });
+    this._recorder.updateHighlight(this._hoverHighlight, false);
   }
 
   private _elementHasValue(element: Element) {
@@ -560,7 +622,7 @@ class TextAssertionTool implements RecorderTool {
     if (this._kind === 'value') {
       if (!this._elementHasValue(target))
         return null;
-      const { selector } = generateSelector(this._recorder.injectedScript, target, { testIdAttributeName: this._recorder.state.testIdAttributeName });
+      const { selector } = this._recorder.injectedScript.generateSelector(target, { testIdAttributeName: this._recorder.state.testIdAttributeName });
       if (target.nodeName === 'INPUT' && ['checkbox', 'radio'].includes((target as HTMLInputElement).type.toLowerCase())) {
         return {
           name: 'assertChecked',
@@ -578,15 +640,16 @@ class TextAssertionTool implements RecorderTool {
         };
       }
     } else {
-      this._hoverHighlight = generateSelector(this._recorder.injectedScript, target, { testIdAttributeName: this._recorder.state.testIdAttributeName, forTextExpect: true });
+      this._hoverHighlight = this._recorder.injectedScript.generateSelector(target, { testIdAttributeName: this._recorder.state.testIdAttributeName, forTextExpect: true });
+      this._hoverHighlight.color = '#8acae480';
       // forTextExpect can update the target, re-highlight it.
-      this._recorder.updateHighlight(this._hoverHighlight, true, { color: '#8acae480' });
+      this._recorder.updateHighlight(this._hoverHighlight, true);
 
       return {
         name: 'assertText',
         selector: this._hoverHighlight.selector,
         signals: [],
-        text: normalizeWhiteSpace(elementText(this._textCache, target).full),
+        text: this._recorder.injectedScript.utils.elementText(this._textCache, target).normalized,
         substring: true,
       };
     }
@@ -594,7 +657,7 @@ class TextAssertionTool implements RecorderTool {
 
   private _renderValue(action: actions.Action) {
     if (action?.name === 'assertText')
-      return normalizeWhiteSpace(action.text);
+      return this._recorder.injectedScript.utils.normalizeWhiteSpace(action.text);
     if (action?.name === 'assertChecked')
       return String(action.checked);
     if (action?.name === 'assertValue')
@@ -649,12 +712,12 @@ class TextAssertionTool implements RecorderTool {
     textElement.classList.add('text-editor');
 
     const updateAndValidate = () => {
-      const newValue = normalizeWhiteSpace(textElement.value);
+      const newValue = this._recorder.injectedScript.utils.normalizeWhiteSpace(textElement.value);
       const target = this._hoverHighlight?.elements[0];
       if (!target)
         return;
       action.text = newValue;
-      const targetText = normalizeWhiteSpace(elementText(this._textCache, target).full);
+      const targetText = this._recorder.injectedScript.utils.elementText(this._textCache, target).normalized;
       const matches = newValue && targetText.includes(newValue);
       textElement.classList.toggle('does-not-match', !matches);
     };
@@ -676,11 +739,24 @@ class TextAssertionTool implements RecorderTool {
     this._recorder.document.removeEventListener('keydown', this._keyboardListener!);
     this._dialogElement = null;
   }
+
+  private _commitAssertValue() {
+    if (this._kind !== 'value')
+      return;
+    const action = this._generateAction();
+    if (!action)
+      return;
+    this._recorder.delegate.recordAction?.(action);
+    this._recorder.delegate.setMode?.('recording');
+    this._recorder.overlay?.flashToolSucceeded('assertingValue');
+  }
 }
 
 class Overlay {
   private _recorder: Recorder;
+  private _listeners: (() => void)[] = [];
   private _overlayElement: HTMLElement;
+  private _dragHandle: HTMLElement;
   private _recordToggle: HTMLElement;
   private _pickLocatorToggle: HTMLElement;
   private _assertVisibilityToggle: HTMLElement;
@@ -698,81 +774,89 @@ class Overlay {
     const toolsListElement = document.createElement('x-pw-tools-list');
     this._overlayElement.appendChild(toolsListElement);
 
-    const dragHandle = document.createElement('x-pw-tool-gripper');
-    dragHandle.addEventListener('mousedown', event => {
-      this._dragState = { offsetX: this._offsetX, dragStart: { x: event.clientX, y: 0 } };
-    });
-    dragHandle.appendChild(document.createElement('x-div'));
-    toolsListElement.appendChild(dragHandle);
+    this._dragHandle = document.createElement('x-pw-tool-gripper');
+    this._dragHandle.appendChild(document.createElement('x-div'));
+    toolsListElement.appendChild(this._dragHandle);
 
     this._recordToggle = this._recorder.injectedScript.document.createElement('x-pw-tool-item');
     this._recordToggle.title = 'Record';
     this._recordToggle.classList.add('record');
     this._recordToggle.appendChild(this._recorder.injectedScript.document.createElement('x-div'));
-    this._recordToggle.addEventListener('click', () => {
-      this._recorder.delegate.setMode?.(this._recorder.state.mode === 'none' || this._recorder.state.mode === 'standby' || this._recorder.state.mode === 'inspecting' ? 'recording' : 'standby');
-    });
     toolsListElement.appendChild(this._recordToggle);
 
     this._pickLocatorToggle = this._recorder.injectedScript.document.createElement('x-pw-tool-item');
     this._pickLocatorToggle.title = 'Pick locator';
     this._pickLocatorToggle.classList.add('pick-locator');
     this._pickLocatorToggle.appendChild(this._recorder.injectedScript.document.createElement('x-div'));
-    this._pickLocatorToggle.addEventListener('click', () => {
-      const newMode: Record<Mode, Mode> = {
-        'inspecting': 'standby',
-        'none': 'inspecting',
-        'standby': 'inspecting',
-        'recording': 'recording-inspecting',
-        'recording-inspecting': 'recording',
-        'assertingText': 'recording-inspecting',
-        'assertingVisibility': 'recording-inspecting',
-        'assertingValue': 'recording-inspecting',
-      };
-      this._recorder.delegate.setMode?.(newMode[this._recorder.state.mode]);
-    });
     toolsListElement.appendChild(this._pickLocatorToggle);
 
     this._assertVisibilityToggle = this._recorder.injectedScript.document.createElement('x-pw-tool-item');
     this._assertVisibilityToggle.title = 'Assert visibility';
     this._assertVisibilityToggle.classList.add('visibility');
     this._assertVisibilityToggle.appendChild(this._recorder.injectedScript.document.createElement('x-div'));
-    this._assertVisibilityToggle.addEventListener('click', () => {
-      if (!this._assertVisibilityToggle.classList.contains('disabled'))
-        this._recorder.delegate.setMode?.(this._recorder.state.mode === 'assertingVisibility' ? 'recording' : 'assertingVisibility');
-    });
     toolsListElement.appendChild(this._assertVisibilityToggle);
 
     this._assertTextToggle = this._recorder.injectedScript.document.createElement('x-pw-tool-item');
     this._assertTextToggle.title = 'Assert text';
     this._assertTextToggle.classList.add('text');
     this._assertTextToggle.appendChild(this._recorder.injectedScript.document.createElement('x-div'));
-    this._assertTextToggle.addEventListener('click', () => {
-      if (!this._assertTextToggle.classList.contains('disabled'))
-        this._recorder.delegate.setMode?.(this._recorder.state.mode === 'assertingText' ? 'recording' : 'assertingText');
-    });
     toolsListElement.appendChild(this._assertTextToggle);
 
     this._assertValuesToggle = this._recorder.injectedScript.document.createElement('x-pw-tool-item');
     this._assertValuesToggle.title = 'Assert value';
     this._assertValuesToggle.classList.add('value');
     this._assertValuesToggle.appendChild(this._recorder.injectedScript.document.createElement('x-div'));
-    this._assertValuesToggle.addEventListener('click', () => {
-      if (!this._assertValuesToggle.classList.contains('disabled'))
-        this._recorder.delegate.setMode?.(this._recorder.state.mode === 'assertingValue' ? 'recording' : 'assertingValue');
-    });
     toolsListElement.appendChild(this._assertValuesToggle);
 
     this._updateVisualPosition();
+    this._refreshListeners();
+  }
+
+  private _refreshListeners() {
+    removeEventListeners(this._listeners);
+    this._listeners = [
+      addEventListener(this._dragHandle, 'mousedown', event => {
+        this._dragState = { offsetX: this._offsetX, dragStart: { x: (event as MouseEvent).clientX, y: 0 } };
+      }),
+      addEventListener(this._recordToggle, 'click', () => {
+        this._recorder.delegate.setMode?.(this._recorder.state.mode === 'none' || this._recorder.state.mode === 'standby' || this._recorder.state.mode === 'inspecting' ? 'recording' : 'standby');
+      }),
+      addEventListener(this._pickLocatorToggle, 'click', () => {
+        const newMode: Record<Mode, Mode> = {
+          'inspecting': 'standby',
+          'none': 'inspecting',
+          'standby': 'inspecting',
+          'recording': 'recording-inspecting',
+          'recording-inspecting': 'recording',
+          'assertingText': 'recording-inspecting',
+          'assertingVisibility': 'recording-inspecting',
+          'assertingValue': 'recording-inspecting',
+        };
+        this._recorder.delegate.setMode?.(newMode[this._recorder.state.mode]);
+      }),
+      addEventListener(this._assertVisibilityToggle, 'click', () => {
+        if (!this._assertVisibilityToggle.classList.contains('disabled'))
+          this._recorder.delegate.setMode?.(this._recorder.state.mode === 'assertingVisibility' ? 'recording' : 'assertingVisibility');
+      }),
+      addEventListener(this._assertTextToggle, 'click', () => {
+        if (!this._assertTextToggle.classList.contains('disabled'))
+          this._recorder.delegate.setMode?.(this._recorder.state.mode === 'assertingText' ? 'recording' : 'assertingText');
+      }),
+      addEventListener(this._assertValuesToggle, 'click', () => {
+        if (!this._assertValuesToggle.classList.contains('disabled'))
+          this._recorder.delegate.setMode?.(this._recorder.state.mode === 'assertingValue' ? 'recording' : 'assertingValue');
+      }),
+    ];
   }
 
   install() {
     this._recorder.highlight.appendChild(this._overlayElement);
+    this._refreshListeners();
     this._updateVisualPosition();
   }
 
   contains(element: Element) {
-    return isInsideScope(this._overlayElement, element);
+    return this._recorder.injectedScript.utils.isInsideScope(this._overlayElement, element);
   }
 
   setUIState(state: UIState) {
@@ -867,7 +951,7 @@ export class Recorder {
   constructor(injectedScript: InjectedScript) {
     this.document = injectedScript.document;
     this.injectedScript = injectedScript;
-    this.highlight = new Highlight(injectedScript);
+    this.highlight = injectedScript.createHighlight();
     this._tools = {
       'none': new NoneTool(),
       'standby': new NoneTool(),
@@ -899,6 +983,7 @@ export class Recorder {
     this._listeners = [
       addEventListener(this.document, 'click', event => this._onClick(event as MouseEvent), true),
       addEventListener(this.document, 'auxclick', event => this._onClick(event as MouseEvent), true),
+      addEventListener(this.document, 'contextmenu', event => this._onContextMenu(event as MouseEvent), true),
       addEventListener(this.document, 'dragstart', event => this._onDragStart(event as DragEvent), true),
       addEventListener(this.document, 'input', event => this._onInput(event), true),
       addEventListener(this.document, 'keydown', event => this._onKeyDown(event as KeyboardEvent), true),
@@ -976,6 +1061,14 @@ export class Recorder {
     if (this._ignoreOverlayEvent(event))
       return;
     this._currentTool.onClick?.(event);
+  }
+
+  private _onContextMenu(event: MouseEvent) {
+    if (!event.isTrusted)
+      return;
+    if (this._ignoreOverlayEvent(event))
+      return;
+    this._currentTool.onContextMenu?.(event);
   }
 
   private _onDragStart(event: DragEvent) {
@@ -1083,17 +1176,20 @@ export class Recorder {
     this._currentTool.onKeyUp?.(event);
   }
 
-  updateHighlight(model: HighlightModel | null, userGesture: boolean, options: HighlightOptions = {}) {
-    if (options.tooltipText === undefined && model?.selector)
-      options.tooltipText = asLocator(this.state.language, model.selector);
-    this.highlight.updateHighlight(model?.elements || [], options);
+  updateHighlight(model: HighlightModel | null, userGesture: boolean) {
+    let tooltipText = model?.tooltipText;
+    if (tooltipText === undefined && !model?.tooltipList && model?.selector)
+      tooltipText = this.injectedScript.utils.asLocator(this.state.language, model.selector);
+    this.highlight.updateHighlight(model?.elements || [], { ...model, tooltipText });
     if (userGesture)
       this.delegate.highlightUpdated?.();
   }
 
   private _ignoreOverlayEvent(event: Event) {
-    const target = event.composedPath()[0] as Element;
-    return target.nodeName.toLowerCase() === 'x-pw-glass';
+    return event.composedPath().some(e => {
+      const nodeName = (e as Element).nodeName || '';
+      return nodeName.toLowerCase() === 'x-pw-glass';
+    });
   }
 
   deepEventTarget(event: Event): HTMLElement {
@@ -1141,7 +1237,7 @@ function consumeEvent(e: Event) {
   e.stopImmediatePropagation();
 }
 
-type HighlightModel = {
+type HighlightModel = HighlightOptions & {
   selector: string;
   elements: Element[];
 };
@@ -1151,6 +1247,13 @@ function asCheckbox(node: Node | null): HTMLInputElement | null {
     return null;
   const inputElement = node as HTMLInputElement;
   return ['checkbox', 'radio'].includes(inputElement.type) ? inputElement : null;
+}
+
+function isRangeInput(node: Node | null): node is HTMLInputElement {
+  if (!node || node.nodeName !== 'INPUT')
+    return false;
+  const inputElement = node as HTMLInputElement;
+  return inputElement.type.toLowerCase() === 'range';
 }
 
 function addEventListener(target: EventTarget, eventName: string, listener: EventListener, useCapture?: boolean): () => void {

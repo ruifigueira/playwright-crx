@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { cssEscape, escapeForAttributeSelector, escapeForTextSelector, normalizeWhiteSpace, quoteCSSAttributeValue } from '../../utils/isomorphic/stringUtils';
+import { cssEscape, escapeForAttributeSelector, escapeForTextSelector, escapeRegExp, quoteCSSAttributeValue } from '../../utils/isomorphic/stringUtils';
 import { closestCrossShadow, isInsideScope, parentElementOrShadowHost } from './domUtils';
 import type { InjectedScript } from './injectedScript';
 import { getAriaRole, getElementAccessibleName, beginAriaCaches, endAriaCaches } from './roleUtils';
@@ -67,17 +67,18 @@ export type GenerateSelectorOptions = {
   omitInternalEngines?: boolean;
   root?: Element | Document;
   forTextExpect?: boolean;
+  multiple?: boolean;
 };
 
-export function generateSelector(injectedScript: InjectedScript, targetElement: Element, options: GenerateSelectorOptions): { selector: string, elements: Element[] } {
+export function generateSelector(injectedScript: InjectedScript, targetElement: Element, options: GenerateSelectorOptions): { selector: string, selectors: string[], elements: Element[] } {
   injectedScript._evaluator.begin();
   beginAriaCaches();
   try {
-    let targetTokens: SelectorToken[];
+    let selectors: string[] = [];
     if (options.forTextExpect) {
-      targetTokens = cssFallback(injectedScript, targetElement.ownerDocument.documentElement, options);
+      let targetTokens = cssFallback(injectedScript, targetElement.ownerDocument.documentElement, options);
       for (let element: Element | undefined = targetElement; element; element = parentElementOrShadowHost(element)) {
-        const tokens = generateSelectorFor(injectedScript, element, options);
+        const tokens = generateSelectorFor(injectedScript, element, { ...options, noText: true });
         if (!tokens)
           continue;
         const score = combineScores(tokens);
@@ -86,14 +87,41 @@ export function generateSelector(injectedScript: InjectedScript, targetElement: 
           break;
         }
       }
+      selectors = [joinTokens(targetTokens)];
     } else {
       targetElement = closestCrossShadow(targetElement, 'button,select,input,[role=button],[role=checkbox],[role=radio],a,[role=link]', options.root) || targetElement;
-      targetTokens = generateSelectorFor(injectedScript, targetElement, options) || cssFallback(injectedScript, targetElement, options);
+      if (options.multiple) {
+        const withText = generateSelectorFor(injectedScript, targetElement, options);
+        const withoutText = generateSelectorFor(injectedScript, targetElement, { ...options, noText: true });
+        let tokens = [withText, withoutText];
+
+        // Clear cache to re-generate without css id.
+        cacheAllowText.clear();
+        cacheDisallowText.clear();
+
+        if (withText && hasCSSIdToken(withText))
+          tokens.push(generateSelectorFor(injectedScript, targetElement, { ...options, noCSSId: true }));
+        if (withoutText && hasCSSIdToken(withoutText))
+          tokens.push(generateSelectorFor(injectedScript, targetElement, { ...options, noText: true, noCSSId: true }));
+
+        tokens = tokens.filter(Boolean);
+        if (!tokens.length) {
+          const css = cssFallback(injectedScript, targetElement, options);
+          tokens.push(css);
+          if (hasCSSIdToken(css))
+            tokens.push(cssFallback(injectedScript, targetElement, { ...options, noCSSId: true }));
+        }
+        selectors = [...new Set(tokens.map(t => joinTokens(t!)))];
+      } else {
+        const targetTokens = generateSelectorFor(injectedScript, targetElement, options) || cssFallback(injectedScript, targetElement, options);
+        selectors = [joinTokens(targetTokens)];
+      }
     }
-    const selector = joinTokens(targetTokens);
+    const selector = selectors[0];
     const parsedSelector = injectedScript.parseSelector(selector);
     return {
       selector,
+      selectors,
       elements: injectedScript.querySelectorAll(parsedSelector, options.root ?? targetElement.ownerDocument)
     };
   } finally {
@@ -109,7 +137,9 @@ function filterRegexTokens(textCandidates: SelectorToken[][]): SelectorToken[][]
   return textCandidates.filter(c => c[0].selector[0] !== '/');
 }
 
-function generateSelectorFor(injectedScript: InjectedScript, targetElement: Element, options: GenerateSelectorOptions): SelectorToken[] | null {
+type InternalOptions = GenerateSelectorOptions & { noText?: boolean, noCSSId?: boolean };
+
+function generateSelectorFor(injectedScript: InjectedScript, targetElement: Element, options: InternalOptions): SelectorToken[] | null {
   if (options.root && !isInsideScope(options.root, targetElement))
     throw new Error(`Target element must belong to the root's subtree`);
 
@@ -188,10 +218,10 @@ function generateSelectorFor(injectedScript: InjectedScript, targetElement: Elem
     return value;
   };
 
-  return calculate(targetElement, !options.forTextExpect);
+  return calculate(targetElement, !options.noText);
 }
 
-function buildNoTextCandidates(injectedScript: InjectedScript, element: Element, options: GenerateSelectorOptions): SelectorToken[] {
+function buildNoTextCandidates(injectedScript: InjectedScript, element: Element, options: InternalOptions): SelectorToken[] {
   const candidates: SelectorToken[] = [];
 
   // CSS selectors are applicable to elements via locator() and iframes via frameLocator().
@@ -201,9 +231,11 @@ function buildNoTextCandidates(injectedScript: InjectedScript, element: Element,
         candidates.push({ engine: 'css', selector: `[${attr}=${quoteCSSAttributeValue(element.getAttribute(attr)!)}]`, score: kOtherTestIdScore });
     }
 
-    const idAttr = element.getAttribute('id');
-    if (idAttr && !isGuidLike(idAttr))
-      candidates.push({ engine: 'css', selector: makeSelectorForId(idAttr), score: kCSSIdScore });
+    if (!options.noCSSId) {
+      const idAttr = element.getAttribute('id');
+      if (idAttr && !isGuidLike(idAttr))
+        candidates.push({ engine: 'css', selector: makeSelectorForId(idAttr), score: kCSSIdScore });
+    }
 
     candidates.push({ engine: 'css', selector: cssEscape(element.nodeName.toLowerCase()), score: kCSSTagNameScore });
   }
@@ -237,7 +269,7 @@ function buildNoTextCandidates(injectedScript: InjectedScript, element: Element,
 
   const labels = getElementLabels(injectedScript._evaluator._cacheText, element);
   for (const label of labels) {
-    const labelText = label.full.trim();
+    const labelText = label.normalized;
     candidates.push({ engine: 'internal:label', selector: escapeForTextSelector(labelText, true), score: kLabelScoreExact });
     for (const alternative of suitableTextAlternatives(labelText))
       candidates.push({ engine: 'internal:label', selector: escapeForTextSelector(alternative.text, false), score: kLabelScore - alternative.scoreBouns });
@@ -281,7 +313,7 @@ function buildTextCandidates(injectedScript: InjectedScript, element: Element, i
       candidates.push([{ engine: 'internal:attr', selector: `[alt=${escapeForAttributeSelector(alternative.text, false)}]`, score: kAltTextScore - alternative.scoreBouns }]);
   }
 
-  const text = normalizeWhiteSpace(elementText(injectedScript._evaluator._cacheText, element).full);
+  const text = elementText(injectedScript._evaluator._cacheText, element).normalized;
   if (text) {
     const alternatives = suitableTextAlternatives(text);
     if (isTargetNode) {
@@ -315,7 +347,11 @@ function makeSelectorForId(id: string) {
   return /^[a-zA-Z][a-zA-Z0-9\-\_]+$/.test(id) ? '#' + id : `[id="${cssEscape(id)}"]`;
 }
 
-function cssFallback(injectedScript: InjectedScript, targetElement: Element, options: GenerateSelectorOptions): SelectorToken[] {
+function hasCSSIdToken(tokens: SelectorToken[]) {
+  return tokens.some(token => token.engine === 'css' && (token.selector.startsWith('#') || token.selector.startsWith('[id="')));
+}
+
+function cssFallback(injectedScript: InjectedScript, targetElement: Element, options: InternalOptions): SelectorToken[] {
   const root: Node = options.root ?? targetElement.ownerDocument;
   const tokens: string[] = [];
 
@@ -342,9 +378,10 @@ function cssFallback(injectedScript: InjectedScript, targetElement: Element, opt
   for (let element: Element | undefined = targetElement; element && element !== root; element = parentElementOrShadowHost(element)) {
     const nodeName = element.nodeName.toLowerCase();
 
-    // Element ID is the strongest signal, use it.
     let bestTokenForLevel: string = '';
-    if (element.id) {
+
+    // Element ID is the strongest signal, use it.
+    if (element.id && !options.noCSSId) {
       const token = makeSelectorForId(element.id);
       const selector = uniqueCSSSelector(token);
       if (selector)
@@ -469,11 +506,6 @@ function isGuidLike(id: string): boolean {
     lastCharacterType = characterType;
   }
   return transitionCount >= id.length / 4;
-}
-
-function escapeRegExp(s: string) {
-  // From https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions#escaping
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
 }
 
 function trimWordBoundary(text: string, maxLength: number) {

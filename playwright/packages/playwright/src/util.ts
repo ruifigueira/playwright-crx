@@ -15,12 +15,11 @@
  */
 
 import fs from 'fs';
-import { mime } from 'playwright-core/lib/utilsBundle';
 import type { StackFrame } from '@protocol/channels';
 import util from 'util';
 import path from 'path';
 import url from 'url';
-import { debug, minimatch, parseStackTraceLine } from 'playwright-core/lib/utilsBundle';
+import { debug, mime, minimatch, parseStackTraceLine } from 'playwright-core/lib/utilsBundle';
 import { formatCallLog } from 'playwright-core/lib/utils';
 import type { TestInfoError } from './../types/test';
 import type { Location } from './../types/testReporter';
@@ -31,13 +30,14 @@ const PLAYWRIGHT_TEST_PATH = path.join(__dirname, '..');
 const PLAYWRIGHT_CORE_PATH = path.dirname(require.resolve('playwright-core/package.json'));
 
 export function filterStackTrace(e: Error): { message: string, stack: string } {
+  const name = e.name ? e.name + ': ' : '';
   if (process.env.PWDEBUGIMPL)
-    return { message: e.name + ': ' + e.message, stack: e.stack || '' };
+    return { message: name + e.message, stack: e.stack || '' };
 
   const stackLines = stringifyStackFrames(filteredStackTrace(e.stack?.split('\n') || []));
   return {
-    message: e.name + ': ' + e.message,
-    stack: `${e.name}: ${e.message}\n${stackLines.join('\n')}`
+    message: name + e.message,
+    stack: `${name}${e.message}${stackLines.map(line => '\n' + line).join('')}`
   };
 }
 
@@ -208,7 +208,8 @@ export function addSuffixToFilePath(filePath: string, suffix: string, customExte
  */
 export function getContainedPath(parentPath: string, subPath: string = ''): string | null {
   const resolvedPath = path.resolve(parentPath, subPath);
-  if (resolvedPath === parentPath || resolvedPath.startsWith(parentPath + path.sep)) return resolvedPath;
+  if (resolvedPath === parentPath || resolvedPath.startsWith(parentPath + path.sep))
+    return resolvedPath;
   return null;
 }
 

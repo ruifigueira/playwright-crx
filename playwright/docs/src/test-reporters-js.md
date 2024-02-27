@@ -289,7 +289,9 @@ export default defineConfig({
 
 You can use the built in `github` reporter to get automatic failure annotations when running in GitHub actions.
 
-Note that all other reporters work on GitHub Actions as well, but do not provide annotations.
+Note that all other reporters work on GitHub Actions as well, but do not provide annotations. Also, it is not recommended to
+use this annotation type if running your tests with a matrix strategy as the stack trace failures will multiply and obscure the
+GitHub file view.
 
 ```js title="playwright.config.ts"
 import { defineConfig } from '@playwright/test';
@@ -340,6 +342,13 @@ export default defineConfig({
   reporter: './my-awesome-reporter.ts',
 });
 ```
+
+Or just pass the reporter file path as `--reporter` command line option:
+
+```bash
+npx playwright test --reporter="./myreporter/my-awesome-reporter.ts"
+```
+
 ## Third party reporter showcase
 
 * [Allure](https://www.npmjs.com/package/allure-playwright)

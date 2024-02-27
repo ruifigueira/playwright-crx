@@ -445,7 +445,8 @@ class ContextRecorder extends EventEmitter {
 
   setOutput(codegenId: string, outputFile?: string) {
     const languages = new Set([
-      new JavaLanguageGenerator(),
+      new JavaLanguageGenerator('junit'),
+      new JavaLanguageGenerator('library'),
       new JavaScriptLanguageGenerator(/* isPlaywrightTest */false),
       new JavaScriptLanguageGenerator(/* isPlaywrightTest */true),
       new PythonLanguageGenerator(/* isAsync */false, /* isPytest */true),
@@ -751,7 +752,7 @@ async function findFrameSelector(frame: Frame): Promise<string | undefined> {
     const utility = await parent._utilityContext();
     const injected = await utility.injectedScript();
     const selector = await injected.evaluate((injected, element) => {
-      return injected.generateSelector(element as Element, { testIdAttributeName: '', omitInternalEngines: true });
+      return injected.generateSelectorSimple(element as Element, { testIdAttributeName: '', omitInternalEngines: true });
     }, frameElement);
     return selector;
   } catch (e) {

@@ -1,6 +1,6 @@
 {
   "name": "@playwright/experimental-ct-svelte",
-  "version": "1.41.1",
+  "version": "1.42.0",
   "description": "Playwright Component Testing for Svelte",
   "repository": {
     "type": "git",
@@ -29,22 +29,14 @@
     }
   },
   "dependencies": {
-    "@playwright/experimental-ct-core": "1.41.1",
+    "@playwright/experimental-ct-core": "1.42.0",
     "@sveltejs/vite-plugin-svelte": "^3.0.1"
   },
   "devDependencies": {
     "svelte": "^4.2.8"
   },
-  "peerDependencies": {
-    "svelte": "^4.0.0",
-    "@sveltejs/vite-plugin-svelte": "^3.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@sveltejs/vite-plugin-svelte": {
-      "optional": true
-    }
-  },
   "bin": {
-    "playwright": "cli.js"
+    "playwright": "cli.js",
+    "pw-svelte": "cli.js"
   }
 }

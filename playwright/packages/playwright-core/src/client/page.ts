@@ -62,13 +62,12 @@ type PDFOptions = Omit<channels.PagePdfParams, 'width' | 'height' | 'margin'> & 
   path?: string,
 };
 
-type ExpectScreenshotOptions = Omit<channels.PageExpectScreenshotOptions, 'screenshotOptions' | 'locator' | 'expected'> & {
+export type ExpectScreenshotOptions = Omit<channels.PageExpectScreenshotOptions, 'locator' | 'expected' | 'mask'> & {
   expected?: Buffer,
-  locator?: Locator,
+  locator?: api.Locator,
   isNot: boolean,
-  screenshotOptions: Omit<channels.PageExpectScreenshotOptions['screenshotOptions'], 'mask'> & { mask?: Locator[] }
+  mask?: api.Locator[],
 };
-
 
 export class Page extends ChannelOwner<channels.PageChannel> implements api.Page {
   private _browserContext: BrowserContext;
@@ -96,6 +95,8 @@ export class Page extends ChannelOwner<channels.PageChannel> implements api.Page
   private _closeReason: string | undefined;
   _closeWasCalled: boolean = false;
   private _harRouters: HarRouter[] = [];
+
+  private _locatorHandlers = new Map<number, Function>();
 
   static from(page: channels.PageChannel): Page {
     return (page as any)._object;
@@ -133,6 +134,7 @@ export class Page extends ChannelOwner<channels.PageChannel> implements api.Page
     this._channel.on('fileChooser', ({ element, isMultiple }) => this.emit(Events.Page.FileChooser, new FileChooser(this, ElementHandle.from(element), isMultiple)));
     this._channel.on('frameAttached', ({ frame }) => this._onFrameAttached(Frame.from(frame)));
     this._channel.on('frameDetached', ({ frame }) => this._onFrameDetached(Frame.from(frame)));
+    this._channel.on('locatorHandlerTriggered', ({ uid }) => this._onLocatorHandlerTriggered(uid));
     this._channel.on('route', ({ route }) => this._onRoute(Route.from(route)));
     this._channel.on('video', ({ artifact }) => {
       const artifactObject = Artifact.from(artifact);
@@ -360,6 +362,22 @@ export class Page extends ChannelOwner<channels.PageChannel> implements api.Page
     return Response.fromNullable((await this._channel.reload({ ...options, waitUntil })).response);
   }
 
+  async addLocatorHandler(locator: Locator, handler: Function): Promise<void> {
+    if (locator._frame !== this._mainFrame)
+      throw new Error(`Locator must belong to the main frame of this page`);
+    const { uid } = await this._channel.registerLocatorHandler({ selector: locator._selector });
+    this._locatorHandlers.set(uid, handler);
+  }
+
+  private async _onLocatorHandlerTriggered(uid: number) {
+    try {
+      const handler = this._locatorHandlers.get(uid);
+      await handler?.();
+    } finally {
+      this._wrapApiCall(() => this._channel.resolveLocatorHandlerNoReply({ uid }), true).catch(() => {});
+    }
+  }
+
   async waitForLoadState(state?: LifecycleEvent, options?: { timeout?: number }): Promise<void> {
     return await this._mainFrame.waitForLoadState(state, options);
   }
@@ -528,22 +546,19 @@ export class Page extends ChannelOwner<channels.PageChannel> implements api.Page
   }
 
   async _expectScreenshot(options: ExpectScreenshotOptions): Promise<{ actual?: Buffer, previous?: Buffer, diff?: Buffer, errorMessage?: string, log?: string[]}> {
-    const mask = options.screenshotOptions?.mask ? options.screenshotOptions?.mask.map(locator => ({
-      frame: locator._frame._channel,
-      selector: locator._selector,
+    const mask = options?.mask ? options?.mask.map(locator => ({
+      frame: (locator as Locator)._frame._channel,
+      selector: (locator as Locator)._selector,
     })) : undefined;
     const locator = options.locator ? {
-      frame: options.locator._frame._channel,
-      selector: options.locator._selector,
+      frame: (options.locator as Locator)._frame._channel,
+      selector: (options.locator as Locator)._selector,
     } : undefined;
     return await this._channel.expectScreenshot({
       ...options,
       isNot: !!options.isNot,
       locator,
-      screenshotOptions: {
-        ...options.screenshotOptions,
-        mask,
-      }
+      mask,
     });
   }
 
