@@ -22,6 +22,7 @@ import { JavaScriptLanguageGenerator } from "playwright-core/lib/server/recorder
 import { Language, LanguageGeneratorOptions } from "playwright-core/lib/server/recorder/language";
 import { PythonLanguageGenerator } from "playwright-core/lib/server/recorder/python";
 import { ActionWithContext } from "./crxPlayer";
+import type { FrameDescription } from "playwright-core/lib/server/recorder/recorderActions";
 
 export type Script = {
   filename: string;
@@ -31,7 +32,8 @@ export type Script = {
 }
 
 const languages = new Map([
-  new JavaLanguageGenerator(),
+  new JavaLanguageGenerator('junit'),
+  new JavaLanguageGenerator('library'),
   new JavaScriptLanguageGenerator(/* isPlaywrightTest */false),
   new JavaScriptLanguageGenerator(/* isPlaywrightTest */true),
   new PythonLanguageGenerator(/* isAsync */false, /* isPytest */true),
@@ -51,7 +53,7 @@ export function toSource(script: Script): Source {
 
     const actionInContext: ActionInContext = {
       action,
-      frame: { url: '', pageAlias, isMainFrame: !frame, ...frame },
+      frame: { url: '', pageAlias, isMainFrame: !frame, ...frame } as FrameDescription,
       committed: true
     }
     return langGenerator.generateAction(actionInContext);

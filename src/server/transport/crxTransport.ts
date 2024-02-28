@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { LogName, debugLogger } from 'playwright-core/lib/common/debugLogger';
+import { LogName, debugLogger } from 'playwright-core/lib/utils/debugLogger';
 import type { Protocol } from 'playwright-core/lib/server/chromium/protocol';
 import type { Progress } from 'playwright-core/lib/server/progress';
 import type { ConnectionTransport, ProtocolRequest, ProtocolResponse } from 'playwright-core/lib/server/transport';

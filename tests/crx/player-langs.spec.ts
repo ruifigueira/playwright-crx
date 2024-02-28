@@ -26,6 +26,7 @@ const langs = {
   'javascript': { line: `  await page.locator('textarea').click();`, linenumber: 10 },
   'playwright-test': { line: `  await page.locator('textarea').click();`, linenumber: 5 },
   'java': { line: `      page.locator("textarea").click();`, linenumber: 14 },
+  'java-junit': { line: `      page.locator("textarea").click();`, linenumber: 13 },
   'python-pytest': { line: `    page.locator("textarea").click()`, linenumber: 6 },
   'python': { line: `    page.locator("textarea").click()`, linenumber: 9 },
   'python-async': { line: `    await page.locator("textarea").click()`, linenumber: 11 },

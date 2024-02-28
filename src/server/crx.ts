@@ -15,7 +15,7 @@
  */
 
 import type * as channels from '@protocol/channels';
-import { RecentLogsCollector } from 'playwright-core/lib/common/debugLogger';
+import { RecentLogsCollector } from 'playwright-core/lib/utils/debugLogger';
 import type { BrowserOptions, BrowserProcess } from 'playwright-core/lib/server/browser';
 import { CRBrowser } from 'playwright-core/lib/server/chromium/crBrowser';
 import type { CRPage } from 'playwright-core/lib/server/chromium/crPage';

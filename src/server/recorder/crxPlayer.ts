@@ -28,16 +28,10 @@ import { FrameExpectParams } from '@protocol/channels';
 
 type Location = CallMetadata['location'];
 
-type FrameDescription = {
-  url: string;
-  name?: string;
-  selectorsChain?: string[];
-};
-
 export type ActionWithContext = (actions.Action | { name: 'pause' }) & {
   pageAlias: string;
   location?: Location;
-  frame?: FrameDescription;
+  frame?: actions.FrameDescription & { url: string; name?: string };
 };
 
 class Stopped extends Error {}
@@ -252,7 +246,7 @@ export default class Player extends EventEmitter {
 
     if (!action.frame) return [page.mainFrame(), selector];
 
-    if (action.frame.selectorsChain && action.name !== 'navigate') {
+    if (!action.frame.isMainFrame && action.name !== 'navigate') {
       const chainedSelector = [...action.frame.selectorsChain, selector].join(' >> internal:control=enter-frame >> ');
       return [page.mainFrame(), chainedSelector];
     }
