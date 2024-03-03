@@ -8,6 +8,6 @@
     "serve": "vite ./server --host 127.0.0.1 --port 3000"
   },
   "devDependencies": {
-    "@playwright/test": "^1.42.0"
+    "@playwright/test": "^1.42.1"
   }
 }
