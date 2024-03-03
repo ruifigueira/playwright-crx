@@ -1,6 +1,6 @@
 {
   "name": "playwright-crx-tests",
-  "version": "0.4.1-next",
+  "version": "0.4.1",
   "keywords": [],
   "author": "",
   "scripts": {
