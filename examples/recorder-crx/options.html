@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Playwright CRX - Configuration</title>
+  </head>
+  <body>
+    <form id="options-form">
+      <label for="test-id">TestID Attribute Name:</label>
+      <input type="text" id="test-id" name="test-id" placeholder="Enter Attribute Name" pattern="[a-zA-Z][\w\-]*" title="Must be a valid attribute name">
+      <button id="submit" type="submit">Save</button>
+    </form>
+    <script type="module" src="/src/options.ts"></script>
+  </body>
+</html>
