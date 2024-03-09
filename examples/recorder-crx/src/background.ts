@@ -15,7 +15,7 @@
  */
 
 import type { CrxApplication } from 'playwright-crx';
-import { crx, _debug, _setUnderTest } from 'playwright-crx';
+import playwright, { crx, _debug, _setUnderTest } from 'playwright-crx';
 
 type Mode = 'none' | 'recording' | 'inspecting' | 'assertingText' | 'recording-inspecting' | 'standby' | 'assertingVisibility' | 'assertingValue';
 
@@ -106,6 +106,10 @@ async function attach(tab: chrome.tabs.Tab) {
   }
 }
 
+async function setTestIdAttributeName(testIdAttributeName: string) {
+  playwright.selectors.setTestIdAttribute(testIdAttributeName);
+}
+
 chrome.action.onClicked.addListener(attach);
 
 chrome.contextMenus.create({
@@ -118,5 +122,11 @@ chrome.contextMenus.onClicked.addListener(async (_, tab) => {
   if (tab) await attach(tab);
 });
 
+chrome.storage.sync.onChanged.addListener(async ({ testIdAttributeName }) => {
+  if (!testIdAttributeName) return;
+
+  await setTestIdAttributeName(testIdAttributeName.newValue);
+});
+
 // for testing
-Object.assign(self, { attach, _debug, _setUnderTest });
+Object.assign(self, { attach, setTestIdAttributeName, _debug, _setUnderTest });

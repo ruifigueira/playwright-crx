@@ -204,7 +204,7 @@ test('should record with all supported actions and assertions', async ({ context
   });
   const context = await browser.newContext();
   const page = await context.newPage();
-  await page.goto('http://127.0.0.1:3000/root.html');
+  await page.goto('${baseURL}/root.html');
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'button' }).click();
   await page.getByRole('checkbox').uncheck();
@@ -220,6 +220,43 @@ test('should record with all supported actions and assertions', async ({ context
   // await expect(page.getByText('Some long text')).toContainText('long text');
   // await expect(page.getByText('Some long text')).toBeVisible();
 ​
+  // ---------------------
+  await context.close();
+  await browser.close();
+})();`;
+
+  await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
+});
+
+test('should record with custom testid', async ({ page, attachRecorder, recordAction, baseURL, extensionServiceWorker }) => {
+  const recorderPage = await attachRecorder(page);
+  await recordAction(() => page.goto(`${baseURL}/empty.html`));
+  await page.setContent(`
+    <button data-testid='btn-testid'>Button</button>
+    <button data-foobar='btn-foobar'>Button</button>
+  `);
+  await recordAction(() => page.locator('button').first().click());
+  await extensionServiceWorker.evaluate(async () => {
+    await (globalThis as any).setTestIdAttributeName('data-foobar');
+  });
+  // injected recorder poll period
+  await page.waitForTimeout(1000);
+  await recordAction(() => page.locator('button').nth(1).click());
+
+  await recorderPage.getByTitle('Record').click();
+
+  const code = `const { chromium } = require('playwright');
+
+(async () => {
+  const browser = await chromium.launch({
+    headless: false
+  });
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto('${baseURL}/empty.html');
+  await page.getByTestId('btn-testid').click();
+  await page.getByTestId('btn-foobar').click();
+
   // ---------------------
   await context.close();
   await browser.close();

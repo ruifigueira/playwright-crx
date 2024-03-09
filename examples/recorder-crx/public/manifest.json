@@ -19,5 +19,9 @@
     },
     "default_title": "Record"
   },
-  "permissions": ["debugger", "tabs", "contextMenus"]
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+  "permissions": ["debugger", "tabs", "contextMenus", "storage"]
 }
