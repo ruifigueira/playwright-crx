@@ -78,7 +78,14 @@ test('should ignore stdio when quiet', async ({ runInlineTest }) => {
   expect(result.output).not.toContain('%%');
 });
 
-test('should support console colors', async ({ runInlineTest }) => {
+test('should support console colors but not tty', {
+  annotation: [
+    { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/15366' },
+    { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/29839' },
+  ],
+}, async ({ runInlineTest, nodeVersion }) => {
+  test.skip(nodeVersion.major < 18, 'Node16 does not respect FORCE_COLOR in onsole');
+
   const result = await runInlineTest({
     'a.spec.js': `
       import { test, expect } from '@playwright/test';
@@ -90,29 +97,11 @@ test('should support console colors', async ({ runInlineTest }) => {
       });
     `
   });
-  expect(result.output).toContain(`process.stdout.isTTY = true`);
-  expect(result.output).toContain(`process.stderr.isTTY = true`);
+  expect(result.output).toContain(`process.stdout.isTTY = undefined`);
+  expect(result.output).toContain(`process.stderr.isTTY = undefined`);
   // The output should have colors.
   expect(result.rawOutput).toContain(`{ b: \x1b[33mtrue\x1b[39m, n: \x1b[33m123\x1b[39m, s: \x1b[32m'abc'\x1b[39m }`);
   expect(result.rawOutput).toContain(`{ b: \x1b[33mfalse\x1b[39m, n: \x1b[33m123\x1b[39m, s: \x1b[32m'abc'\x1b[39m }`);
-});
-
-test('should override hasColors and getColorDepth', async ({ runInlineTest }) => {
-  const result = await runInlineTest({
-    'a.spec.js': `
-      import { test, expect } from '@playwright/test';
-      test('console log', () => {
-        console.log('process.stdout.hasColors(1) = ' + process.stdout.hasColors(1));
-        console.log('process.stderr.hasColors(1) = ' + process.stderr.hasColors(1));
-        console.log('process.stdout.getColorDepth() > 0 = ' + (process.stdout.getColorDepth() > 0));
-        console.log('process.stderr.getColorDepth() > 0 = ' + (process.stderr.getColorDepth() > 0));
-      });
-    `
-  });
-  expect(result.output).toContain(`process.stdout.hasColors(1) = true`);
-  expect(result.output).toContain(`process.stderr.hasColors(1) = true`);
-  expect(result.output).toContain(`process.stdout.getColorDepth() > 0 = true`);
-  expect(result.output).toContain(`process.stderr.getColorDepth() > 0 = true`);
 });
 
 test('should not throw type error when using assert', async ({ runInlineTest }) => {

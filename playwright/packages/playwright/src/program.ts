@@ -34,7 +34,7 @@ export { program } from 'playwright-core/lib/cli/program';
 import type { ReporterDescription } from '../types/test';
 import { prepareErrorStack } from './reporters/base';
 import { cacheDir } from './transform/compilationCache';
-import { runTestServer } from './runner/testServer';
+import * as testServer from './runner/testServer';
 
 function addTestCommand(program: Command) {
   const command = program.command('test [test-filter...]');
@@ -108,9 +108,10 @@ function addFindRelatedTestFilesCommand(program: Command) {
 function addTestServerCommand(program: Command) {
   const command = program.command('test-server', { hidden: true });
   command.description('start test server');
-  command.action(() => {
-    void runTestServer();
-  });
+  command.option('-c, --config <file>', `Configuration file, or a test directory with optional "playwright.config.{m,c}?{js,ts}"`);
+  command.option('--host <host>', 'Host to start the server on', 'localhost');
+  command.option('--port <port>', 'Port to start the server on', '0');
+  command.action(opts => runTestServer(opts));
 }
 
 function addShowReportCommand(program: Command) {
@@ -152,7 +153,30 @@ Examples:
 
 async function runTests(args: string[], opts: { [key: string]: any }) {
   await startProfiling();
-  const config = await loadConfigFromFileRestartIfNeeded(opts.config, overridesFromOptions(opts), opts.deps === false);
+  const cliOverrides = overridesFromOptions(opts);
+
+  if (opts.ui || opts.uiHost || opts.uiPort) {
+    const status = await testServer.runUIMode(opts.config, {
+      host: opts.uiHost,
+      port: opts.uiPort ? +opts.uiPort : undefined,
+      args,
+      grep: opts.grep as string | undefined,
+      grepInvert: opts.grepInvert as string | undefined,
+      project: opts.project || undefined,
+      headed: opts.headed,
+      reporter: Array.isArray(opts.reporter) ? opts.reporter : opts.reporter ? [opts.reporter] : undefined,
+      workers: cliOverrides.workers,
+      timeout: cliOverrides.timeout,
+    });
+    await stopProfiling('runner');
+    if (status === 'restarted')
+      return;
+    const exitCode = status === 'interrupted' ? 130 : (status === 'passed' ? 0 : 1);
+    gracefullyProcessExitDoNotHang(exitCode);
+    return;
+  }
+
+  const config = await loadConfigFromFileRestartIfNeeded(opts.config, cliOverrides, opts.deps === false);
   if (!config)
     return;
 
@@ -165,13 +189,21 @@ async function runTests(args: string[], opts: { [key: string]: any }) {
 
   const runner = new Runner(config);
   let status: FullResult['status'];
-  if (opts.ui || opts.uiHost || opts.uiPort)
-    status = await runner.uiAllTests({ host: opts.uiHost, port: opts.uiPort ? +opts.uiPort : undefined });
-  else if (process.env.PWTEST_WATCH)
+  if (process.env.PWTEST_WATCH)
     status = await runner.watchAllTests();
   else
     status = await runner.runAllTests();
   await stopProfiling('runner');
+  const exitCode = status === 'interrupted' ? 130 : (status === 'passed' ? 0 : 1);
+  gracefullyProcessExitDoNotHang(exitCode);
+}
+
+async function runTestServer(opts: { [key: string]: any }) {
+  const host = opts.host || 'localhost';
+  const port = opts.port ? +opts.port : 0;
+  const status = await testServer.runTestServer(opts.config, { host, port });
+  if (status === 'restarted')
+    return;
   const exitCode = status === 'interrupted' ? 130 : (status === 'passed' ? 0 : 1);
   gracefullyProcessExitDoNotHang(exitCode);
 }
@@ -290,7 +322,7 @@ function resolveReporter(id: string) {
   return require.resolve(id, { paths: [process.cwd()] });
 }
 
-const kTraceModes: TraceMode[] = ['on', 'off', 'on-first-retry', 'on-all-retries', 'retain-on-failure'];
+const kTraceModes: TraceMode[] = ['on', 'off', 'on-first-retry', 'on-all-retries', 'retain-on-failure', 'retain-on-first-failure'];
 
 const testOptions: [string, string][] = [
   ['--browser <browser>', `Browser to use for tests, one of "all", "chromium", "firefox" or "webkit" (default: "chromium")`],

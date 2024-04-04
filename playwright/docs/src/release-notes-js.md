@@ -6,7 +6,87 @@ toc_max_heading_level: 2
 
 import LiteYouTube from '@site/src/components/LiteYouTube';
 
+## Version 1.43
+
+### New APIs
+
+- Method [`method: BrowserContext.clearCookies`] now supports filters to remove only some cookies.
+
+  ```js
+  // Clear all cookies.
+  await context.clearCookies();
+  // New: clear cookies with a particular name.
+  await context.clearCookies({ name: 'session-id' });
+  // New: clear cookies for a particular domain.
+  await context.clearCookies({ domain: 'my-origin.com' });
+  ```
+
+- New mode `retain-on-first-failure` for [`property: TestOptions.trace`]. In this mode, trace is recorded for the first run of each test, but not for retires. When test run fails, the trace file is retained, otherwise it is removed.
+
+  ```js title=playwright.config.ts
+  import { defineConfig } from '@playwright/test';
+
+  export default defineConfig({
+    use: {
+      trace: 'retain-on-first-failure',
+    },
+  });
+  ```
+
+- New property [`property: TestInfo.tags`] exposes test tags during test execution.
+
+  ```js
+  test('example', async ({ page }) => {
+    console.log(test.info().tags);
+  });
+  ```
+
+- New method [`method: Locator.contentFrame`] converts a [Locator] object to a [FrameLocator]. This can be useful when you have a [Locator] object obtained somewhere, and later on would like to interact with the content inside the frame.
+
+  ```js
+  const locator = page.locator('iframe[name="embedded"]');
+  // ...
+  const frameLocator = locator.contentFrame();
+  await frameLocator.getByRole('button').click();
+  ```
+
+- New method [`method: FrameLocator.owner`] converts a [FrameLocator] object to a [Locator]. This can be useful when you have a [FrameLocator] object obtained somewhere, and later on would like to interact with the `iframe` element.
+
+  ```js
+  const frameLocator = page.frameLocator('iframe[name="embedded"]');
+  // ...
+  const locator = frameLocator.owner();
+  await expect(locator).toBeVisible();
+  ```
+
+### UI Mode Updates
+
+![Playwright UI Mode](https://github.com/microsoft/playwright/assets/9881434/61ca7cfc-eb7a-4305-8b62-b6c9f098f300)
+
+* See tags in the test list.
+* Filter by tags by typing `@fast` or clicking on the tag itself.
+* New shortcuts:
+  - "F5" to run tests.
+  - "Shift F5" to stop running tests.
+  - "Ctrl `" to toggle test output.
+
+### Browser Versions
+
+* Chromium 124.0.6367.8
+* Mozilla Firefox 124.0
+* WebKit 17.4
+
+This version was also tested against the following stable channels:
+
+* Google Chrome 123
+* Microsoft Edge 123
+
 ## Version 1.42
+
+<LiteYouTube
+  id="KjSaIQLlgns"
+  title="Playwright 1.41 & 1.42"
+/>
 
 ### New APIs
 
@@ -1978,31 +2058,31 @@ This version of Playwright was also tested against the following stable channels
 
 #### 🖱️ Mouse Wheel
 
-By using [`Page.mouse.wheel`](https://playwright.dev/docs/api/class-mouse#mouse-wheel) you are now able to scroll vertically or horizontally.
+By using [`method: Mouse.wheel`] you are now able to scroll vertically or horizontally.
 
 #### 📜 New Headers API
 
 Previously it was not possible to get multiple header values of a response. This is now  possible and additional helper functions are available:
 
-- [Request.allHeaders()](https://playwright.dev/docs/api/class-request#request-all-headers)
-- [Request.headersArray()](https://playwright.dev/docs/api/class-request#request-headers-array)
-- [Request.headerValue(name: string)](https://playwright.dev/docs/api/class-request#request-header-value)
-- [Response.allHeaders()](https://playwright.dev/docs/api/class-response#response-all-headers)
-- [Response.headersArray()](https://playwright.dev/docs/api/class-response#response-headers-array)
-- [Response.headerValue(name: string)](https://playwright.dev/docs/api/class-response#response-header-value)
-- [Response.headerValues(name: string)](https://playwright.dev/docs/api/class-response#response-header-values)
+- [`method: Request.allHeaders`]
+- [`method: Request.headersArray`]
+- [`method: Request.headerValue`]
+- [`method: Response.allHeaders`]
+- [`method: Response.headersArray`]
+- [`method: Response.headerValue`]
+- [`method: Response.headerValues`]
 
 #### 🌈 Forced-Colors emulation
 
-Its now possible to emulate the `forced-colors` CSS media feature by passing it in the [context options](https://playwright.dev/docs/api/class-browser#browser-new-context-option-forced-colors) or calling [Page.emulateMedia()](https://playwright.dev/docs/api/class-page#page-emulate-media).
+Its now possible to emulate the `forced-colors` CSS media feature by passing it in the [`method: Browser.newContext`] or calling [`method: Page.emulateMedia`].
 
 #### New APIs
 
-- [Page.route()](https://playwright.dev/docs/api/class-page#page-route) accepts new `times` option to specify how many times this route should be matched.
-- [Page.setChecked(selector: string, checked: boolean)](https://playwright.dev/docs/api/class-page#page-set-checked) and [Locator.setChecked(selector: string, checked: boolean)](https://playwright.dev/docs/api/class-locator#locator-set-checked) was introduced to set the checked state of a checkbox.
-- [Request.sizes()](https://playwright.dev/docs/api/class-request#request-sizes) Returns resource size information for given http request.
-- [BrowserContext.tracing.startChunk()](https://playwright.dev/docs/api/class-tracing#tracing-start-chunk) - Start a new trace chunk.
-- [BrowserContext.tracing.stopChunk()](https://playwright.dev/docs/api/class-tracing#tracing-stop-chunk) - Stops a new trace chunk.
+- [`method: Page.route`] accepts new `times` option to specify how many times this route should be matched.
+- [`method: Page.setChecked`] and [`method: Locator.setChecked`] were introduced to set the checked state of a checkbox.
+- [`method: Request.sizes`] Returns resource size information for given http request.
+- [`method: Tracing.startChunk`] - Start a new trace chunk.
+- [`method: Tracing.stopChunk`] - Stops a new trace chunk.
 
 ### 🎭 Playwright Test
 
@@ -2017,11 +2097,11 @@ test.describe.parallel('group', () => {
 });
 ```
 
-By default, tests in a single file are run in order. If you have many independent tests in a single file, you can now run them in parallel with [test.describe.parallel(title, callback)](https://playwright.dev/docs/api/class-test#test-describe-parallel).
+By default, tests in a single file are run in order. If you have many independent tests in a single file, you can now run them in parallel with [test.describe.parallel(title, callback)](./api/class-test#test-describe-parallel).
 
 #### 🛠 Add `--debug` CLI flag
 
-By using `npx playwright test --debug` it will enable the [Playwright Inspector](https://playwright.dev/docs/debug#playwright-inspector) for you to debug your tests.
+By using `npx playwright test --debug` it will enable the [Playwright Inspector](./debug#playwright-inspector) for you to debug your tests.
 
 ### Browser Versions
 
