@@ -40,15 +40,20 @@ test('should run global setup and teardown', async ({ runUITest }) => {
   });
   await page.getByTitle('Run all').click();
   await expect(page.getByTestId('status-line')).toHaveText('1/1 passed (100%)');
+
+  await page.getByTitle('Toggle output').click();
+  await expect(page.getByTestId('output')).toContainText('from-global-setup');
   await page.close();
+
   await expect.poll(() => testProcess.outputLines()).toEqual([
-    'from-global-setup',
     'from-global-teardown',
   ]);
 });
 
-test('should teardown on sigint', async ({ runUITest }) => {
+test('should teardown on sigint', async ({ runUITest, nodeVersion }) => {
   test.skip(process.platform === 'win32', 'No sending SIGINT on Windows');
+  test.skip(nodeVersion.major < 18);
+
   const { page, testProcess } = await runUITest({
     'playwright.config.ts': `
       import { defineConfig } from '@playwright/test';
@@ -70,9 +75,11 @@ test('should teardown on sigint', async ({ runUITest }) => {
   });
   await page.getByTitle('Run all').click();
   await expect(page.getByTestId('status-line')).toHaveText('1/1 passed (100%)');
+  await page.getByTitle('Toggle output').click();
+  await expect(page.getByTestId('output')).toContainText('from-global-setup');
+
   testProcess.process.kill('SIGINT');
   await expect.poll(() => testProcess.outputLines()).toEqual([
-    'from-global-setup',
     'from-global-teardown',
   ]);
 });
@@ -196,8 +203,9 @@ test('should run part of the setup only', async ({ runUITest }) => {
 
 for (const useWeb of [true, false]) {
   test.describe(`web-mode: ${useWeb}`, () => {
-    test('should run teardown with SIGINT', async ({ runUITest }) => {
+    test('should run teardown with SIGINT', async ({ runUITest, nodeVersion }) => {
       test.skip(process.platform === 'win32', 'No sending SIGINT on Windows');
+      test.skip(nodeVersion.major < 18);
       const { page, testProcess } = await runUITest({
         'playwright.config.ts': `
           import { defineConfig } from '@playwright/test';

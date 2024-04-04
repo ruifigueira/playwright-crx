@@ -186,7 +186,10 @@ context.on("dialog", lambda dialog: dialog.accept())
 ```
 
 ```csharp
-context.Dialog += (_, dialog) => dialog.AcceptAsync();
+Context.Dialog += async (_, dialog) =>
+{
+    await dialog.AcceptAsync();
+};
 ```
 
 :::note
@@ -390,7 +393,7 @@ browser_context.add_init_script(path="preload.js")
 ```
 
 ```csharp
-await context.AddInitScriptAsync(scriptPath: "preload.js");
+await Context.AddInitScriptAsync(scriptPath: "preload.js");
 ```
 
 :::note
@@ -456,7 +459,71 @@ Returns the browser instance of the context. If it was launched as a persistent 
 ## async method: BrowserContext.clearCookies
 * since: v1.8
 
-Clears context cookies.
+Removes cookies from context. Accepts optional filter.
+
+**Usage**
+
+```js
+await context.clearCookies();
+await context.clearCookies({ name: 'session-id' });
+await context.clearCookies({ domain: 'my-origin.com' });
+await context.clearCookies({ domain: /.*my-origin\.com/ });
+await context.clearCookies({ path: '/api/v1' });
+await context.clearCookies({ name: 'session-id', domain: 'my-origin.com' });
+```
+
+
+```java
+context.clearCookies();
+context.clearCookies(new BrowserContext.ClearCookiesOptions().setName("session-id"));
+context.clearCookies(new BrowserContext.ClearCookiesOptions().setDomain("my-origin.com"));
+context.clearCookies(new BrowserContext.ClearCookiesOptions().setPath("/api/v1"));
+context.clearCookies(new BrowserContext.ClearCookiesOptions()
+                         .setName("session-id")
+                         .setDomain("my-origin.com"));
+```
+
+```python async
+await context.clear_cookies()
+await context.clear_cookies(name="session-id")
+await context.clear_cookies(domain="my-origin.com")
+await context.clear_cookies(path="/api/v1")
+await context.clear_cookies(name="session-id", domain="my-origin.com")
+```
+
+```python sync
+context.clear_cookies()
+context.clear_cookies(name="session-id")
+context.clear_cookies(domain="my-origin.com")
+context.clear_cookies(path="/api/v1")
+context.clear_cookies(name="session-id", domain="my-origin.com")
+```
+
+```csharp
+await context.ClearCookiesAsync();
+await context.ClearCookiesAsync(new() { Name = "session-id" });
+await context.ClearCookiesAsync(new() { Domain = "my-origin.com" });
+await context.ClearCookiesAsync(new() { Path = "/api/v1" });
+await context.ClearCookiesAsync(new() { Name = "session-id", Domain = "my-origin.com" });
+```
+
+### option: BrowserContext.clearCookies.name
+* since: v1.43
+- `name` <[string]|[RegExp]>
+
+Only removes cookies with the given name.
+
+### option: BrowserContext.clearCookies.domain
+* since: v1.43
+- `domain` <[string]|[RegExp]>
+
+Only removes cookies with the given domain.
+
+### option: BrowserContext.clearCookies.path
+* since: v1.43
+- `path` <[string]|[RegExp]>
+
+Only removes cookies with the given path.
 
 ## async method: BrowserContext.clearPermissions
 * since: v1.8
@@ -1159,7 +1226,7 @@ context.route("/api/**", handle_route)
 await page.RouteAsync("/api/**", async r =>
 {
     if (r.Request.PostData.Contains("my-string"))
-        await r.FulfillAsync(body: "mocked-data");
+        await r.FulfillAsync(new() { Body = "mocked-data" });
     else
         await r.ContinueAsync();
 });

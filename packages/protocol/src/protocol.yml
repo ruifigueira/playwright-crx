@@ -1031,6 +1031,16 @@ BrowserContext:
         source: string
 
     clearCookies:
+      parameters:
+        name: string?
+        nameRegexSource: string?
+        nameRegexFlags: string?
+        domain: string?
+        domainRegexSource: string?
+        domainRegexFlags: string?
+        path: string?
+        pathRegexSource: string?
+        pathRegexFlags: string?
 
     clearPermissions:
 
@@ -3222,7 +3232,7 @@ ElectronApplication:
   events:
     close:
     console:
-      parameters: 
+      parameters:
         $mixin: ConsoleMessage
 
 Android:

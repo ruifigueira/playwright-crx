@@ -22,7 +22,6 @@ import type { TransformCallback } from 'stream';
 import { Transform } from 'stream';
 import { codeFrameColumns } from '../transform/babelBundle';
 import type { FullResult, FullConfig, Location, Suite, TestCase as TestCasePublic, TestResult as TestResultPublic, TestStep as TestStepPublic, TestError } from '../../types/testReporter';
-import type { SuitePrivate } from '../../types/reporterPrivate';
 import { HttpServer, assert, calculateSha1, copyFileAndMakeWritable, gracefullyProcessExitDoNotHang, removeFolders, sanitizeForFilePath, toPosixPath } from 'playwright-core/lib/utils';
 import { colors, formatError, formatResultFailure, stripAnsiEscapes } from './base';
 import { resolveReporterOutputPath } from '../util';
@@ -31,7 +30,6 @@ import type { ZipFile } from 'playwright-core/lib/zipBundle';
 import { yazl } from 'playwright-core/lib/zipBundle';
 import { mime } from 'playwright-core/lib/utilsBundle';
 import type { HTMLReport, Stats, TestAttachment, TestCase, TestCaseSummary, TestFile, TestFileSummary, TestResult, TestStep } from '@html-reporter/types';
-import { FullConfigInternal } from '../common/config';
 import EmptyReporter from './empty';
 
 type TestEntry = {
@@ -53,6 +51,8 @@ type HtmlReporterOptions = {
   host?: string,
   port?: number,
   attachmentsBaseURL?: string,
+  _mode?: 'test' | 'list';
+  _isTestServer?: boolean;
 };
 
 class HtmlReporter extends EmptyReporter {
@@ -68,6 +68,8 @@ class HtmlReporter extends EmptyReporter {
   constructor(options: HtmlReporterOptions) {
     super();
     this._options = options;
+    if (options._mode === 'test')
+      process.env.PW_HTML_REPORT = '1';
   }
 
   override printsToStdio() {
@@ -125,12 +127,11 @@ class HtmlReporter extends EmptyReporter {
   override async onExit() {
     if (process.env.CI || !this._buildResult)
       return;
-
     const { ok, singleTestId } = this._buildResult;
-    const shouldOpen = this._open === 'always' || (!ok && this._open === 'on-failure');
+    const shouldOpen = !this._options._isTestServer && (this._open === 'always' || (!ok && this._open === 'on-failure'));
     if (shouldOpen) {
       await showHTMLReport(this._outputFolder, this._options.host, this._options.port, singleTestId);
-    } else if (!FullConfigInternal.from(this.config)?.cliListOnly) {
+    } else if (this._options._mode === 'test') {
       const packageManagerCommand = getPackageManagerExecCommand();
       const relativeReportPath = this._outputFolder === standaloneDefaultFolder() ? '' : ' ' + path.relative(process.cwd(), this._outputFolder);
       const hostArg = this._options.host ? ` --host ${this._options.host}` : '';
@@ -215,6 +216,8 @@ class HtmlBuilder {
   private _dataZipFile: ZipFile;
   private _hasTraces = false;
   private _attachmentsBaseURL: string;
+  private _projectToId: Map<Suite, number> = new Map();
+  private _lastProjectId = 0;
 
   constructor(config: FullConfig, outputDir: string, attachmentsBaseURL: string) {
     this._config = config;
@@ -227,9 +230,12 @@ class HtmlBuilder {
   async build(metadata: Metadata, projectSuites: Suite[], result: FullResult, topLevelErrors: TestError[]): Promise<{ ok: boolean, singleTestId: string | undefined }> {
     const data = new Map<string, { testFile: TestFile, testFileSummary: TestFileSummary }>();
     for (const projectSuite of projectSuites) {
+      const testDir = projectSuite.project()!.testDir;
       for (const fileSuite of projectSuite.suites) {
         const fileName = this._relativeLocation(fileSuite.location)!.file;
-        const fileId = (fileSuite as SuitePrivate)._fileId!;
+        // Preserve file ids computed off the testDir.
+        const relativeFile = path.relative(testDir, fileSuite.location!.file);
+        const fileId = calculateSha1(toPosixPath(relativeFile)).slice(0, 20);
         let fileEntry = data.get(fileId);
         if (!fileEntry) {
           fileEntry = {
@@ -240,7 +246,7 @@ class HtmlBuilder {
         }
         const { testFile, testFileSummary } = fileEntry;
         const testEntries: TestEntry[] = [];
-        this._processJsonSuite(fileSuite, fileId, projectSuite.project()!.name, projectSuite.project()!.metadata?.reportName, [], testEntries);
+        this._processJsonSuite(fileSuite, fileId, projectSuite.project()!.name, [], testEntries);
         for (const test of testEntries) {
           testFile.tests.push(test.testCase);
           testFileSummary.tests.push(test.testCaseSummary);
@@ -340,25 +346,28 @@ class HtmlBuilder {
     this._dataZipFile.addBuffer(Buffer.from(JSON.stringify(data)), fileName);
   }
 
-  private _processJsonSuite(suite: Suite, fileId: string, projectName: string, botName: string | undefined, path: string[], outTests: TestEntry[]) {
+  private _processJsonSuite(suite: Suite, fileId: string, projectName: string, path: string[], outTests: TestEntry[]) {
     const newPath = [...path, suite.title];
-    suite.suites.forEach(s => this._processJsonSuite(s, fileId, projectName, botName, newPath, outTests));
-    suite.tests.forEach(t => outTests.push(this._createTestEntry(t, projectName, botName, newPath)));
+    suite.suites.forEach(s => this._processJsonSuite(s, fileId, projectName, newPath, outTests));
+    suite.tests.forEach(t => outTests.push(this._createTestEntry(fileId, t, projectName, newPath)));
   }
 
-  private _createTestEntry(test: TestCasePublic, projectName: string, botName: string | undefined, path: string[]): TestEntry {
+  private _createTestEntry(fileId: string, test: TestCasePublic, projectName: string, path: string[]): TestEntry {
     const duration = test.results.reduce((a, r) => a + r.duration, 0);
     const location = this._relativeLocation(test.location)!;
     path = path.slice(1);
+
+    const [file, ...titles] = test.titlePath();
+    const testIdExpression = `[project=${this._projectId(test.parent)}]${toPosixPath(file)}\x1e${titles.join('\x1e')} (repeat:${test.repeatEachIndex})`;
+    const testId = fileId + '-' + calculateSha1(testIdExpression).slice(0, 20);
 
     const results = test.results.map(r => this._createTestResult(test, r));
 
     return {
       testCase: {
-        testId: test.id,
+        testId,
         title: test.title,
         projectName,
-        botName,
         location,
         duration,
         // Annotations can be pushed directly, with a wrong type.
@@ -370,10 +379,9 @@ class HtmlBuilder {
         ok: test.outcome() === 'expected' || test.outcome() === 'flaky',
       },
       testCaseSummary: {
-        testId: test.id,
+        testId,
         title: test.title,
         projectName,
-        botName,
         location,
         duration,
         // Annotations can be pushed directly, with a wrong type.
@@ -387,6 +395,16 @@ class HtmlBuilder {
         }),
       },
     };
+  }
+
+  private _projectId(suite: Suite): number {
+    const project = projectSuite(suite);
+    let id = this._projectToId.get(project);
+    if (!id) {
+      id = ++this._lastProjectId;
+      this._projectToId.set(project, id);
+    }
+    return id;
   }
 
   private _serializeAttachments(attachments: JsonAttachment[]) {
@@ -624,6 +642,12 @@ function createSnippets(stepsInFile: MultiMap<string, TestStep>) {
       step.snippet = snippetLines.join('\n');
     }
   }
+}
+
+function projectSuite(suite: Suite): Suite {
+  while (suite.parent?.parent)
+    suite = suite.parent;
+  return suite;
 }
 
 export default HtmlReporter;
