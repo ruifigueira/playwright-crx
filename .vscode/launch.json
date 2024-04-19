@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch Recorder",
+      "request": "launch",
+      "type": "chrome",
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}/examples/pwbot-crx/dist",
+        "--disable-extensions-except=${workspaceFolder}/examples/pwbot-crx/dist"
+      ],
+      "webRoot": "${workspaceFolder}",
+      "url": "https://demo.playwright.dev/todomvc",
+    },
+  ]
+}
