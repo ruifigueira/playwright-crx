@@ -15,17 +15,18 @@
  */
 
 import type { Worker } from '@playwright/test';
-import { test as base, chromium, mergeTests } from '@playwright/test';
+import { test as base, chromium } from '@playwright/test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import type { CrxApplication, BrowserContext as CrxBrowserContext, Page as CrxPage } from 'playwright-crx';
 import type * as CrxTests from 'playwright-crx/test';
-import { rimrafSync } from 'rimraf';
+import { rimraf } from 'rimraf';
 
 type CrxServer = {
   EMPTY_PAGE: string;
   PREFIX: string;
+  CROSS_PROCESS_PREFIX: string;
 };
 
 type CrxFixtures = {
@@ -50,9 +51,12 @@ declare const serviceWorker: ServiceWorker;
 export const test = base.extend<{
   basePath: string,
   extensionPath: string;
+  browserVersion: string;
+  browserMajorVersion: number;
   createUserDataDir: () => string;
   extensionServiceWorker: Worker;
   extensionId: string;
+  server: CrxServer;
   runCrxTest: (testFn: CrxTest) => Promise<void>;
   mockPaths: (paths: Record<string, string | { body: string, contentType?: string }>) => Promise<void>;
   _extensionServiceWorkerDevtools: void;
@@ -63,6 +67,14 @@ export const test = base.extend<{
 
   extensionPath: path.join(__dirname, '..', 'test-extension', 'dist'),
 
+  browserVersion: async ({ browser }, run) => {
+    await run(browser.version());
+  },
+
+  browserMajorVersion: async ({ browserVersion }, run) => {
+    await run(Number(browserVersion.split('.')[0]));
+  },
+
   createUserDataDir: async ({}, run) => {
     const dirs: string[] = [];
     await run(() => {
@@ -70,7 +82,7 @@ export const test = base.extend<{
       dirs.push(dir);
       return dir;
     });
-    rimrafSync(dirs);
+    await rimraf(dirs).catch(() => {});
   },
 
   context: async ({ extensionPath, createUserDataDir }, use) => {
@@ -108,8 +120,20 @@ export const test = base.extend<{
     await use(extensionId);
   },
 
-  runCrxTest: async ({ extensionServiceWorker, baseURL }, use) => {
-    const params = { server: { PREFIX: baseURL, EMPTY_PAGE: `${baseURL}/empty.html` } };
+  server: async ({ baseURL }, use) => {
+    const prefix = baseURL!;
+    const crossProcessUrl = new URL(prefix);
+    crossProcessUrl.hostname = crossProcessUrl.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
+    const crossProcessPrefix = crossProcessUrl.toString().replace(/\/$/, '');
+    await use({
+      PREFIX: prefix,
+      CROSS_PROCESS_PREFIX: crossProcessPrefix,
+      EMPTY_PAGE: `${baseURL}/empty.html`,
+    });
+  },
+
+  runCrxTest: async ({ extensionServiceWorker, server }, use) => {
+    const params = { server };
     use((fn) => extensionServiceWorker.evaluate(`_runTest(${fn.toString()}, ${JSON.stringify(params)})`));
   },
 

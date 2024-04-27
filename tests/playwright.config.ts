@@ -13,8 +13,12 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'chromium',
+      name: 'Chrome',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'Chrome Tip-of-Tree',
+      use: { ...devices['Desktop Chrome'], channel: "chromium-tip-of-tree" },
     },
   ],
   webServer: {

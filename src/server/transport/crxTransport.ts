@@ -21,11 +21,16 @@ import type { ConnectionTransport, ProtocolRequest, ProtocolResponse } from 'pla
 
 type Tab = chrome.tabs.Tab;
 
+// mimics DebuggerSession on https://chromium-review.googlesource.com/c/chromium/src/+/5398119/12/chrome/common/extensions/api/debugger.json
+// TODO replace with proper type when available
+type DebuggerSession = chrome.debugger.Debuggee & { sessionId?: string };
+
 export class CrxTransport implements ConnectionTransport {
   private _progress?: Progress;
   private _detachedPromise?: Promise<void>;
   private _targetToTab: Map<string, number>;
   private _tabToTarget: Map<number, string>;
+  private _sessions: Map<string, number>;
 
   onmessage?: (message: ProtocolResponse) => void;
   onclose?: () => void;
@@ -34,6 +39,7 @@ export class CrxTransport implements ConnectionTransport {
     this._progress = progress;
     this._tabToTarget = new Map();
     this._targetToTab = new Map();
+    this._sessions = new Map();
     chrome.debugger.onEvent.addListener(this._onDebuggerEvent);
     chrome.debugger.onDetach.addListener(this._onRemoved);
     chrome.tabs.onRemoved.addListener(this._onRemoved);
@@ -51,17 +57,38 @@ export class CrxTransport implements ConnectionTransport {
   async send(message: ProtocolRequest) {
     try {
       const [, tabIdStr] = /crx-tab-(\d+)/.exec(message.sessionId ?? '') ?? [];
-      const tabId = tabIdStr ? parseInt(tabIdStr, 10) : undefined;
+      let debuggee: DebuggerSession;
+      if (tabIdStr) {
+        const tabId = parseInt(tabIdStr, 10);
+        debuggee = { tabId };
+      } else {
+        const sessionId = message.sessionId!;
+        const tabId = this._sessions.get(sessionId)!;
+        debuggee = { tabId, sessionId };
+      }
 
       let result;
       // chrome extensions doesn't support all CDP commands so we need to handle them
-      if (message.method === 'Target.setAutoAttach' && !tabId) {
+      if (message.method === 'Target.setAutoAttach' && !debuggee.tabId) {
         // no tab to attach, just skip for now...
         result = await Promise.resolve().then();
       } else if (message.method === 'Target.setAutoAttach') {
-        // we need to exclude service workers, see https://github.com/ruifigueira/playwright-crx/issues/1
-        result = await this._send(message.method, { tabId, ...message.params, filter: [{ exclude: true, type: 'service_worker' }] });
-      } else if (message.method === 'Target.getTargetInfo' && !tabId) {
+        const [, versionStr] = navigator.userAgent.match(/Chrome\/([0-9]+)./) ?? [];
+
+        // we need to exclude service workers, see:
+        // https://github.com/ruifigueira/playwright-crx/issues/1
+        // https://chromedevtools.github.io/devtools-protocol/tot/Target/#method-setAutoAttach
+        result = await this._send(debuggee, message.method, { ...message.params, filter: [
+          { exclude: true, type: 'service_worker' },
+          // and these are the defaults:
+          // https://chromedevtools.github.io/devtools-protocol/tot/Target/#type-TargetFilter
+          { exclude: true, type: 'browser' },
+          { exclude: true, type: 'tab' },
+          // in versions prior to 126, this fallback doesn't work,
+          // but it is necessary for oopif frames to be discoverable in version 126 or greater
+          ...(versionStr && parseInt(versionStr) >= 126 ? [{}] : []),
+        ]});
+      } else if (message.method === 'Target.getTargetInfo' && !debuggee.tabId) {
         // most likely related with https://chromium-review.googlesource.com/c/chromium/src/+/2885888
         // See CRBrowser.connect
         result = await Promise.resolve().then();
@@ -92,8 +119,7 @@ export class CrxTransport implements ConnectionTransport {
         // see: https://github.com/ruifigueira/playwright-crx/issues/2
         result = await Promise.resolve().then();
       } else {
-        // @ts-ignore
-        result = await this._send(message.method, { tabId, ...message.params });
+        result = await this._send(debuggee, message.method as keyof Protocol.CommandParameters, { ...message.params });
       }
 
       this._emitMessage({
@@ -103,7 +129,6 @@ export class CrxTransport implements ConnectionTransport {
     } catch (error) {
       this._emitMessage({
         ...message,
-        // @ts-ignore
         error,
       });
     }
@@ -113,10 +138,11 @@ export class CrxTransport implements ConnectionTransport {
     let targetId = this._tabToTarget.get(tabId);
 
     if (!targetId) {
-      await chrome.debugger.attach({ tabId }, '1.3');
+      const debuggee = { tabId };
+      await chrome.debugger.attach(debuggee, '1.3');
       this._progress?.log(`<chrome debugger attached to tab ${tabId}>`);
       // we don't create a new browser context, just return the current one
-      const { targetInfo } = await this._send('Target.getTargetInfo', { tabId });
+      const { targetInfo } = await this._send(debuggee, 'Target.getTargetInfo');
       targetId = targetInfo.targetId;
 
       // force browser to create a page
@@ -162,18 +188,18 @@ export class CrxTransport implements ConnectionTransport {
   }
 
   private async _send<T extends keyof Protocol.CommandParameters>(
+    debuggee: DebuggerSession,
     method: T,
-    params?: Protocol.CommandParameters[T] & { tabId?: number }
+    commandParams?: Protocol.CommandParameters[T]
   ) {
-    const { tabId, ...commandParams } = params ?? {};
     // eslint-disable-next-line no-console
-    if (!tabId) console.trace(`No tabId provided for ${method}`);
+    if (!debuggee.tabId) console.trace(`No tabId provided for ${method}`);
 
     if (debugLogger.isEnabled('chromedebugger' as LogName)) {
-      debugLogger.log('chromedebugger' as LogName, `SEND> ${method} #${tabId}`);
+      debugLogger.log('chromedebugger' as LogName, `SEND> ${method} #${debuggee.tabId}`);
     }
 
-    return await chrome.debugger.sendCommand({ tabId }, method, commandParams) as
+    return await chrome.debugger.sendCommand(debuggee, method, commandParams) as
       Protocol.CommandReturnValues[T];
   }
 
@@ -197,8 +223,15 @@ export class CrxTransport implements ConnectionTransport {
     }
   };
 
-  private _onDebuggerEvent = ({ tabId }: { tabId?: number }, message?: string, params?: any) => {
+  private _onDebuggerEvent = ({ tabId, sessionId }: DebuggerSession, message?: string, params?: any) => {
     if (!tabId) return;
+    if (!sessionId) sessionId = this._sessionIdFor(tabId);
+
+    if (message === 'Target.attachedToTarget') {
+      this._sessions.set((params as Protocol.Target.attachToTargetReturnValue).sessionId, tabId);
+    } else if (message === 'Target.detachedFromTarget') {
+      this._sessions.delete((params as Protocol.Target.attachToTargetReturnValue).sessionId);
+    }
 
     if (debugLogger.isEnabled(`chromedebugger` as LogName)) {
       debugLogger.log('chromedebugger' as LogName, `<RECV ${message} #${tabId}`);
@@ -206,7 +239,7 @@ export class CrxTransport implements ConnectionTransport {
 
     this._emitMessage({
       method: message,
-      sessionId: this._sessionIdFor(tabId),
+      sessionId,
       params,
     });
   };

@@ -172,3 +172,13 @@ test("should take screenshot", async ({ runCrxTest }) => {
     expect(screenshot).not.toBeNull();
   });
 });
+
+test('should report oopif frames', async ({ runCrxTest, browserMajorVersion }) => {
+  test.skip(browserMajorVersion < 126);
+
+  await runCrxTest(async ({ page, server, expect }) => {
+    await page.goto(server.PREFIX + '/dynamic-oopif.html');
+    expect(page.frames().length).toBe(2);
+    expect(await page.frames()[1].evaluate(() => '' + location.href)).toBe(server.CROSS_PROCESS_PREFIX + '/grid.html');
+  });
+});
