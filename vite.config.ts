@@ -61,7 +61,9 @@ export default defineConfig({
       './expectBundleImpl': '../../bundles/expect/src/expectBundleImpl',
 
       // shims
+      '_url': path.resolve(__dirname, './node_modules/url'),
       '_util': path.resolve(__dirname, './node_modules/util'),
+      'async_hooks': path.resolve(__dirname, './src/shims/async_hooks'),
       'assert': path.resolve(__dirname, './node_modules/assert'),
       'buffer': path.resolve(__dirname, './node_modules/buffer'),
       'child_process': path.resolve(__dirname, './src/shims/child_process'),
@@ -84,7 +86,7 @@ export default defineConfig({
       'setimmediate': path.resolve(__dirname, './node_modules/setimmediate'),
       'stream': path.resolve(__dirname, './node_modules/readable-stream'),
       'tls': path.resolve(__dirname, './src/shims/tls'),
-      'url': path.resolve(__dirname, './node_modules/url'),
+      'url': path.resolve(__dirname, './src/shims/url'),
       'util': path.resolve(__dirname, './src/shims/util'),
       'zlib': path.resolve(__dirname, './node_modules/browserify-zlib'),
 
@@ -94,14 +96,7 @@ export default defineConfig({
     },
   },
   define: {
-    // we need this one because of PLAYWRIGHT_CORE_PATH (it checks the actual version of playwright-core)
-    'require.resolve': '((s) => s)',
-    'process.platform': '"browser"',
-    'process.versions.node': '"18.16"',
-    'process.stdout.isTTY': 'false',
-    'getFromENV("PLAYWRIGHT_BROWSERS_PATH")': '"."',
-    'url.pathToFileURL': '((s) => s)',
-    'process.geteuid': '(() => "")',
+    'require.resolve': 'Boolean',
   },
   build: {
     outDir: path.resolve(__dirname, './lib/'),

@@ -34,5 +34,11 @@ process.hrtime = (previousTimestamp?: [number, number]): [number, number] => {
   }
   return [seconds, nanoseconds];
 };
+process.platform = 'linux';
+process.versions.node = '18.16';
+process.stdout = { isTTY: 'false' };
+process.geteuid = () => "";
+
+process.env['PLAYWRIGHT_BROWSERS_PATH'] = '.';
 
 self.process = process;
