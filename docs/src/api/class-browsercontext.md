@@ -64,7 +64,6 @@ await context.CloseAsync();
 
 ## event: BrowserContext.backgroundPage
 * since: v1.11
-* langs: js, python
 - argument: <[Page]>
 
 :::note
@@ -72,6 +71,12 @@ Only works with Chromium browser's persistent context.
 :::
 
 Emitted when new background page is created in the context.
+
+```java
+context.onBackgroundPage(backgroundPage -> {
+  System.out.println(backgroundPage.url());
+});
+```
 
 ```js
 const backgroundPage = await context.waitForEvent('backgroundpage');
@@ -83,6 +88,14 @@ background_page = await context.wait_for_event("backgroundpage")
 
 ```python sync
 background_page = context.wait_for_event("backgroundpage")
+```
+
+```csharp
+context.BackgroundPage += (_, backgroundPage) =>
+{
+    Console.WriteLine(backgroundPage.Url);
+};
+
 ```
 
 ## event: BrowserContext.close
@@ -205,7 +218,7 @@ also fire for popup pages. See also [`event: Page.popup`] to receive events abou
 
 The earliest moment that page is available is when it has navigated to the initial url. For example, when opening a
 popup with `window.open('http://example.com')`, this event will fire when the network request to "http://example.com" is
-done and its response has started loading in the popup.
+done and its response has started loading in the popup. If you would like to route/listen to this network request, use [`method: BrowserContext.route`] and [`event: BrowserContext.request`] respectively instead of similar methods on the [Page].
 
 ```js
 const newPagePromise = context.waitForEvent('page');
@@ -441,7 +454,6 @@ Script to be evaluated in all pages in the browser context. Optional.
 
 ## method: BrowserContext.backgroundPages
 * since: v1.11
-* langs: js, python
 - returns: <[Array]<[Page]>>
 
 :::note

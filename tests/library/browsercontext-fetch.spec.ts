@@ -983,6 +983,39 @@ it('should support multipart/form-data and keep the order', async function({ con
   expect(response.status()).toBe(200);
 });
 
+it('should support repeating names in multipart/form-data', async function({ context, server }) {
+  it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/28070' });
+  const nodeVersion = +process.versions.node.split('.')[0];
+  it.skip(nodeVersion < 20, 'File is not available in Node.js < 20. FormData is not available in Node.js < 18');
+  const postBodyPromise = new Promise<string>(resolve => {
+    server.setRoute('/empty.html', async (req, res) => {
+      resolve((await req.postBody).toString('utf-8'));
+      res.writeHead(200, {
+        'content-type': 'text/plain',
+      });
+      res.end('OK.');
+    });
+  });
+  const formData = new FormData();
+  formData.set('name', 'John');
+  formData.append('name', 'Doe');
+  formData.append('file', new File(['var x = 10;\r\n;console.log(x);'], 'f1.js', { type: 'text/javascript' }));
+  formData.append('file', new File(['hello'], 'f2.txt', { type: 'text/plain' }), 'custom_f2.txt');
+  formData.append('file', new Blob(['boo'], { type: 'text/plain' }));
+  const [postBody, response] = await Promise.all([
+    postBodyPromise,
+    context.request.post(server.EMPTY_PAGE, {
+      multipart: formData
+    })
+  ]);
+  expect(postBody).toContain(`content-disposition: form-data; name="name"\r\n\r\nJohn`);
+  expect(postBody).toContain(`content-disposition: form-data; name="name"\r\n\r\nDoe`);
+  expect(postBody).toContain(`content-disposition: form-data; name="file"; filename="f1.js"\r\ncontent-type: text/javascript\r\n\r\nvar x = 10;\r\n;console.log(x);`);
+  expect(postBody).toContain(`content-disposition: form-data; name="file"; filename="custom_f2.txt"\r\ncontent-type: text/plain\r\n\r\nhello`);
+  expect(postBody).toContain(`content-disposition: form-data; name="file"; filename="blob"\r\ncontent-type: text/plain\r\n\r\nboo`);
+  expect(response.status()).toBe(200);
+});
+
 it('should serialize data to json regardless of content-type', async function({ context, server }) {
   const data = {
     firstName: 'John',
