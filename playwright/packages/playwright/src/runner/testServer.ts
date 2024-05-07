@@ -21,7 +21,7 @@ import { ManualPromise, gracefullyProcessExitDoNotHang, isUnderTest } from 'play
 import type { Transport, HttpServer } from 'playwright-core/lib/utils';
 import type * as reporterTypes from '../../types/testReporter';
 import { collectAffectedTestFiles, dependenciesForTestFile } from '../transform/compilationCache';
-import type { FullConfigInternal } from '../common/config';
+import type { ConfigLocation, FullConfigInternal } from '../common/config';
 import { InternalReporter } from '../reporters/internalReporter';
 import { createReporterForTestServer, createReporters } from './reporters';
 import { TestRun, createTaskRunnerForList, createTaskRunnerForTestServer, createTaskRunnerForWatchSetup, createTaskRunnerForListFiles } from './tasks';
@@ -33,25 +33,27 @@ import { Watcher } from '../fsWatcher';
 import type { ReportEntry, TestServerInterface, TestServerInterfaceEventEmitters } from '../isomorphic/testServerInterface';
 import { Runner } from './runner';
 import type { ConfigCLIOverrides } from '../common/ipc';
-import { loadConfig, resolveConfigFile, restartWithExperimentalTsEsm } from '../common/configLoader';
+import { loadConfig, resolveConfigLocation, restartWithExperimentalTsEsm } from '../common/configLoader';
 import { webServerPluginsForConfig } from '../plugins/webServerPlugin';
 import type { TraceViewerRedirectOptions, TraceViewerServerOptions } from 'playwright-core/lib/server/trace/viewer/traceViewer';
 import type { TestRunnerPluginRegistration } from '../plugins';
 import { serializeError } from '../util';
+import { cacheDir } from '../transform/compilationCache';
+import { baseFullConfig } from '../isomorphic/teleReceiver';
 
 const originalStdoutWrite = process.stdout.write;
 const originalStderrWrite = process.stderr.write;
 
 class TestServer {
-  private _configFile: string | undefined;
+  private _configLocation: ConfigLocation;
   private _dispatcher: TestServerDispatcher | undefined;
 
-  constructor(configFile: string | undefined) {
-    this._configFile = configFile;
+  constructor(configLocation: ConfigLocation) {
+    this._configLocation = configLocation;
   }
 
   async start(options: { host?: string, port?: number }): Promise<HttpServer> {
-    this._dispatcher = new TestServerDispatcher(this._configFile);
+    this._dispatcher = new TestServerDispatcher(this._configLocation);
     return await startTraceViewerServer({ ...options, transport: this._dispatcher.transport });
   }
 
@@ -62,7 +64,7 @@ class TestServer {
 }
 
 class TestServerDispatcher implements TestServerInterface {
-  private _configFile: string | undefined;
+  private _configLocation: ConfigLocation;
   private _globalWatcher: Watcher;
   private _testWatcher: Watcher;
   private _testRun: { run: Promise<reporterTypes.FullResult['status']>, stop: ManualPromise<void> } | undefined;
@@ -74,9 +76,10 @@ class TestServerDispatcher implements TestServerInterface {
   private _serializer = require.resolve('./uiModeReporter');
   private _watchTestDirs = false;
   private _closeOnDisconnect = false;
+  private _devServerHandle: (() => Promise<void>) | undefined;
 
-  constructor(configFile: string | undefined) {
-    this._configFile = configFile;
+  constructor(configLocation: ConfigLocation) {
+    this._configLocation = configLocation;
     this.transport = {
       dispatch: (method, params) => (this as any)[method](params),
       onclose: () => {
@@ -143,9 +146,12 @@ class TestServerDispatcher implements TestServerInterface {
     await this.runGlobalTeardown();
 
     const { reporter, report } = await this._collectingReporter();
-    const { config, error } = await this._loadConfig(this._configFile);
+    const { config, error } = await this._loadConfig();
     if (!config) {
+      // Produce dummy config when it has an error.
+      reporter.onConfigure(baseFullConfig);
       reporter.onError(error!);
+      await reporter.onExit();
       return { status: 'failed', report };
     }
 
@@ -172,9 +178,52 @@ class TestServerDispatcher implements TestServerInterface {
     return { status, report: globalSetup?.report || [] };
   }
 
+  async startDevServer(params: Parameters<TestServerInterface['startDevServer']>[0]): ReturnType<TestServerInterface['startDevServer']> {
+    if (this._devServerHandle)
+      return { status: 'failed', report: [] };
+    const { reporter, report } = await this._collectingReporter();
+    const { config, error } = await this._loadConfig();
+    if (!config) {
+      reporter.onError(error!);
+      return { status: 'failed', report };
+    }
+    const devServerCommand = (config.config as any)['@playwright/test']?.['cli']?.['dev-server'];
+    if (!devServerCommand) {
+      reporter.onError({ message: 'No dev-server command found in the configuration' });
+      return { status: 'failed', report };
+    }
+    try {
+      this._devServerHandle = await devServerCommand(config);
+      return { status: 'passed', report };
+    } catch (e) {
+      reporter.onError(serializeError(e));
+      return { status: 'failed', report };
+    }
+  }
+
+  async stopDevServer(params: Parameters<TestServerInterface['stopDevServer']>[0]): ReturnType<TestServerInterface['stopDevServer']> {
+    if (!this._devServerHandle)
+      return { status: 'failed', report: [] };
+    try {
+      await this._devServerHandle();
+      this._devServerHandle = undefined;
+      return { status: 'passed', report: [] };
+    } catch (e) {
+      const { reporter, report } = await this._collectingReporter();
+      reporter.onError(serializeError(e));
+      return { status: 'failed', report };
+    }
+  }
+
+  async clearCache(params: Parameters<TestServerInterface['clearCache']>[0]): ReturnType<TestServerInterface['clearCache']> {
+    const { config } = await this._loadConfig();
+    if (config)
+      await clearCacheAndLogToConsole(config);
+  }
+
   async listFiles(params: Parameters<TestServerInterface['listFiles']>[0]): ReturnType<TestServerInterface['listFiles']> {
     const { reporter, report } = await this._collectingReporter();
-    const { config, error } = await this._loadConfig(this._configFile);
+    const { config, error } = await this._loadConfig();
     if (!config) {
       reporter.onError(error!);
       return { status: 'failed', report };
@@ -205,7 +254,7 @@ class TestServerDispatcher implements TestServerInterface {
       retries: 0,
     };
     const { reporter, report } = await this._collectingReporter();
-    const { config, error } = await this._loadConfig(this._configFile, overrides);
+    const { config, error } = await this._loadConfig(overrides);
     if (!config) {
       reporter.onError(error!);
       return { report: [], status: 'failed' };
@@ -270,7 +319,7 @@ class TestServerDispatcher implements TestServerInterface {
     else
       process.env.PW_LIVE_TRACE_STACKS = undefined;
 
-    const { config, error } = await this._loadConfig(this._configFile, overrides);
+    const { config, error } = await this._loadConfig(overrides);
     if (!config) {
       const wireReporter = await this._wireReporter(e => this._dispatchEvent('report', e));
       wireReporter.onError(error!);
@@ -314,7 +363,7 @@ class TestServerDispatcher implements TestServerInterface {
   }
 
   async findRelatedTestFiles(params: Parameters<TestServerInterface['findRelatedTestFiles']>[0]): ReturnType<TestServerInterface['findRelatedTestFiles']> {
-    const { config, error } = await this._loadConfig(this._configFile);
+    const { config, error } = await this._loadConfig();
     if (error)
       return { testFiles: [], errors: [error] };
     const runner = new Runner(config!);
@@ -348,11 +397,9 @@ class TestServerDispatcher implements TestServerInterface {
     gracefullyProcessExitDoNotHang(0);
   }
 
-  private async _loadConfig(configFile: string | undefined, overrides?: ConfigCLIOverrides): Promise<{ config: FullConfigInternal | null, error?: reporterTypes.TestError }> {
-    const configFileOrDirectory = configFile ? path.resolve(process.cwd(), configFile) : process.cwd();
-    const resolvedConfigFile = resolveConfigFile(configFileOrDirectory);
+  private async _loadConfig(overrides?: ConfigCLIOverrides): Promise<{ config: FullConfigInternal | null, error?: reporterTypes.TestError }> {
     try {
-      const config = await loadConfig({ resolvedConfigFile, configDir: resolvedConfigFile === configFileOrDirectory ? path.dirname(resolvedConfigFile) : configFileOrDirectory  }, overrides);
+      const config = await loadConfig(this._configLocation, overrides);
       // Preserve plugin instances between setup and build.
       if (!this._plugins)
         this._plugins = config.plugins || [];
@@ -366,7 +413,8 @@ class TestServerDispatcher implements TestServerInterface {
 }
 
 export async function runUIMode(configFile: string | undefined, options: TraceViewerServerOptions & TraceViewerRedirectOptions): Promise<reporterTypes.FullResult['status'] | 'restarted'> {
-  return await innerRunTestServer(configFile, options, async (server: HttpServer, cancelPromise: ManualPromise<void>) => {
+  const configLocation = resolveConfigLocation(configFile);
+  return await innerRunTestServer(configLocation, options, async (server: HttpServer, cancelPromise: ManualPromise<void>) => {
     await installRootRedirect(server, [], { ...options, webApp: 'uiMode.html' });
     if (options.host !== undefined || options.port !== undefined) {
       await openTraceInBrowser(server.urlPrefix());
@@ -383,23 +431,24 @@ export async function runUIMode(configFile: string | undefined, options: TraceVi
 }
 
 export async function runTestServer(configFile: string | undefined, options: { host?: string, port?: number }): Promise<reporterTypes.FullResult['status'] | 'restarted'> {
-  return await innerRunTestServer(configFile, options, async server => {
+  const configLocation = resolveConfigLocation(configFile);
+  return await innerRunTestServer(configLocation, options, async server => {
     // eslint-disable-next-line no-console
     console.log('Listening on ' + server.urlPrefix().replace('http:', 'ws:') + '/' + server.wsGuid());
   });
 }
 
-async function innerRunTestServer(configFile: string | undefined, options: { host?: string, port?: number }, openUI: (server: HttpServer, cancelPromise: ManualPromise<void>) => Promise<void>): Promise<reporterTypes.FullResult['status'] | 'restarted'> {
+async function innerRunTestServer(configLocation: ConfigLocation, options: { host?: string, port?: number }, openUI: (server: HttpServer, cancelPromise: ManualPromise<void>, configLocation: ConfigLocation) => Promise<void>): Promise<reporterTypes.FullResult['status'] | 'restarted'> {
   if (restartWithExperimentalTsEsm(undefined, true))
     return 'restarted';
-  const testServer = new TestServer(configFile);
+  const testServer = new TestServer(configLocation);
   const cancelPromise = new ManualPromise<void>();
   const sigintWatcher = new SigIntWatcher();
   process.stdin.on('close', () => gracefullyProcessExitDoNotHang(0));
   void sigintWatcher.promise().then(() => cancelPromise.resolve());
   try {
     const server = await testServer.start(options);
-    await openUI(server, cancelPromise);
+    await openUI(server, cancelPromise, configLocation);
     await cancelPromise;
   } finally {
     await testServer.stop();
@@ -453,4 +502,24 @@ export async function resolveCtDirs(config: FullConfigInternal) {
     outDir,
     templateDir
   };
+}
+
+export async function clearCacheAndLogToConsole(config: FullConfigInternal) {
+  const override = (config.config as any)['@playwright/test']?.['cli']?.['clear-cache'];
+  if (override) {
+    await override(config);
+    return;
+  }
+  await removeFolderAndLogToConsole(cacheDir);
+}
+
+export async function removeFolderAndLogToConsole(folder: string) {
+  try {
+    if (!fs.existsSync(folder))
+      return;
+    // eslint-disable-next-line no-console
+    console.log(`Removing ${await fs.promises.realpath(folder)}`);
+    await fs.promises.rm(folder, { recursive: true, force: true });
+  } catch {
+  }
 }

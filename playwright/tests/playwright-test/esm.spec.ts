@@ -55,6 +55,23 @@ test('should support import assertions', async ({ runInlineTest }) => {
   expect(result.passed).toBe(1);
 });
 
+test('should support import attributes', async ({ runInlineTest }) => {
+  const result = await runInlineTest({
+    'playwright.config.ts': `
+      import packageJSON from './package.json' with { type: 'json' };
+      export default { };
+    `,
+    'package.json': JSON.stringify({ type: 'module' }),
+    'a.test.ts': `
+      import config from './config.json' with { type: 'json' };
+      import { test, expect } from '@playwright/test';
+      test('pass', async () => {});
+    `
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.passed).toBe(1);
+});
+
 test('should import esm from ts when package.json has type module in experimental mode', async ({ runInlineTest }) => {
   const result = await runInlineTest({
     'playwright.config.ts': `
@@ -581,6 +598,28 @@ test('should load mts without config', async ({ runInlineTest, nodeVersion }) =>
       import { test, expect } from '@playwright/test';
       test('check project name', ({}, testInfo) => {
         expect(true).toBe(true);
+      });
+    `,
+  });
+
+  expect(result.exitCode).toBe(0);
+  expect(result.passed).toBe(1);
+});
+
+test('should load type module without config', async ({ runInlineTest, nodeVersion }) => {
+  test.skip(nodeVersion.major < 18, 'ESM loader is enabled conditionally with older API');
+
+  const result = await runInlineTest({
+    'package.json': `{ "type": "module" }`,
+    'helper.js': `
+      const foo = 42;
+      export default foo;
+    `,
+    'a.test.ts': `
+      import { test, expect } from '@playwright/test';
+      import foo from './helper.js';
+      test('check project name', ({}, testInfo) => {
+        expect(foo).toBe(42);
       });
     `,
   });

@@ -1790,6 +1790,7 @@ export interface PageChannel extends PageEventTarget, EventTargetChannel {
   goForward(params: PageGoForwardParams, metadata?: CallMetadata): Promise<PageGoForwardResult>;
   registerLocatorHandler(params: PageRegisterLocatorHandlerParams, metadata?: CallMetadata): Promise<PageRegisterLocatorHandlerResult>;
   resolveLocatorHandlerNoReply(params: PageResolveLocatorHandlerNoReplyParams, metadata?: CallMetadata): Promise<PageResolveLocatorHandlerNoReplyResult>;
+  unregisterLocatorHandler(params: PageUnregisterLocatorHandlerParams, metadata?: CallMetadata): Promise<PageUnregisterLocatorHandlerResult>;
   reload(params: PageReloadParams, metadata?: CallMetadata): Promise<PageReloadResult>;
   expectScreenshot(params: PageExpectScreenshotParams, metadata?: CallMetadata): Promise<PageExpectScreenshotResult>;
   screenshot(params: PageScreenshotParams, metadata?: CallMetadata): Promise<PageScreenshotResult>;
@@ -1926,20 +1927,29 @@ export type PageGoForwardResult = {
 };
 export type PageRegisterLocatorHandlerParams = {
   selector: string,
+  noWaitAfter?: boolean,
 };
 export type PageRegisterLocatorHandlerOptions = {
-
+  noWaitAfter?: boolean,
 };
 export type PageRegisterLocatorHandlerResult = {
   uid: number,
 };
 export type PageResolveLocatorHandlerNoReplyParams = {
   uid: number,
+  remove?: boolean,
 };
 export type PageResolveLocatorHandlerNoReplyOptions = {
-
+  remove?: boolean,
 };
 export type PageResolveLocatorHandlerNoReplyResult = void;
+export type PageUnregisterLocatorHandlerParams = {
+  uid: number,
+};
+export type PageUnregisterLocatorHandlerOptions = {
+
+};
+export type PageUnregisterLocatorHandlerResult = void;
 export type PageReloadParams = {
   timeout?: number,
   waitUntil?: LifecycleEvent,
@@ -2448,7 +2458,7 @@ export type FrameClickParams = {
   strict?: boolean,
   force?: boolean,
   noWaitAfter?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   delay?: number,
   button?: 'left' | 'right' | 'middle',
@@ -2460,7 +2470,7 @@ export type FrameClickOptions = {
   strict?: boolean,
   force?: boolean,
   noWaitAfter?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   delay?: number,
   button?: 'left' | 'right' | 'middle',
@@ -2500,7 +2510,7 @@ export type FrameDblclickParams = {
   strict?: boolean,
   force?: boolean,
   noWaitAfter?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   delay?: number,
   button?: 'left' | 'right' | 'middle',
@@ -2511,7 +2521,7 @@ export type FrameDblclickOptions = {
   strict?: boolean,
   force?: boolean,
   noWaitAfter?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   delay?: number,
   button?: 'left' | 'right' | 'middle',
@@ -2623,7 +2633,7 @@ export type FrameHoverParams = {
   selector: string,
   strict?: boolean,
   force?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   timeout?: number,
   trial?: boolean,
@@ -2632,7 +2642,7 @@ export type FrameHoverParams = {
 export type FrameHoverOptions = {
   strict?: boolean,
   force?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   timeout?: number,
   trial?: boolean,
@@ -2857,7 +2867,7 @@ export type FrameTapParams = {
   strict?: boolean,
   force?: boolean,
   noWaitAfter?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   timeout?: number,
   trial?: boolean,
@@ -2866,7 +2876,7 @@ export type FrameTapOptions = {
   strict?: boolean,
   force?: boolean,
   noWaitAfter?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   timeout?: number,
   trial?: boolean,
@@ -3200,7 +3210,7 @@ export type ElementHandleCheckResult = void;
 export type ElementHandleClickParams = {
   force?: boolean,
   noWaitAfter?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   delay?: number,
   button?: 'left' | 'right' | 'middle',
@@ -3211,7 +3221,7 @@ export type ElementHandleClickParams = {
 export type ElementHandleClickOptions = {
   force?: boolean,
   noWaitAfter?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   delay?: number,
   button?: 'left' | 'right' | 'middle',
@@ -3228,7 +3238,7 @@ export type ElementHandleContentFrameResult = {
 export type ElementHandleDblclickParams = {
   force?: boolean,
   noWaitAfter?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   delay?: number,
   button?: 'left' | 'right' | 'middle',
@@ -3238,7 +3248,7 @@ export type ElementHandleDblclickParams = {
 export type ElementHandleDblclickOptions = {
   force?: boolean,
   noWaitAfter?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   delay?: number,
   button?: 'left' | 'right' | 'middle',
@@ -3280,7 +3290,7 @@ export type ElementHandleGetAttributeResult = {
 };
 export type ElementHandleHoverParams = {
   force?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   timeout?: number,
   trial?: boolean,
@@ -3288,7 +3298,7 @@ export type ElementHandleHoverParams = {
 };
 export type ElementHandleHoverOptions = {
   force?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   timeout?: number,
   trial?: boolean,
@@ -3478,7 +3488,7 @@ export type ElementHandleSetInputFilesResult = void;
 export type ElementHandleTapParams = {
   force?: boolean,
   noWaitAfter?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   timeout?: number,
   trial?: boolean,
@@ -3486,7 +3496,7 @@ export type ElementHandleTapParams = {
 export type ElementHandleTapOptions = {
   force?: boolean,
   noWaitAfter?: boolean,
-  modifiers?: ('Alt' | 'Control' | 'Meta' | 'Shift')[],
+  modifiers?: ('Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift')[],
   position?: Point,
   timeout?: number,
   trial?: boolean,
@@ -4674,7 +4684,7 @@ export type JsonPipeMessageEvent = {
   message: any,
 };
 export type JsonPipeClosedEvent = {
-  error?: SerializedError,
+  reason?: string,
 };
 export type JsonPipeSendParams = {
   message: any,

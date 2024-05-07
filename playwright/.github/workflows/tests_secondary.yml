@@ -17,12 +17,16 @@ on:
 env:
   # Force terminal colors. @see https://www.npmjs.com/package/colors
   FORCE_COLOR: 1
-  FLAKINESS_CONNECTION_STRING: ${{ secrets.FLAKINESS_CONNECTION_STRING }}
   ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
+permissions:
+  id-token: write   # This is required for OIDC login (azure/login) to succeed
+  contents: read    # This is required for actions/checkout to succeed
 
 jobs:
   test_linux:
     name: ${{ matrix.os }} (${{ matrix.browser }})
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     strategy:
       fail-fast: false
       matrix:
@@ -43,7 +47,13 @@ jobs:
     - run: npm run build
     - run: npx playwright install --with-deps ${{ matrix.browser }} chromium
     - run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- npm run test -- --project=${{ matrix.browser }}-*
-    - run: node tests/config/checkCoverage.js ${{ matrix.browser }}
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -56,6 +66,7 @@ jobs:
 
   test_mac:
     name: ${{ matrix.os }} (${{ matrix.browser }})
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     strategy:
       fail-fast: false
       matrix:
@@ -65,6 +76,10 @@ jobs:
     env:
       PWTEST_BOT_NAME: "${{ matrix.browser }}-${{ matrix.os }}"
     steps:
+    # https://github.com/actions/runner-images/issues/9330
+    - name: Allow microphone access to all apps (macOS 14)
+      if: ${{ matrix.os == 'macos-14' }}
+      run: sqlite3 $HOME/Library/Application\ Support/com.apple.TCC/TCC.db "INSERT OR IGNORE INTO access VALUES ('kTCCServiceMicrophone','/usr/local/opt/runner/provisioner/provisioner',1,2,4,1,NULL,NULL,0,'UNUSED',NULL,0,1687786159,NULL,NULL,'UNUSED',1687786159);"
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
@@ -76,6 +91,13 @@ jobs:
     - run: npm run build
     - run: npx playwright install --with-deps ${{ matrix.browser }} chromium
     - run: npm run test -- --project=${{ matrix.browser }}-*
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -88,6 +110,7 @@ jobs:
 
   test_win:
     name: "Windows"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     strategy:
       fail-fast: false
       matrix:
@@ -112,6 +135,13 @@ jobs:
     - run: npm run test -- --project=${{ matrix.browser }}-*
       if: matrix.browser != 'firefox'
       shell: bash
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -124,6 +154,7 @@ jobs:
 
   test-package-installations-other-node-versions:
     name: "Installation Test ${{ matrix.os }} (${{ matrix.node_version }})"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: ${{ matrix.os  }}
     strategy:
       fail-fast: false
@@ -150,21 +181,33 @@ jobs:
       if: matrix.os != 'ubuntu-latest'
     - run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- npm run itest
       if: matrix.os == 'ubuntu-latest'
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
 
   headed_tests:
     name: "headed ${{ matrix.browser }} (${{ matrix.os }})"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     strategy:
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
-        os: [ubuntu-20.04, ubuntu-22.04, macos-latest, windows-latest]
+        os: [ubuntu-20.04, ubuntu-22.04, macos-14, windows-latest]
     runs-on: ${{ matrix.os }}
     env:
       PWTEST_BOT_NAME: "${{ matrix.browser }}-headed-${{ matrix.os }}"
     steps:
+    # https://github.com/actions/runner-images/issues/9330
+    - name: Allow microphone access to all apps (macOS 14)
+      if: ${{ matrix.os == 'macos-14' }}
+      run: sqlite3 $HOME/Library/Application\ Support/com.apple.TCC/TCC.db "INSERT OR IGNORE INTO access VALUES ('kTCCServiceMicrophone','/usr/local/opt/runner/provisioner/provisioner',1,2,4,1,NULL,NULL,0,'UNUSED',NULL,0,1687786159,NULL,NULL,'UNUSED',1687786159);"
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
@@ -179,6 +222,13 @@ jobs:
       if: ${{ !cancelled() && startsWith(matrix.os, 'ubuntu-') }}
     - run: npm run test -- --project=${{ matrix.browser }}-* --headed
       if: ${{ !cancelled() && !startsWith(matrix.os, 'ubuntu-') }}
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -191,6 +241,7 @@ jobs:
 
   transport_linux:
     name: "Transport"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     strategy:
       fail-fast: false
       matrix:
@@ -212,6 +263,13 @@ jobs:
     - run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- npm run ctest
       env:
         PWTEST_MODE: ${{ matrix.mode }}
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -224,6 +282,7 @@ jobs:
 
   tracing_linux:
     name: Tracing ${{ matrix.browser }} ${{ matrix.channel }}
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     strategy:
       fail-fast: false
       matrix:
@@ -251,6 +310,13 @@ jobs:
       env:
         PWTEST_TRACE: 1
         PWTEST_CHANNEL: ${{ matrix.channel }}
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -263,6 +329,7 @@ jobs:
 
   chrome_stable_linux:
     name: "Chrome Stable (Linux)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: ubuntu-20.04
     env:
       PWTEST_BOT_NAME: "chrome-stable-linux"
@@ -279,6 +346,13 @@ jobs:
     - run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- npm run ctest
       env:
         PWTEST_CHANNEL: chrome
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -291,6 +365,7 @@ jobs:
 
   chrome_stable_win:
     name: "Chrome Stable (Win)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: windows-latest
     env:
       PWTEST_BOT_NAME: "chrome-stable-windows"
@@ -308,6 +383,13 @@ jobs:
       shell: bash
       env:
         PWTEST_CHANNEL: chrome
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -320,6 +402,7 @@ jobs:
 
   chrome_stable_mac:
     name: "Chrome Stable (Mac)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: macos-latest
     env:
       PWTEST_BOT_NAME: "chrome-stable-mac"
@@ -336,6 +419,13 @@ jobs:
     - run: npm run ctest
       env:
         PWTEST_CHANNEL: chrome
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -348,6 +438,7 @@ jobs:
 
   chromium_tot:
     name: Chromium TOT ${{ matrix.os }}
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: ${{ matrix.os  }}
     env:
       PWTEST_CHANNEL: chromium-tip-of-tree
@@ -370,6 +461,13 @@ jobs:
       if: matrix.os == 'ubuntu-20.04'
     - run: npm run ctest
       if: matrix.os != 'ubuntu-20.04'
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -382,6 +480,7 @@ jobs:
 
   chromium_tot_headed:
     name: Chromium TOT headed ${{ matrix.os }}
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: ${{ matrix.os  }}
     env:
       PWTEST_CHANNEL: chromium-tip-of-tree
@@ -404,6 +503,13 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
     - run: npm run ctest -- --headed
       if: matrix.os != 'ubuntu-latest'
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -416,6 +522,7 @@ jobs:
 
   firefox_beta_linux:
     name: "Firefox Beta (Linux)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: ubuntu-20.04
     env:
       PWTEST_BOT_NAME: "firefox-beta-linux"
@@ -432,6 +539,13 @@ jobs:
     - run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- npm run ftest
       env:
         PWTEST_CHANNEL: firefox-beta
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -444,6 +558,7 @@ jobs:
 
   firefox_beta_win:
     name: "Firefox Beta (Win)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: windows-latest
     env:
       PWTEST_BOT_NAME: "firefox-beta-windows"
@@ -461,6 +576,13 @@ jobs:
       shell: bash
       env:
         PWTEST_CHANNEL: firefox-beta
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -473,6 +595,7 @@ jobs:
 
   firefox_beta_mac:
     name: "Firefox Beta (Mac)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: macos-latest
     env:
       PWTEST_BOT_NAME: "firefox-beta-mac"
@@ -489,6 +612,13 @@ jobs:
     - run: npm run ftest
       env:
         PWTEST_CHANNEL: firefox-beta
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -501,6 +631,7 @@ jobs:
 
   edge_stable_mac:
     name: "Edge Stable (Mac)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: macos-latest
     env:
       PWTEST_BOT_NAME: "edge-stable-mac"
@@ -517,6 +648,13 @@ jobs:
     - run: npm run ctest
       env:
         PWTEST_CHANNEL: msedge
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -529,6 +667,7 @@ jobs:
 
   edge_stable_win:
     name: "Edge Stable (Win)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: windows-latest
     env:
       PWTEST_BOT_NAME: "edge-stable-windows"
@@ -546,6 +685,13 @@ jobs:
       shell: bash
       env:
         PWTEST_CHANNEL: msedge
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -558,6 +704,7 @@ jobs:
 
   edge_stable_linux:
     name: "Edge Stable (Linux)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: ubuntu-20.04
     env:
       PWTEST_BOT_NAME: "edge-stable-linux"
@@ -574,6 +721,13 @@ jobs:
     - run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- npm run ctest
       env:
         PWTEST_CHANNEL: msedge
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -586,6 +740,7 @@ jobs:
 
   edge_beta_mac:
     name: "Edge Beta (Mac)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: macos-latest
     env:
       PWTEST_BOT_NAME: "edge-beta-mac"
@@ -602,6 +757,13 @@ jobs:
     - run: npm run ctest
       env:
         PWTEST_CHANNEL: msedge-beta
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -614,6 +776,7 @@ jobs:
 
   edge_beta_win:
     name: "Edge Beta (Win)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: windows-latest
     env:
       PWTEST_BOT_NAME: "edge-beta-windows"
@@ -631,6 +794,13 @@ jobs:
       shell: bash
       env:
         PWTEST_CHANNEL: msedge-beta
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -643,6 +813,7 @@ jobs:
 
   edge_beta_linux:
     name: "Edge Beta (Linux)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: ubuntu-20.04
     env:
       PWTEST_BOT_NAME: "edge-beta-linux"
@@ -659,6 +830,13 @@ jobs:
     - run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- npm run ctest
       env:
         PWTEST_CHANNEL: msedge-beta
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -671,6 +849,7 @@ jobs:
 
   edge_dev_mac:
     name: "Edge Dev (Mac)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: macos-latest
     env:
       PWTEST_BOT_NAME: "edge-dev-mac"
@@ -687,6 +866,13 @@ jobs:
     - run: npm run ctest
       env:
         PWTEST_CHANNEL: msedge-dev
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -699,6 +885,7 @@ jobs:
 
   edge_dev_win:
     name: "Edge Dev (Win)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: windows-latest
     env:
       PWTEST_BOT_NAME: "edge-dev-windows"
@@ -716,6 +903,13 @@ jobs:
       shell: bash
       env:
         PWTEST_CHANNEL: msedge-dev
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -728,6 +922,7 @@ jobs:
 
   edge_dev_linux:
     name: "Edge Dev (Linux)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: ubuntu-20.04
     env:
       PWTEST_BOT_NAME: "edge-dev-linux"
@@ -744,6 +939,13 @@ jobs:
     - run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- npm run ctest
       env:
         PWTEST_CHANNEL: msedge-dev
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -756,6 +958,7 @@ jobs:
 
   chrome_beta_linux:
     name: "Chrome Beta (Linux)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: ubuntu-20.04
     env:
       PWTEST_BOT_NAME: "chrome-beta-linux"
@@ -772,6 +975,13 @@ jobs:
     - run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- npm run ctest
       env:
         PWTEST_CHANNEL: chrome-beta
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -784,6 +994,7 @@ jobs:
 
   chrome_beta_win:
     name: "Chrome Beta (Win)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: windows-latest
     env:
       PWTEST_BOT_NAME: "chrome-beta-windows"
@@ -801,6 +1012,13 @@ jobs:
       shell: bash
       env:
         PWTEST_CHANNEL: chrome-beta
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -813,6 +1031,7 @@ jobs:
 
   chrome_beta_mac:
     name: "Chrome Beta (Mac)"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: macos-latest
     env:
       PWTEST_BOT_NAME: "chrome-beta-mac"
@@ -829,6 +1048,13 @@ jobs:
     - run: npm run ctest
       env:
         PWTEST_CHANNEL: chrome-beta
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -854,6 +1080,7 @@ jobs:
 
   test_linux_chromium_headless_new:
     name: Linux Chromium Headless New
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     runs-on: ubuntu-latest
     env:
       PWTEST_BOT_NAME: "headless-new"
@@ -871,7 +1098,13 @@ jobs:
     - run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- npm run test -- --project=chromium-*
       env:
         PLAYWRIGHT_CHROMIUM_USE_HEADLESS_NEW: 1
-    - run: node tests/config/checkCoverage.js chromium
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash

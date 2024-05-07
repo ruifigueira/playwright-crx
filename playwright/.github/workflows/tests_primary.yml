@@ -22,12 +22,12 @@ concurrency:
 env:
   # Force terminal colors. @see https://www.npmjs.com/package/colors
   FORCE_COLOR: 1
-  FLAKINESS_CONNECTION_STRING: ${{ secrets.FLAKINESS_CONNECTION_STRING }}
   ELECTRON_SKIP_BINARY_DOWNLOAD: 1
 
 jobs:
   test_linux:
     name: ${{ matrix.os }} (${{ matrix.browser }} - Node.js ${{ matrix.node-version }})
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     strategy:
       fail-fast: false
       matrix:
@@ -44,6 +44,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       PWTEST_BOT_NAME: "${{ matrix.browser }}-${{ matrix.os }}-node${{ matrix.node-version }}"
+    permissions:
+      id-token: write   # This is required for OIDC login (azure/login) to succeed
+      contents: read    # This is required for actions/checkout to succeed
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
@@ -56,7 +59,13 @@ jobs:
     - run: npm run build
     - run: npx playwright install --with-deps ${{ matrix.browser }} chromium
     - run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- npm run test -- --project=${{ matrix.browser }}-*
-    - run: node tests/config/checkCoverage.js ${{ matrix.browser }}
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -69,6 +78,7 @@ jobs:
 
   test_linux_chromium_tot:
     name: ${{ matrix.os }} (chromium tip-of-tree)
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     strategy:
       fail-fast: false
       matrix:
@@ -76,6 +86,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       PWTEST_BOT_NAME: "${{ matrix.os }}-chromium-tip-of-tree"
+    permissions:
+      id-token: write   # This is required for OIDC login (azure/login) to succeed
+      contents: read    # This is required for actions/checkout to succeed
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
@@ -91,6 +104,13 @@ jobs:
       env:
         PWTEST_CHANNEL: chromium-tip-of-tree
         PWTEST_BOT_NAME: "${{ matrix.os }}-chromium-tip-of-tree"
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -103,6 +123,7 @@ jobs:
 
   test_test_runner:
     name: Test Runner
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     strategy:
       fail-fast: false
       matrix:
@@ -130,6 +151,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       PWTEST_BOT_NAME: "${{ matrix.os }}-node${{ matrix.node-version }}-${{ matrix.shardIndex }}"
+    permissions:
+      id-token: write   # This is required for OIDC login (azure/login) to succeed
+      contents: read    # This is required for actions/checkout to succeed
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
@@ -144,6 +168,13 @@ jobs:
       if: matrix.os != 'ubuntu-latest'
     - run: xvfb-run npm run ttest --  --shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
       if: matrix.os == 'ubuntu-latest'
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
@@ -227,6 +258,7 @@ jobs:
 
   test_package_installations:
     name: "Installation Test ${{ matrix.os }}"
+    environment: ${{ github.event_name == 'push' && 'allow-uploading-flakiness-results' || null }}
     strategy:
       fail-fast: false
       matrix:
@@ -238,6 +270,9 @@ jobs:
     timeout-minutes: 30
     env:
       PWTEST_BOT_NAME: "package-installations-${{ matrix.os }}"
+    permissions:
+      id-token: write   # This is required for OIDC login (azure/login) to succeed
+      contents: read    # This is required for actions/checkout to succeed
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
@@ -254,6 +289,13 @@ jobs:
       if: matrix.os != 'ubuntu-latest'
     - run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- npm run itest
       if: matrix.os == 'ubuntu-latest'
+    - name: Azure Login
+      uses: azure/login@v2
+      if: ${{ !cancelled() && github.event_name == 'push' && github.repository == 'microsoft/playwright' }}
+      with:
+        client-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_FLAKINESS_DASHBOARD_SUBSCRIPTION_ID }}
     - run: ./utils/upload_flakiness_dashboard.sh ./test-results/report.json
       if: ${{ !cancelled() }}
       shell: bash
