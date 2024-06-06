@@ -292,3 +292,42 @@ test('should record oopif frames', async ({ page, attachRecorder, recordAction, 
 
   await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
 });
+
+test('should start recording with configured language', async ({ page, attachRecorder, configureRecorder }) => {
+  {
+    await configureRecorder({ targetLanguage: 'python-pytest' });
+    const recorderPage = await attachRecorder(page);
+    await expect(recorderPage.locator('.recorder-chooser')).toHaveValue('python-pytest');
+    const code = `import re
+from playwright.sync_api import Page, expect
+
+
+def test_example(page: Page) -> None:
+`;
+
+    await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
+    await recorderPage.close();
+  }
+
+  {
+    // change again
+    await configureRecorder({ targetLanguage: 'csharp-nunit' });
+    const recorderPage = await attachRecorder(page);
+    await expect(recorderPage.locator('.recorder-chooser')).toHaveValue('csharp-nunit');
+    const code = `using Microsoft.Playwright.NUnit;
+using Microsoft.Playwright;
+
+[Parallelizable(ParallelScope.Self)]
+[TestFixture]
+public class Tests : PageTest
+{
+    [Test]
+    public async Task MyTest()
+    {
+    }
+}
+`;
+    await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
+    await recorderPage.close();
+  }
+});

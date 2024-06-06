@@ -74,6 +74,7 @@ export const test = crxTest.extend<{
   recorderPage: Page;
   recordAction<T = void>(action: () => Promise<T>): Promise<T>;
   recordAssertion(locator: Locator, type: 'assertText'|'assertValue'|'assertChecked'|'assertVisible', param?: string|boolean): Promise<void>;
+  configureRecorder: (config: { testIdAttributeName?: string, targetLanguage?: string }) => Promise<void>;
 }>({
   extensionPath: path.join(__dirname, '../../examples/recorder-crx/dist'),
 
@@ -151,5 +152,21 @@ export const test = crxTest.extend<{
         await locator.page().evaluate(action => (window as any).__pw_recorderRecordAction(action), action);
       });
     });
-  }
+  },
+
+  configureRecorder: async ({ context, extensionId }, run) => {
+    await run(async ({ testIdAttributeName, targetLanguage }: { testIdAttributeName?: string, targetLanguage?: string }) => {
+      const configPage = await context.newPage();
+      try {
+        await configPage.goto(`chrome-extension://${extensionId}/options.html`);
+        if (targetLanguage)
+          await configPage.locator('#target-language').selectOption(targetLanguage);
+        if (testIdAttributeName)
+          await configPage.locator('#test-id').fill(testIdAttributeName);
+        await configPage.locator('#submit').click();
+      } finally {
+        await configPage.close();
+      }
+    });
+  },
 });

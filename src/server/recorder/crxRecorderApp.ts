@@ -61,6 +61,15 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   }
 
   async open(options?: channels.CrxApplicationShowRecorderParams) {
+    const mode = options?.mode ?? 'none';
+    const language = options?.language ?? 'javascript';
+
+    // set in recorder before, so that if it opens the recorder UI window, it will already reflect the changes
+    this._onMessage({ type: 'recorderEvent', event: 'clear', params: {} });
+    this._onMessage({ type: 'recorderEvent', event: 'fileChanged', params: { file: language } });
+    this._recorder.setOutput(language, undefined);
+    this._recorder.setMode(mode);
+
     if (!this._window) {
       const promise = new ManualPromise<number>();
       this._window = await chrome.windows.create({ type: 'popup', url: 'index.html' });
@@ -79,15 +88,9 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     } else {
       await chrome.windows.update(this._window.id!, { drawAttention: true, focused: true });
     }
-    const mode = options?.mode ?? 'none';
 
-    // set in recorder
-    this._onMessage({ type: 'recorderEvent', event: 'clear', params: {} });
-    this._onMessage({ type: 'recorderEvent', event: 'fileChanged', params: { file: 'javascript' } });
-    this._onMessage({ type: 'recorderEvent', event: 'setMode', params: { mode } });
-
-    // set in UI
     this.setMode(mode);
+    this.setFileIfNeeded(language);
   }
 
   async hide() {
