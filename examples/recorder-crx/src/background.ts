@@ -27,6 +27,7 @@ let crxAppPromise: Promise<CrxApplication> | undefined;
 
 const attachedTabIds = new Set<number>();
 let currentMode: Mode | 'detached' | undefined;
+let language: string | undefined;
 
 async function changeAction(tabId: number, mode?: Mode | 'detached') {
   if (!mode) {
@@ -62,6 +63,8 @@ chrome.tabs.onUpdated.addListener(tabId => changeAction(tabId));
 
 async function getCrxApp() {
   if (!crxAppPromise) {
+    const { testIdAttributeName, targetLanguage } = await chrome.storage.sync.get(['testIdAttributeName', 'targetLanguage']);
+
     crxAppPromise = crx.start().then(crxApp => {
       crxApp.recorder.addListener('hide', async () => {
         await crxApp.detachAll();
@@ -77,6 +80,11 @@ async function getCrxApp() {
         attachedTabIds.delete(tabId);
         await changeAction(tabId, 'detached');
       });
+      if (!testIdAttributeName)
+        setTestIdAttributeName(testIdAttributeName);
+      if (!language && targetLanguage)
+        language = targetLanguage;
+
       return crxApp;
     });
   }
@@ -95,7 +103,7 @@ async function attach(tab: chrome.tabs.Tab) {
 
   try {
     if (crxApp.recorder.isHidden())
-      await crxApp.recorder.show({ mode: 'recording' });
+      await crxApp.recorder.show({ mode: 'recording', language });
 
     await crxApp.attach(tabId);
   } catch (e) {
@@ -122,10 +130,11 @@ chrome.contextMenus.onClicked.addListener(async (_, tab) => {
   if (tab) await attach(tab);
 });
 
-chrome.storage.sync.onChanged.addListener(async ({ testIdAttributeName }) => {
-  if (!testIdAttributeName) return;
-
-  await setTestIdAttributeName(testIdAttributeName.newValue);
+chrome.storage.sync.onChanged.addListener(async ({ testIdAttributeName, targetLanguage }) => {
+  if (testIdAttributeName)
+    await setTestIdAttributeName(testIdAttributeName.newValue);
+  if (targetLanguage)
+    language = targetLanguage.newValue;
 });
 
 // for testing

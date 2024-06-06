@@ -18,11 +18,10 @@ label {
   font-weight: bold;
 }
 
-input[type="text"] {
+input[type="text"], select {
   padding: 5px;
   border: 1px solid #ccc;
   border-radius: 4px;
-  width: 100%;
 }
 
 button[type="submit"] {

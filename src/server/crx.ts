@@ -132,7 +132,7 @@ export class CrxApplication extends SdkObject {
     if (!this._recorderApp) {
       const { mode, ...otherOptions } = options ?? {};
       await Recorder.show(this._context(), {
-        language: 'javascript',
+        language: options?.language ?? 'javascript',
         mode: mode === 'none' ? undefined : mode,
         ...otherOptions
       });
