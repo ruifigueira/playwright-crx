@@ -41,6 +41,7 @@ import { Recorder } from './recorder';
 import * as consoleApiSource from '../generated/consoleApiSource';
 import { BrowserContextAPIRequestContext } from './fetch';
 import type { Artifact } from './artifact';
+import { Clock } from './clock';
 
 export abstract class BrowserContext extends SdkObject {
   static Events = {
@@ -87,6 +88,7 @@ export abstract class BrowserContext extends SdkObject {
   private _routesInFlight = new Set<network.Route>();
   private _debugger!: Debugger;
   _closeReason: string | undefined;
+  readonly clock: Clock;
 
   constructor(browser: Browser, options: channels.BrowserNewContextParams, browserContextId: string | undefined) {
     super(browser, 'browser-context');
@@ -103,6 +105,7 @@ export abstract class BrowserContext extends SdkObject {
       this._harRecorders.set('', new HarRecorder(this, null, this._options.recordHar));
 
     this.tracing = new Tracing(this, browser.options.tracesDir);
+    this.clock = new Clock(this);
   }
 
   isPersistentContext(): boolean {
@@ -213,6 +216,7 @@ export abstract class BrowserContext extends SdkObject {
     await this._resetStorage();
     await this._removeExposedBindings();
     await this._removeInitScripts();
+    this.clock.markAsUninstalled();
     // TODO: following can be optimized to not perform noops.
     if (this._options.permissions)
       await this.grantPermissions(this._options.permissions);

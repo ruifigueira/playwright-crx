@@ -149,7 +149,7 @@ export type Metadata = {
   },
   apiName?: string,
   internal?: boolean,
-  wallTime?: number,
+  stepId?: string,
 };
 
 export type ClientSideCallMetadata = {
@@ -309,7 +309,7 @@ export interface APIRequestContextChannel extends APIRequestContextEventTarget, 
   fetchLog(params: APIRequestContextFetchLogParams, metadata?: CallMetadata): Promise<APIRequestContextFetchLogResult>;
   storageState(params?: APIRequestContextStorageStateParams, metadata?: CallMetadata): Promise<APIRequestContextStorageStateResult>;
   disposeAPIResponse(params: APIRequestContextDisposeAPIResponseParams, metadata?: CallMetadata): Promise<APIRequestContextDisposeAPIResponseResult>;
-  dispose(params?: APIRequestContextDisposeParams, metadata?: CallMetadata): Promise<APIRequestContextDisposeResult>;
+  dispose(params: APIRequestContextDisposeParams, metadata?: CallMetadata): Promise<APIRequestContextDisposeResult>;
 }
 export type APIRequestContextFetchParams = {
   url: string,
@@ -372,8 +372,12 @@ export type APIRequestContextDisposeAPIResponseOptions = {
 
 };
 export type APIRequestContextDisposeAPIResponseResult = void;
-export type APIRequestContextDisposeParams = {};
-export type APIRequestContextDisposeOptions = {};
+export type APIRequestContextDisposeParams = {
+  reason?: string,
+};
+export type APIRequestContextDisposeOptions = {
+  reason?: string,
+};
 export type APIRequestContextDisposeResult = void;
 
 export interface APIRequestContextEvents {
@@ -574,6 +578,7 @@ export type PlaywrightNewRequestParams = {
     username: string,
     password: string,
     origin?: string,
+    send?: 'always' | 'unauthorized',
   },
   proxy?: {
     server: string,
@@ -597,6 +602,7 @@ export type PlaywrightNewRequestOptions = {
     username: string,
     password: string,
     origin?: string,
+    send?: 'always' | 'unauthorized',
   },
   proxy?: {
     server: string,
@@ -953,6 +959,7 @@ export type BrowserTypeLaunchPersistentContextParams = {
     username: string,
     password: string,
     origin?: string,
+    send?: 'always' | 'unauthorized',
   },
   deviceScaleFactor?: number,
   isMobile?: boolean,
@@ -1025,6 +1032,7 @@ export type BrowserTypeLaunchPersistentContextOptions = {
     username: string,
     password: string,
     origin?: string,
+    send?: 'always' | 'unauthorized',
   },
   deviceScaleFactor?: number,
   isMobile?: boolean,
@@ -1132,6 +1140,7 @@ export type BrowserNewContextParams = {
     username: string,
     password: string,
     origin?: string,
+    send?: 'always' | 'unauthorized',
   },
   deviceScaleFactor?: number,
   isMobile?: boolean,
@@ -1190,6 +1199,7 @@ export type BrowserNewContextOptions = {
     username: string,
     password: string,
     origin?: string,
+    send?: 'always' | 'unauthorized',
   },
   deviceScaleFactor?: number,
   isMobile?: boolean,
@@ -1251,6 +1261,7 @@ export type BrowserNewContextForReuseParams = {
     username: string,
     password: string,
     origin?: string,
+    send?: 'always' | 'unauthorized',
   },
   deviceScaleFactor?: number,
   isMobile?: boolean,
@@ -1309,6 +1320,7 @@ export type BrowserNewContextForReuseOptions = {
     username: string,
     password: string,
     origin?: string,
+    send?: 'always' | 'unauthorized',
   },
   deviceScaleFactor?: number,
   isMobile?: boolean,
@@ -1446,8 +1458,15 @@ export interface BrowserContextChannel extends BrowserContextEventTarget, EventT
   newCDPSession(params: BrowserContextNewCDPSessionParams, metadata?: CallMetadata): Promise<BrowserContextNewCDPSessionResult>;
   harStart(params: BrowserContextHarStartParams, metadata?: CallMetadata): Promise<BrowserContextHarStartResult>;
   harExport(params: BrowserContextHarExportParams, metadata?: CallMetadata): Promise<BrowserContextHarExportResult>;
-  createTempFile(params: BrowserContextCreateTempFileParams, metadata?: CallMetadata): Promise<BrowserContextCreateTempFileResult>;
+  createTempFiles(params: BrowserContextCreateTempFilesParams, metadata?: CallMetadata): Promise<BrowserContextCreateTempFilesResult>;
   updateSubscription(params: BrowserContextUpdateSubscriptionParams, metadata?: CallMetadata): Promise<BrowserContextUpdateSubscriptionResult>;
+  clockFastForward(params: BrowserContextClockFastForwardParams, metadata?: CallMetadata): Promise<BrowserContextClockFastForwardResult>;
+  clockInstall(params: BrowserContextClockInstallParams, metadata?: CallMetadata): Promise<BrowserContextClockInstallResult>;
+  clockPauseAt(params: BrowserContextClockPauseAtParams, metadata?: CallMetadata): Promise<BrowserContextClockPauseAtResult>;
+  clockResume(params?: BrowserContextClockResumeParams, metadata?: CallMetadata): Promise<BrowserContextClockResumeResult>;
+  clockRunFor(params: BrowserContextClockRunForParams, metadata?: CallMetadata): Promise<BrowserContextClockRunForResult>;
+  clockSetFixedTime(params: BrowserContextClockSetFixedTimeParams, metadata?: CallMetadata): Promise<BrowserContextClockSetFixedTimeResult>;
+  clockSetSystemTime(params: BrowserContextClockSetSystemTimeParams, metadata?: CallMetadata): Promise<BrowserContextClockSetSystemTimeResult>;
 }
 export type BrowserContextBindingCallEvent = {
   binding: BindingCallChannel,
@@ -1718,15 +1737,19 @@ export type BrowserContextHarExportOptions = {
 export type BrowserContextHarExportResult = {
   artifact: ArtifactChannel,
 };
-export type BrowserContextCreateTempFileParams = {
-  name: string,
-  lastModifiedMs?: number,
+export type BrowserContextCreateTempFilesParams = {
+  rootDirName?: string,
+  items: {
+    name: string,
+    lastModifiedMs?: number,
+  }[],
 };
-export type BrowserContextCreateTempFileOptions = {
-  lastModifiedMs?: number,
+export type BrowserContextCreateTempFilesOptions = {
+  rootDirName?: string,
 };
-export type BrowserContextCreateTempFileResult = {
-  writableStream: WritableStreamChannel,
+export type BrowserContextCreateTempFilesResult = {
+  rootDir?: WritableStreamChannel,
+  writableStreams: WritableStreamChannel[],
 };
 export type BrowserContextUpdateSubscriptionParams = {
   event: 'console' | 'dialog' | 'request' | 'response' | 'requestFinished' | 'requestFailed',
@@ -1736,6 +1759,63 @@ export type BrowserContextUpdateSubscriptionOptions = {
 
 };
 export type BrowserContextUpdateSubscriptionResult = void;
+export type BrowserContextClockFastForwardParams = {
+  ticksNumber?: number,
+  ticksString?: string,
+};
+export type BrowserContextClockFastForwardOptions = {
+  ticksNumber?: number,
+  ticksString?: string,
+};
+export type BrowserContextClockFastForwardResult = void;
+export type BrowserContextClockInstallParams = {
+  timeNumber?: number,
+  timeString?: string,
+};
+export type BrowserContextClockInstallOptions = {
+  timeNumber?: number,
+  timeString?: string,
+};
+export type BrowserContextClockInstallResult = void;
+export type BrowserContextClockPauseAtParams = {
+  timeNumber?: number,
+  timeString?: string,
+};
+export type BrowserContextClockPauseAtOptions = {
+  timeNumber?: number,
+  timeString?: string,
+};
+export type BrowserContextClockPauseAtResult = void;
+export type BrowserContextClockResumeParams = {};
+export type BrowserContextClockResumeOptions = {};
+export type BrowserContextClockResumeResult = void;
+export type BrowserContextClockRunForParams = {
+  ticksNumber?: number,
+  ticksString?: string,
+};
+export type BrowserContextClockRunForOptions = {
+  ticksNumber?: number,
+  ticksString?: string,
+};
+export type BrowserContextClockRunForResult = void;
+export type BrowserContextClockSetFixedTimeParams = {
+  timeNumber?: number,
+  timeString?: string,
+};
+export type BrowserContextClockSetFixedTimeOptions = {
+  timeNumber?: number,
+  timeString?: string,
+};
+export type BrowserContextClockSetFixedTimeResult = void;
+export type BrowserContextClockSetSystemTimeParams = {
+  timeNumber?: number,
+  timeString?: string,
+};
+export type BrowserContextClockSetSystemTimeOptions = {
+  timeNumber?: number,
+  timeString?: string,
+};
+export type BrowserContextClockSetSystemTimeResult = void;
 
 export interface BrowserContextEvents {
   'bindingCall': BrowserContextBindingCallEvent;
@@ -2544,12 +2624,10 @@ export type FrameDispatchEventResult = void;
 export type FrameEvaluateExpressionParams = {
   expression: string,
   isFunction?: boolean,
-  exposeUtilityScript?: boolean,
   arg: SerializedArgument,
 };
 export type FrameEvaluateExpressionOptions = {
   isFunction?: boolean,
-  exposeUtilityScript?: boolean,
 };
 export type FrameEvaluateExpressionResult = {
   value: SerializedValue,
@@ -2844,6 +2922,8 @@ export type FrameSetInputFilesParams = {
     mimeType?: string,
     buffer: Binary,
   }[],
+  localDirectory?: string,
+  directoryStream?: WritableStreamChannel,
   localPaths?: string[],
   streams?: WritableStreamChannel[],
   timeout?: number,
@@ -2856,6 +2936,8 @@ export type FrameSetInputFilesOptions = {
     mimeType?: string,
     buffer: Binary,
   }[],
+  localDirectory?: string,
+  directoryStream?: WritableStreamChannel,
   localPaths?: string[],
   streams?: WritableStreamChannel[],
   timeout?: number,
@@ -3468,6 +3550,8 @@ export type ElementHandleSetInputFilesParams = {
     mimeType?: string,
     buffer: Binary,
   }[],
+  localDirectory?: string,
+  directoryStream?: WritableStreamChannel,
   localPaths?: string[],
   streams?: WritableStreamChannel[],
   timeout?: number,
@@ -3479,6 +3563,8 @@ export type ElementHandleSetInputFilesOptions = {
     mimeType?: string,
     buffer: Binary,
   }[],
+  localDirectory?: string,
+  directoryStream?: WritableStreamChannel,
   localPaths?: string[],
   streams?: WritableStreamChannel[],
   timeout?: number,
@@ -4116,7 +4202,6 @@ export interface ElectronApplicationChannel extends ElectronApplicationEventTarg
   evaluateExpression(params: ElectronApplicationEvaluateExpressionParams, metadata?: CallMetadata): Promise<ElectronApplicationEvaluateExpressionResult>;
   evaluateExpressionHandle(params: ElectronApplicationEvaluateExpressionHandleParams, metadata?: CallMetadata): Promise<ElectronApplicationEvaluateExpressionHandleResult>;
   updateSubscription(params: ElectronApplicationUpdateSubscriptionParams, metadata?: CallMetadata): Promise<ElectronApplicationUpdateSubscriptionResult>;
-  close(params?: ElectronApplicationCloseParams, metadata?: CallMetadata): Promise<ElectronApplicationCloseResult>;
 }
 export type ElectronApplicationCloseEvent = {};
 export type ElectronApplicationConsoleEvent = {
@@ -4168,9 +4253,6 @@ export type ElectronApplicationUpdateSubscriptionOptions = {
 
 };
 export type ElectronApplicationUpdateSubscriptionResult = void;
-export type ElectronApplicationCloseParams = {};
-export type ElectronApplicationCloseOptions = {};
-export type ElectronApplicationCloseResult = void;
 
 export interface ElectronApplicationEvents {
   'close': ElectronApplicationCloseEvent;
@@ -4471,6 +4553,7 @@ export type AndroidDeviceLaunchBrowserParams = {
     username: string,
     password: string,
     origin?: string,
+    send?: 'always' | 'unauthorized',
   },
   deviceScaleFactor?: number,
   isMobile?: boolean,
@@ -4527,6 +4610,7 @@ export type AndroidDeviceLaunchBrowserOptions = {
     username: string,
     password: string,
     origin?: string,
+    send?: 'always' | 'unauthorized',
   },
   deviceScaleFactor?: number,
   isMobile?: boolean,

@@ -1,6 +1,6 @@
 {
   "name": "playwright-core",
-  "version": "1.44.0",
+  "version": "1.45.0",
   "description": "A high-level API to automate web browsers",
   "repository": {
     "type": "git",
@@ -8,7 +8,7 @@
   },
   "homepage": "https://playwright.dev",
   "engines": {
-    "node": ">=16"
+    "node": ">=18"
   },
   "author": {
     "name": "Microsoft Corporation"

@@ -416,7 +416,7 @@ function generateNameDefault(member, name, t, parent) {
           attemptedName = `${parent.name}BoundingBoxResult`;
         if (attemptedName === 'BrowserContextCookie')
           attemptedName = 'BrowserContextCookiesResult';
-        if (attemptedName === 'File' || (parent.name === 'FormData' && attemptedName === 'SetValue'))
+        if (attemptedName === 'File' || (parent.name === 'FormData' && ['SetValue', 'AppendValue'].includes(attemptedName)))
           attemptedName = `FilePayload`;
         if (attemptedName === 'Size')
           attemptedName = 'RequestSizesResult';
@@ -829,7 +829,7 @@ function translateType(type, parent, generateNameCallback = t => t.name, optiona
  * @param {Documentation.Type} type
  */
 function registerModelType(typeName, type) {
-  if (['object', 'string', 'int'].includes(typeName))
+  if (['object', 'string', 'int', 'long'].includes(typeName))
     return;
   if (typeName.endsWith('Option'))
     return;

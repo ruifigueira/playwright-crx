@@ -151,6 +151,12 @@ page.Load += PageLoadHandler;
 page.Load -= PageLoadHandler;
 ```
 
+## property: Page.clock
+* since: v1.45
+- type: <[Clock]>
+
+Playwright has ability to mock clock and passage of time.
+
 ## event: Page.close
 * since: v1.8
 - argument: <[Page]>
@@ -1811,80 +1817,6 @@ class PageExamples
 }
 ```
 
-An example of passing an element handle:
-
-```js
-await page.exposeBinding('clicked', async (source, element) => {
-  console.log(await element.textContent());
-}, { handle: true });
-await page.setContent(`
-  <script>
-    document.addEventListener('click', event => window.clicked(event.target));
-  </script>
-  <div>Click me</div>
-  <div>Or click me</div>
-`);
-```
-
-```java
-page.exposeBinding("clicked", (source, args) -> {
-  ElementHandle element = (ElementHandle) args[0];
-  System.out.println(element.textContent());
-  return null;
-}, new Page.ExposeBindingOptions().setHandle(true));
-page.setContent("" +
-  "<script>\n" +
-  "  document.addEventListener('click', event => window.clicked(event.target));\n" +
-  "</script>\n" +
-  "<div>Click me</div>\n" +
-  "<div>Or click me</div>\n");
-```
-
-```python async
-async def print(source, element):
-    print(await element.text_content())
-
-await page.expose_binding("clicked", print, handle=true)
-await page.set_content("""
-  <script>
-    document.addEventListener('click', event => window.clicked(event.target));
-  </script>
-  <div>Click me</div>
-  <div>Or click me</div>
-""")
-```
-
-```python sync
-def print(source, element):
-    print(element.text_content())
-
-page.expose_binding("clicked", print, handle=true)
-page.set_content("""
-  <script>
-    document.addEventListener('click', event => window.clicked(event.target));
-  </script>
-  <div>Click me</div>
-  <div>Or click me</div>
-""")
-```
-
-```csharp
-var result = new TaskCompletionSource<string>();
-await page.ExposeBindingAsync("clicked", async (BindingSource _, IJSHandle t) =>
-{
-    return result.TrySetResult(await t.AsElement().TextContentAsync());
-});
-
-await page.SetContentAsync("<script>\n" +
-  "  document.addEventListener('click', event => window.clicked(event.target));\n" +
-  "</script>\n" +
-  "<div>Click me</div>\n" +
-  "<div>Or click me</div>\n");
-
-await page.ClickAsync("div");
-Console.WriteLine(await result.Task);
-```
-
 ### param: Page.exposeBinding.name
 * since: v1.8
 - `name` <[string]>
@@ -1899,6 +1831,7 @@ Callback function that will be called in the Playwright's context.
 
 ### option: Page.exposeBinding.handle
 * since: v1.8
+* deprecated: This option will be removed in the future.
 - `handle` <[boolean]>
 
 Whether to pass the argument as a handle, instead of passing by value. When passing a handle, only one argument is
@@ -3388,7 +3321,7 @@ Function that should be run once [`param: locator`] appears. This function shoul
 ### param: Page.addLocatorHandler.handler
 * langs: csharp
 * since: v1.42
-- `handler` <[function]\([Locator]\)>
+- `handler` <[function]\([Locator]\): [Promise<any>]>
 
 Function that should be run once [`param: locator`] appears. This function should get rid of the element that blocks actions like click.
 
@@ -3921,6 +3854,7 @@ An object containing additional HTTP headers to be sent with every request. All 
 
 Sets the value of the file input to these file paths or files. If some of the `filePaths` are relative paths, then they
 are resolved relative to the current working directory. For empty array, clears the selected files.
+For inputs with a `[webkitdirectory]` attribute, only a single directory path is supported.
 
 This method expects [`param: selector`] to point to an
 [input element](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input). However, if the element is inside the `<label>` element that has an associated [control](https://developer.mozilla.org/en-US/docs/Web/API/HTMLLabelElement/control), targets the control instead.
@@ -4880,6 +4814,7 @@ const response = await responsePromise;
 // Alternative way with a predicate. Note no await.
 const responsePromise = page.waitForResponse(response =>
   response.url() === 'https://example.com' && response.status() === 200
+      && response.request().method() === 'GET'
 );
 await page.getByText('trigger response').click();
 const response = await responsePromise;
@@ -4893,7 +4828,7 @@ Response response = page.waitForResponse("https://example.com/resource", () -> {
 });
 
 // Waits for the next response matching some conditions
-Response response = page.waitForResponse(response -> "https://example.com".equals(response.url()) && response.status() == 200, () -> {
+Response response = page.waitForResponse(response -> "https://example.com".equals(response.url()) && response.status() == 200 && "GET".equals(response.request().method()), () -> {
   // Triggers the response
   page.getByText("trigger response").click();
 });
@@ -4906,7 +4841,7 @@ response = await response_info.value
 return response.ok
 
 # or with a lambda
-async with page.expect_response(lambda response: response.url == "https://example.com" and response.status == 200) as response_info:
+async with page.expect_response(lambda response: response.url == "https://example.com" and response.status == 200 and response.request.method == "get") as response_info:
     await page.get_by_text("trigger response").click()
 response = await response_info.value
 return response.ok
@@ -4919,7 +4854,7 @@ response = response_info.value
 return response.ok
 
 # or with a lambda
-with page.expect_response(lambda response: response.url == "https://example.com" and response.status == 200) as response_info:
+with page.expect_response(lambda response: response.url == "https://example.com" and response.status == 200 and response.request.method == "get") as response_info:
     page.get_by_text("trigger response").click()
 response = response_info.value
 return response.ok
@@ -4936,7 +4871,7 @@ await page.RunAndWaitForResponseAsync(async () =>
 await page.RunAndWaitForResponseAsync(async () =>
 {
     await page.GetByText("trigger response").ClickAsync();
-}, response => response.Url == "https://example.com" && response.Status == 200);
+}, response => response.Url == "https://example.com" && response.Status == 200 && response.Request.Method == "GET");
 ```
 
 ## async method: Page.waitForResponse

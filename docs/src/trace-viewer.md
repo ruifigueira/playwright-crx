@@ -31,7 +31,7 @@ In the Actions tab you can see what locator was used for every action and how lo
 
 ### Screenshots
 
-When tracing with the [`option: screenshots`] option turned on, each trace records a screencast and renders it as a film strip. You can hover over the film strip to see a magnified image of for each action and state which helps you easily find the action you want to inspect. 
+When tracing with the [`option: screenshots`] option turned on (default), each trace records a screencast and renders it as a film strip. You can hover over the film strip to see a magnified image of for each action and state which helps you easily find the action you want to inspect. 
 
 Double click on an action to see the time range for that action. You can use the slider in the timeline to increase the actions selected and these will be shown in the Actions tab and all console logs and network logs will be filtered to only show the logs for the actions selected.
 
@@ -58,7 +58,7 @@ Notice how it highlights both, the DOM Node as well as the exact click position.
 
 ### Source
 
-As you hover over each action of your test the line of code for that action is highlighted in the source panel.
+When you click on an action in the sidebar, the line of code for that action is highlighted in the source panel.
 
 ![showing source code tab in trace viewer](https://github.com/microsoft/playwright/assets/13063165/daa8845d-c250-4923-aa7a-5d040da9adc5)
 
@@ -86,12 +86,20 @@ See console logs from the browser as well as from your test. Different icons are
 
 ![showing log of tests in trace viewer](https://github.com/microsoft/playwright/assets/13063165/4107c08d-1eaf-421c-bdd4-9dd2aa641d4a)
 
+Double click on an action from your test in the actions sidebar. This will filter the console to only show the logs that were made during that action. Click the *Show all* button to see all console logs again.
+
+Use the timeline to filter actions, by clicking a start point and dragging to an ending point. The console tab will also be filtered to only show the logs that were made during the actions selected.
+
 
 ### Network
 
 The Network tab shows you all the network requests that were made during your test. You can sort by different types of requests, status code, method, request, content type, duration and size. Click on a request to see more information about it such as the request headers, response headers, request body and response body.
 
 ![network requests tab in trace viewer](https://github.com/microsoft/playwright/assets/13063165/0a3d1671-8ccd-4f7a-a844-35f5eb37f236)
+
+Double click on an action from your test in the actions sidebar. This will filter the network requests to only show the requests that were made during that action. Click the *Show all* button to see all network requests again.
+
+Use the timeline to filter actions, by clicking a start point and dragging to an ending point. The network tab will also be filtered to only show the network requests that were made during the actions selected.
 
 ### Metadata
 
@@ -159,6 +167,8 @@ Available options to record a trace:
 
 
 You can also use `trace: 'retain-on-failure'` if you do not enable retries but still want traces for failed tests.
+
+There are more granular options available, see [`property: TestOptions.trace`].
 
 If you are not using Playwright as a Test Runner, use the [`property: BrowserContext.tracing`] API instead.
 
@@ -242,10 +252,10 @@ Traces can be recorded using the [`property: BrowserContext.tracing`] API as fol
 
 <Tabs
   groupId="test-runners"
-  defaultValue="nunit"
+  defaultValue="mstest"
   values={[
+    {label: 'MSTest', value: 'mstest'},
     {label: 'NUnit', value: 'nunit'},
-    {label: 'MSTest', value: 'mstest'}
   ]
 }>
 <TabItem value="nunit">
@@ -345,9 +355,118 @@ public class UnitTest1 : PageTest
 
 This will record the trace and place it into the `bin/Debug/net8.0/playwright-traces/` directory.
 
+
+## Run trace only on failure
+* langs: csharp
+
+Setup your tests to record a trace only when the test fails:
+
+<Tabs
+  groupId="test-runners"
+  defaultValue="mstest"
+  values={[
+    {label: 'MSTest', value: 'mstest'},
+    {label: 'NUnit', value: 'nunit'},
+  ]
+}>
+<TabItem value="nunit">
+
+```csharp
+namespace PlaywrightTests;
+
+[Parallelizable(ParallelScope.Self)]
+[TestFixture]
+public class ExampleTest : PageTest
+{
+    [SetUp]
+    public async Task Setup()
+    {
+        await Context.Tracing.StartAsync(new()
+        {
+            Title = $"{TestContext.CurrentContext.Test.ClassName}.{TestContext.CurrentContext.Test.Name}",
+            Screenshots = true,
+            Snapshots = true,
+            Sources = true
+        });
+    }
+
+    [TearDown]
+    public async Task TearDown()
+    {
+        var failed = TestContext.CurrentContext.Result.Outcome == NUnit.Framework.Interfaces.ResultState.Error 
+            || TestContext.CurrentContext.Result.Outcome == NUnit.Framework.Interfaces.ResultState.Failure;
+
+        await Context.Tracing.StopAsync(new()
+        {
+            Path = failed ? Path.Combine(
+                TestContext.CurrentContext.WorkDirectory,
+                "playwright-traces",
+                $"{TestContext.CurrentContext.Test.ClassName}.{TestContext.CurrentContext.Test.Name}.zip"
+            ) : null, 
+        });
+    }
+
+    [Test]
+    public async Task GetStartedLink()
+    {
+        // ..
+    }
+}
+```
+</TabItem>
+<TabItem value="mstest">
+
+```csharp
+using System.Text.RegularExpressions;
+using Microsoft.Playwright;
+using Microsoft.Playwright.MSTest;
+
+namespace PlaywrightTests;
+
+[TestClass]
+public class ExampleTest : PageTest
+{
+    [TestInitialize]
+    public async Task TestInitialize()
+    {
+         await Context.Tracing.StartAsync(new()
+        {
+            Title = $"{TestContext.FullyQualifiedTestClassName}.{TestContext.TestName}",
+            Screenshots = true,
+            Snapshots = true,
+            Sources = true
+        });
+    }
+
+    [TestCleanup]
+    public async Task TestCleanup()
+    {
+        var failed = new[] { UnitTestOutcome.Failed, UnitTestOutcome.Error, UnitTestOutcome.Timeout, UnitTestOutcome.Aborted }.Contains(TestContext.CurrentTestOutcome);
+
+        await Context.Tracing.StopAsync(new()
+        {
+            Path = failed ? Path.Combine(
+                Environment.CurrentDirectory,
+                "playwright-traces",
+                $"{TestContext.FullyQualifiedTestClassName}.{TestContext.TestName}.zip"
+            ) : null,
+        });
+    }
+
+    [TestMethod]
+    public async Task GetStartedLink()
+    {
+        // ...
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
 ## Opening the trace
 
-You can open the saved trace using the Playwright CLI or in your browser on [`trace.playwright.dev`](https://trace.playwright.dev). Make sure to add the full path to where your `trace.zip` file is located. This should include the full path to your `trace.zip` file.
+You can open the saved trace using the Playwright CLI or in your browser on [`trace.playwright.dev`](https://trace.playwright.dev). Make sure to add the full path to where your `trace.zip` file is located.
 
 ```bash js
 npx playwright show-trace path/to/trace.zip
@@ -398,5 +517,4 @@ You can also pass the URL of your uploaded trace (e.g. inside your CI) from some
 ```txt
 https://trace.playwright.dev/?trace=https://demo.playwright.dev/reports/todomvc/data/cb0fa77ebd9487a5c899f3ae65a7ffdbac681182.zip
 ```
-
 

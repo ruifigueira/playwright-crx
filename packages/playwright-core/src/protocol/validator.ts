@@ -34,7 +34,7 @@ scheme.Metadata = tObject({
   })),
   apiName: tOptional(tString),
   internal: tOptional(tBoolean),
-  wallTime: tOptional(tNumber),
+  stepId: tOptional(tString),
 });
 scheme.ClientSideCallMetadata = tObject({
   id: tNumber,
@@ -207,7 +207,9 @@ scheme.APIRequestContextDisposeAPIResponseParams = tObject({
   fetchUid: tString,
 });
 scheme.APIRequestContextDisposeAPIResponseResult = tOptional(tObject({}));
-scheme.APIRequestContextDisposeParams = tOptional(tObject({}));
+scheme.APIRequestContextDisposeParams = tObject({
+  reason: tOptional(tString),
+});
 scheme.APIRequestContextDisposeResult = tOptional(tObject({}));
 scheme.APIResponse = tObject({
   fetchUid: tString,
@@ -332,6 +334,7 @@ scheme.PlaywrightNewRequestParams = tObject({
     username: tString,
     password: tString,
     origin: tOptional(tString),
+    send: tOptional(tEnum(['always', 'unauthorized'])),
   })),
   proxy: tOptional(tObject({
     server: tString,
@@ -545,6 +548,7 @@ scheme.BrowserTypeLaunchPersistentContextParams = tObject({
     username: tString,
     password: tString,
     origin: tOptional(tString),
+    send: tOptional(tEnum(['always', 'unauthorized'])),
   })),
   deviceScaleFactor: tOptional(tNumber),
   isMobile: tOptional(tBoolean),
@@ -623,6 +627,7 @@ scheme.BrowserNewContextParams = tObject({
     username: tString,
     password: tString,
     origin: tOptional(tString),
+    send: tOptional(tEnum(['always', 'unauthorized'])),
   })),
   deviceScaleFactor: tOptional(tNumber),
   isMobile: tOptional(tBoolean),
@@ -684,6 +689,7 @@ scheme.BrowserNewContextForReuseParams = tObject({
     username: tString,
     password: tString,
     origin: tOptional(tString),
+    send: tOptional(tEnum(['always', 'unauthorized'])),
   })),
   deviceScaleFactor: tOptional(tNumber),
   isMobile: tOptional(tBoolean),
@@ -945,18 +951,54 @@ scheme.BrowserContextHarExportParams = tObject({
 scheme.BrowserContextHarExportResult = tObject({
   artifact: tChannel(['Artifact']),
 });
-scheme.BrowserContextCreateTempFileParams = tObject({
-  name: tString,
-  lastModifiedMs: tOptional(tNumber),
+scheme.BrowserContextCreateTempFilesParams = tObject({
+  rootDirName: tOptional(tString),
+  items: tArray(tObject({
+    name: tString,
+    lastModifiedMs: tOptional(tNumber),
+  })),
 });
-scheme.BrowserContextCreateTempFileResult = tObject({
-  writableStream: tChannel(['WritableStream']),
+scheme.BrowserContextCreateTempFilesResult = tObject({
+  rootDir: tOptional(tChannel(['WritableStream'])),
+  writableStreams: tArray(tChannel(['WritableStream'])),
 });
 scheme.BrowserContextUpdateSubscriptionParams = tObject({
   event: tEnum(['console', 'dialog', 'request', 'response', 'requestFinished', 'requestFailed']),
   enabled: tBoolean,
 });
 scheme.BrowserContextUpdateSubscriptionResult = tOptional(tObject({}));
+scheme.BrowserContextClockFastForwardParams = tObject({
+  ticksNumber: tOptional(tNumber),
+  ticksString: tOptional(tString),
+});
+scheme.BrowserContextClockFastForwardResult = tOptional(tObject({}));
+scheme.BrowserContextClockInstallParams = tObject({
+  timeNumber: tOptional(tNumber),
+  timeString: tOptional(tString),
+});
+scheme.BrowserContextClockInstallResult = tOptional(tObject({}));
+scheme.BrowserContextClockPauseAtParams = tObject({
+  timeNumber: tOptional(tNumber),
+  timeString: tOptional(tString),
+});
+scheme.BrowserContextClockPauseAtResult = tOptional(tObject({}));
+scheme.BrowserContextClockResumeParams = tOptional(tObject({}));
+scheme.BrowserContextClockResumeResult = tOptional(tObject({}));
+scheme.BrowserContextClockRunForParams = tObject({
+  ticksNumber: tOptional(tNumber),
+  ticksString: tOptional(tString),
+});
+scheme.BrowserContextClockRunForResult = tOptional(tObject({}));
+scheme.BrowserContextClockSetFixedTimeParams = tObject({
+  timeNumber: tOptional(tNumber),
+  timeString: tOptional(tString),
+});
+scheme.BrowserContextClockSetFixedTimeResult = tOptional(tObject({}));
+scheme.BrowserContextClockSetSystemTimeParams = tObject({
+  timeNumber: tOptional(tNumber),
+  timeString: tOptional(tString),
+});
+scheme.BrowserContextClockSetSystemTimeResult = tOptional(tObject({}));
 scheme.PageInitializer = tObject({
   mainFrame: tChannel(['Frame']),
   viewportSize: tOptional(tObject({
@@ -1391,7 +1433,6 @@ scheme.FrameDispatchEventResult = tOptional(tObject({}));
 scheme.FrameEvaluateExpressionParams = tObject({
   expression: tString,
   isFunction: tOptional(tBoolean),
-  exposeUtilityScript: tOptional(tBoolean),
   arg: tType('SerializedArgument'),
 });
 scheme.FrameEvaluateExpressionResult = tObject({
@@ -1586,6 +1627,8 @@ scheme.FrameSetInputFilesParams = tObject({
     mimeType: tOptional(tString),
     buffer: tBinary,
   }))),
+  localDirectory: tOptional(tString),
+  directoryStream: tOptional(tChannel(['WritableStream'])),
   localPaths: tOptional(tArray(tString)),
   streams: tOptional(tArray(tChannel(['WritableStream']))),
   timeout: tOptional(tNumber),
@@ -1953,6 +1996,8 @@ scheme.ElementHandleSetInputFilesParams = tObject({
     mimeType: tOptional(tString),
     buffer: tBinary,
   }))),
+  localDirectory: tOptional(tString),
+  directoryStream: tOptional(tChannel(['WritableStream'])),
   localPaths: tOptional(tArray(tString)),
   streams: tOptional(tArray(tChannel(['WritableStream']))),
   timeout: tOptional(tNumber),
@@ -2309,8 +2354,6 @@ scheme.ElectronApplicationUpdateSubscriptionParams = tObject({
   enabled: tBoolean,
 });
 scheme.ElectronApplicationUpdateSubscriptionResult = tOptional(tObject({}));
-scheme.ElectronApplicationCloseParams = tOptional(tObject({}));
-scheme.ElectronApplicationCloseResult = tOptional(tObject({}));
 scheme.AndroidInitializer = tOptional(tObject({}));
 scheme.AndroidDevicesParams = tObject({
   host: tOptional(tString),
@@ -2474,6 +2517,7 @@ scheme.AndroidDeviceLaunchBrowserParams = tObject({
     username: tString,
     password: tString,
     origin: tOptional(tString),
+    send: tOptional(tEnum(['always', 'unauthorized'])),
   })),
   deviceScaleFactor: tOptional(tNumber),
   isMobile: tOptional(tBoolean),

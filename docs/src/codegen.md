@@ -127,8 +127,6 @@ When you have finished interacting with the page, press the **record** button to
 
 Use the **clear** button to clear the code to start recording again. Once finished close the Playwright inspector window or stop the terminal command.
 
-To learn more about generating tests check out or detailed guide on [Codegen](./codegen.md).
-
 ### Generating locators
 You can generate [locators](/locators.md) with the test generator. 
 
@@ -371,7 +369,7 @@ pwsh bin/Debug/netX/playwright.ps1 codegen github.com/microsoft/playwright --sav
 
 After performing authentication and closing the browser, `auth.json` will contain the storage state which you can then reuse in your tests. 
 
-<img width="1394" alt="login to Github screen" src="https://user-images.githubusercontent.com/13063165/220561688-04b2b984-4ba6-4446-8b0a-8058876e2a02.png" />
+<img width="1394" alt="login to GitHub screen" src="https://user-images.githubusercontent.com/13063165/220561688-04b2b984-4ba6-4446-8b0a-8058876e2a02.png" />
 
 Make sure you only use the `auth.json` locally as it contains sensitive information. Add it to your `.gitignore` or delete it once you have finished generating your tests.
 

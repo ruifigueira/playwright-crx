@@ -29,8 +29,8 @@ const test = baseTest.extend<{ showReport: (reportFolder?: string) => Promise<vo
     await use(async (reportFolder?: string) => {
       reportFolder ??=  testInfo.outputPath('playwright-report');
       server = startHtmlReportServer(reportFolder) as HttpServer;
-      const location = await server.start();
-      await page.goto(location);
+      await server.start();
+      await page.goto(server.urlPrefix('precise'));
     });
     await server?.stop();
   }
@@ -65,7 +65,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             expect(testInfo.retry).toBe(1);
           });
         `,
-      }, { reporter: 'dot,html', retries: 1 }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html', retries: 1 }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
       await showReport();
 
@@ -95,6 +95,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await expect(1).toBe(1);
           });
         `,
+        // Note: using PW_TEST_HTML_REPORT_OPEN to test backwards compatibility.
       }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(1);
@@ -113,7 +114,7 @@ for (const useIntermediateMergeReport of [false] as const) {
       await expect(page.locator('.attachment-body')).toHaveText(/TESTID=.*/);
     });
 
-    test('should not throw when PW_TEST_HTML_REPORT_OPEN value is invalid', async ({ runInlineTest, page, showReport }, testInfo) => {
+    test('should not throw when PLAYWRIGHT_HTML_OPEN value is invalid', async ({ runInlineTest, page, showReport }, testInfo) => {
       const invalidOption = 'invalid-option';
       const result = await runInlineTest({
         'playwright.config.ts': `
@@ -125,7 +126,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             expect(2).toEqual(2);
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: invalidOption });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: invalidOption });
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(1);
     });
@@ -143,7 +144,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             testInfo.attachments.push({ name: 'screenshot', path: screenshot, contentType: 'image/png' });
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(1);
 
@@ -169,7 +170,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await expect(screenshot).toMatchSnapshot('expected.png');
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(1);
       expect(result.failed).toBe(1);
 
@@ -243,7 +244,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await expect.soft(page).toHaveScreenshot({ timeout: 1000 });
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(1);
       expect(result.failed).toBe(1);
 
@@ -278,7 +279,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await expect.soft(screenshot).toMatchSnapshot('expected.png');
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(1);
       expect(result.failed).toBe(1);
 
@@ -309,7 +310,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await expect.soft(page).toHaveScreenshot({ timeout: 1000 });
           });
         `,
-      }, { 'reporter': 'dot,html', 'update-snapshots': true }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { 'reporter': 'dot,html', 'update-snapshots': true }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(1);
       expect(result.failed).toBe(1);
 
@@ -344,7 +345,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await expect(screenshot).toMatchSnapshot('expected');
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(1);
       expect(result.failed).toBe(1);
 
@@ -373,7 +374,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await expect(true).toBeFalsy();
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(1);
       expect(result.failed).toBe(1);
 
@@ -404,7 +405,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await page.evaluate('2 + 2');
           });
         `
-      }, {}, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, {}, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(1);
 
@@ -432,7 +433,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await expect(true).toBeFalsy();
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(1);
       expect(result.failed).toBe(1);
 
@@ -452,7 +453,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await expect(true).toBeFalsy();
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(1);
       expect(result.failed).toBe(1);
 
@@ -475,7 +476,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await evaluateWrapper(page, '2 + 2');
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(1);
 
@@ -508,7 +509,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await page.evaluate('2 + 2');
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(1);
 
@@ -538,7 +539,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await page.evaluate('2 + 2');
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(1);
 
@@ -562,7 +563,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await request.dispose();
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(1);
 
@@ -582,6 +583,38 @@ for (const useIntermediateMergeReport of [false] as const) {
       await expect(page.locator('.source-line-running')).toContainText('request.get');
     });
 
+    test('trace should not hang when showing parallel api requests', async ({ runInlineTest, page, server, showReport }) => {
+      const result = await runInlineTest({
+        'playwright.config.js': `
+          module.exports = { use: { trace: 'on' } };
+        `,
+        'a.test.js': `
+          import { test, expect, request } from '@playwright/test';
+          test('log two contexts', async function({ }) {
+            const api1 = await request.newContext();
+            const api2 = await request.newContext();
+            await Promise.all([
+              api1.get('${server.EMPTY_PAGE}'),
+              api1.get('${server.CROSS_PROCESS_PREFIX}/empty.html'),
+              api2.get('${server.EMPTY_PAGE}'),
+              api2.get('${server.CROSS_PROCESS_PREFIX}/empty.html'),
+            ]);
+          });
+        `,
+      }, { reporter: 'html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
+      expect(result.exitCode).toBe(0);
+      expect(result.passed).toBe(1);
+
+      await showReport();
+      await page.getByRole('link', { name: 'View trace' }).click();
+
+      // Trace viewer should not hang here when displaying parallal requests.
+      await expect(page.getByTestId('actions-tree')).toContainText('apiRequestContext.get');
+      await page.getByText('apiRequestContext.get').nth(2).click();
+      await page.getByText('apiRequestContext.get').nth(1).click();
+      await page.getByText('apiRequestContext.get').nth(0).click();
+    });
+
     test('should warn user when viewing via file:// protocol', async ({ runInlineTest, page, showReport }, testInfo) => {
       const result = await runInlineTest({
         'playwright.config.js': `
@@ -593,7 +626,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await page.evaluate('2 + 2');
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(1);
 
@@ -651,7 +684,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             });
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(1);
       expect(result.passed).toBe(0);
 
@@ -694,7 +727,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             test.info().annotations.push({ type: 'issue', description: 'I am not interested in this test' });
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(1);
 
@@ -714,7 +747,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             test.info().annotations.push({ type: 'issue', description: '${server.EMPTY_PAGE}' });
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(1);
 
@@ -757,7 +790,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             });
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(0);
 
       await showReport();
@@ -782,7 +815,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             await testInfo.attach('example.ext with spaces', { body: Buffer.from('b'), contentType: 'madeup' });
           });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(0);
       await showReport();
       await page.getByRole('link', { name: 'passing' }).click();
@@ -835,7 +868,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             expect('new').toMatchSnapshot('snapshot.txt');
           });
         `
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(1);
       await showReport();
       await page.click('text="is a test"');
@@ -862,7 +895,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             expect('newcommon').toMatchSnapshot('snapshot.txt');
           });
         `
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(1);
       await showReport();
       await page.click('text="is a test"');
@@ -880,7 +913,7 @@ for (const useIntermediateMergeReport of [false] as const) {
               throw new Error('ouch');
           });
         `
-      }, { 'reporter': 'dot,html', 'repeat-each': 3 }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { 'reporter': 'dot,html', 'repeat-each': 3 }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(1);
       await showReport();
 
@@ -905,7 +938,7 @@ for (const useIntermediateMergeReport of [false] as const) {
               expect(2).toEqual(2);
           });
         `
-      }, { 'reporter': 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { 'reporter': 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(0);
       await showReport();
 
@@ -924,7 +957,7 @@ for (const useIntermediateMergeReport of [false] as const) {
           test('sample', async ({}) => { expect(2).toBe(2); });
         `,
         'a.spec.js': `require('./inner')`
-      }, { 'reporter': 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { 'reporter': 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
       expect(result.exitCode).toBe(0);
       await showReport();
       await expect(page.locator('text=a.spec.js')).toBeVisible();
@@ -965,7 +998,7 @@ for (const useIntermediateMergeReport of [false] as const) {
         await execGit(['commit', '-m', 'awesome commit message']);
 
         const result = await runInlineTest(files, { reporter: 'dot,html' }, {
-          PW_TEST_HTML_REPORT_OPEN: 'never',
+          PLAYWRIGHT_HTML_OPEN: 'never',
           GITHUB_REPOSITORY: 'microsoft/playwright-example-for-test',
           GITHUB_RUN_ID: 'example-run-id',
           GITHUB_SERVER_URL: 'https://playwright.dev',
@@ -1011,7 +1044,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             import { test, expect } from '@playwright/test';
             test('sample', async ({}) => { expect(2).toBe(2); });
           `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never', GITHUB_REPOSITORY: 'microsoft/playwright-example-for-test', GITHUB_RUN_ID: 'example-run-id', GITHUB_SERVER_URL: 'https://playwright.dev', GITHUB_SHA: 'example-sha' }, undefined);
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never', GITHUB_REPOSITORY: 'microsoft/playwright-example-for-test', GITHUB_RUN_ID: 'example-run-id', GITHUB_SERVER_URL: 'https://playwright.dev', GITHUB_SHA: 'example-sha' }, undefined);
 
         await showReport();
 
@@ -1039,7 +1072,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             import { test, expect } from '@playwright/test';
             test('my sample test', async ({}) => { expect(2).toBe(2); });
           `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' }, undefined);
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' }, undefined);
 
         await showReport();
 
@@ -1063,7 +1096,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             import { test, expect } from '@playwright/test';
             test('my sample test', async ({}) => { expect(2).toBe(2); });
           `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
         await showReport();
 
@@ -1092,6 +1125,26 @@ for (const useIntermediateMergeReport of [false] as const) {
       const output = result.output;
       expect(output).toContain('Configuration Error');
       expect(output).toContain('html-report');
+    });
+
+    test('it should only identify exact matches as clashing folders', async ({ runInlineTest, useIntermediateMergeReport }) => {
+      test.skip(useIntermediateMergeReport);
+      const result = await runInlineTest({
+        'playwright.config.ts': `
+          module.exports = {
+            reporter: [['html', { outputFolder: 'test-results-html' }]]
+          }
+        `,
+        'a.test.js': `
+          import { test, expect } from '@playwright/test';
+          test('passes', async ({}) => {
+          });
+        `,
+      });
+      expect(result.exitCode).toBe(0);
+      const output = result.output;
+      expect(output).not.toContain('Configuration Error');
+      expect(output).toContain('test-results-html');
     });
 
     test.describe('report location', () => {
@@ -1125,7 +1178,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             test('pass', ({}, testInfo) => {
             });
           `
-        }, { 'reporter': 'html,line' }, { PW_TEST_HTML_REPORT_OPEN: 'never' }, {
+        }, { 'reporter': 'html,line' }, { PLAYWRIGHT_HTML_OPEN: 'never' }, {
           cwd: 'foo/bar/baz/tests',
         });
         expect(result.exitCode).toBe(0);
@@ -1149,7 +1202,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             test('pass', ({}, testInfo) => {
             });
           `
-        }, { 'reporter': 'html,line' }, { 'PW_TEST_HTML_REPORT_OPEN': 'never', 'PLAYWRIGHT_HTML_REPORT': '../my-report' }, {
+        }, { 'reporter': 'html,line' }, { 'PLAYWRIGHT_HTML_OPEN': 'never', 'PLAYWRIGHT_HTML_OUTPUT_DIR': '../my-report' }, {
           cwd: 'foo/bar/baz/tests',
         });
         expect(result.exitCode).toBe(0);
@@ -1198,7 +1251,7 @@ for (const useIntermediateMergeReport of [false] as const) {
               expect(1).toBe(2);
             });
           `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
         expect(result.exitCode).toBe(1);
         expect(result.passed).toBe(3);
@@ -1272,7 +1325,7 @@ for (const useIntermediateMergeReport of [false] as const) {
               expect(1).toBe(1);
             });
           `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
         expect(result.exitCode).toBe(0);
         expect(result.passed).toBe(3);
@@ -1314,7 +1367,7 @@ for (const useIntermediateMergeReport of [false] as const) {
               expect(1).toBe(1);
             });
           `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
         expect(result.exitCode).toBe(0);
         expect(result.passed).toBe(3);
@@ -1355,7 +1408,7 @@ for (const useIntermediateMergeReport of [false] as const) {
               expect(1).toBe(1);
             });
           `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
         expect(result.exitCode).toBe(0);
         expect(result.passed).toBe(3);
@@ -1393,7 +1446,7 @@ for (const useIntermediateMergeReport of [false] as const) {
               });
             });
           `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
         expect(result.exitCode).toBe(1);
         expect(result.passed).toBe(2);
@@ -1402,7 +1455,7 @@ for (const useIntermediateMergeReport of [false] as const) {
         await showReport();
 
         const searchInput = page.locator('.subnav-search-input');
-        const smokeLabelButton =  page.locator('.test-file-test', { has: page.getByText('Error Pages › @smoke fails', { exact: true }) }).locator('.label', { hasText: 'smoke' });
+        const smokeLabelButton = page.locator('.test-file-test', { has: page.getByText('Error Pages › @smoke fails', { exact: true }) }).locator('.label', { hasText: 'smoke' });
 
         await expect(smokeLabelButton).toBeVisible();
         await smokeLabelButton.click();
@@ -1412,7 +1465,7 @@ for (const useIntermediateMergeReport of [false] as const) {
         await expect(page.locator('.chip', { hasText: 'b.test.js' })).toHaveCount(1);
         await expect(page.locator('.test-file-test .test-file-title')).toHaveText('Error Pages › @smoke fails');
 
-        const regressionLabelButton =  page.locator('.test-file-test', { has: page.getByText('Error Pages › @regression passes', { exact: true }) }).locator('.label', { hasText: 'regression' });
+        const regressionLabelButton = page.locator('.test-file-test', { has: page.getByText('Error Pages › @regression passes', { exact: true }) }).locator('.label', { hasText: 'regression' });
 
         await expect(regressionLabelButton).not.toBeVisible();
 
@@ -1471,7 +1524,7 @@ for (const useIntermediateMergeReport of [false] as const) {
               });
             });
           `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
         expect(result.exitCode).toBe(0);
         expect(result.passed).toBe(5);
@@ -1514,7 +1567,7 @@ for (const useIntermediateMergeReport of [false] as const) {
               expect(1).toBe(2);
             });
           `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
         expect(result.exitCode).toBe(1);
         expect(result.passed).toBe(1);
@@ -1524,7 +1577,7 @@ for (const useIntermediateMergeReport of [false] as const) {
 
         const searchInput = page.locator('.subnav-search-input');
 
-        const smokeLabelButton =  page.locator('.test-file-test', { has: page.getByText('@smoke fails', { exact: true }) }).locator('.label', { hasText: 'smoke' });
+        const smokeLabelButton = page.locator('.test-file-test', { has: page.getByText('@smoke fails', { exact: true }) }).locator('.label', { hasText: 'smoke' });
         await smokeLabelButton.click();
         await expect(page).toHaveURL(/@smoke/);
         await searchInput.clear();
@@ -1532,7 +1585,7 @@ for (const useIntermediateMergeReport of [false] as const) {
         await expect(searchInput).toHaveValue('');
         await expect(page).not.toHaveURL(/@smoke/);
 
-        const regressionLabelButton =  page.locator('.test-file-test', { has: page.getByText('@regression passes', { exact: true }) }).locator('.label', { hasText: 'regression' });
+        const regressionLabelButton = page.locator('.test-file-test', { has: page.getByText('@regression passes', { exact: true }) }).locator('.label', { hasText: 'regression' });
         await regressionLabelButton.click();
         await expect(page).toHaveURL(/@regression/);
         await searchInput.clear();
@@ -1563,7 +1616,7 @@ for (const useIntermediateMergeReport of [false] as const) {
               });
             }
           `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
         expect(result.exitCode).toBe(1);
         expect(result.passed).toBe(7);
@@ -1637,7 +1690,7 @@ for (const useIntermediateMergeReport of [false] as const) {
               expect(1).toBe(2);
             });
           `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
         expect(result.exitCode).toBe(1);
         expect(result.passed).toBe(2);
@@ -1703,7 +1756,7 @@ for (const useIntermediateMergeReport of [false] as const) {
               expect(1).toBe(2);
             });
           `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
         expect(result.exitCode).toBe(1);
         expect(result.passed).toBe(2);
@@ -1752,7 +1805,7 @@ for (const useIntermediateMergeReport of [false] as const) {
               expect(1).toBe(2);
             });
           `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
         expect(result.exitCode).toBe(1);
         expect(result.passed).toBe(1);
@@ -1810,7 +1863,7 @@ for (const useIntermediateMergeReport of [false] as const) {
         await expect(page.locator('.test-file-test .test-file-title', { hasText: '@company_information_widget fails' })).toHaveCount(1);
       });
 
-      test('handling of meta or ctrl key', async ({ runInlineTest, showReport, page,  }) => {
+      test('handling of meta or ctrl key', async ({ runInlineTest, showReport, page, }) => {
         const result = await runInlineTest({
           'a.test.js': `
             const { expect, test } = require('@playwright/test');
@@ -1830,7 +1883,7 @@ for (const useIntermediateMergeReport of [false] as const) {
               expect(1).toBe(1);
             });
           `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
         expect(result.exitCode).toBe(0);
         expect(result.passed).toBe(3);
@@ -1969,7 +2022,7 @@ for (const useIntermediateMergeReport of [false] as const) {
                 expect(1).toBe(0);
               });
             `,
-        }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
         expect(result.exitCode).toBe(1);
         expect(result.passed).toBe(3);
@@ -2058,7 +2111,7 @@ for (const useIntermediateMergeReport of [false] as const) {
             test('passes', () => {});
           }
         `,
-      }, { reporter: 'html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
       await showReport();
 
@@ -2087,7 +2140,7 @@ for (const useIntermediateMergeReport of [false] as const) {
           });
           test('test 6', async ({}) => {});
         `,
-      }, { reporter: 'html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
       await showReport();
 
@@ -2115,7 +2168,7 @@ for (const useIntermediateMergeReport of [false] as const) {
           test('b test 1', async ({}) => {});
           test('b test 2', async ({}) => {});
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(4);
@@ -2145,7 +2198,7 @@ for (const useIntermediateMergeReport of [false] as const) {
           test('failed title', async ({}) => { expect(1).toBe(1); });
           test('passes title', async ({}) => { expect(1).toBe(2); });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
       expect(result.exitCode).toBe(1);
       expect(result.passed).toBe(1);
@@ -2161,6 +2214,29 @@ for (const useIntermediateMergeReport of [false] as const) {
       await expect(page.getByText('passes title')).toBeVisible();
     });
 
+    test('tests should filter by annotation texts', async ({ runInlineTest, showReport, page }) => {
+      const result = await runInlineTest({
+        'a.test.js': `
+          const { test, expect } = require('@playwright/test');
+          test('annotated test',{ annotation :[{type:'key',description:'value'}]}, async ({}) => {expect(1).toBe(1);});
+          test('non-annotated test', async ({}) => {expect(1).toBe(2);});
+        `,
+      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+
+      expect(result.exitCode).toBe(1);
+      expect(result.passed).toBe(1);
+      expect(result.failed).toBe(1);
+
+      await showReport();
+
+      const searchInput = page.locator('.subnav-search-input');
+
+      await searchInput.fill('annot:key=value');
+      await expect(page.getByText('a.test.js', { exact: true })).toBeVisible();
+      await expect(page.getByText('non-annotated test')).not.toBeVisible();
+      await expect(page.getByText('annotated test')).toBeVisible();
+    });
+
     test('tests should filter by fileName:line/column', async ({ runInlineTest, showReport, page }) => {
       const result = await runInlineTest({
         'a.test.js': `
@@ -2168,7 +2244,7 @@ for (const useIntermediateMergeReport of [false] as const) {
           test('test1', async ({}) => { expect(1).toBe(1); });
               test('test2', async ({}) => { expect(1).toBe(2); });
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
       expect(result.exitCode).toBe(1);
       expect(result.passed).toBe(1);
@@ -2205,7 +2281,7 @@ for (const useIntermediateMergeReport of [false] as const) {
           expect(1).toBe(1);
         });
       `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(1);
@@ -2234,7 +2310,7 @@ for (const useIntermediateMergeReport of [false] as const) {
           expect(1).toBe(1);
         });
       `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(1);
@@ -2263,7 +2339,7 @@ for (const useIntermediateMergeReport of [false] as const) {
           expect(1).toBe(1);
         });
       `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(1);
@@ -2292,7 +2368,7 @@ for (const useIntermediateMergeReport of [false] as const) {
           expect(1).toBe(1);
         });
       `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
       expect(result.exitCode).toBe(0);
       expect(result.passed).toBe(1);
@@ -2322,13 +2398,43 @@ for (const useIntermediateMergeReport of [false] as const) {
         'playwright.config.ts': `
           export default { globalTeardown: './globalTeardown.ts' };
         `,
-      }, { reporter: 'dot,html' }, { PW_TEST_HTML_REPORT_OPEN: 'never' });
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
 
       expect(result.exitCode).toBe(1);
       expect(result.passed).toBe(1);
 
       await showReport();
       await expect(page.getByTestId('report-errors')).toHaveText(/Error: From teardown.*at globalTeardown.ts:3.*export default async function globalTeardown/s);
+    });
+
+    test('should not render anonymous describe', async ({ runInlineTest, showReport, page }) => {
+      const result = await runInlineTest({
+        'a.test.js': `
+            const { expect, test } = require('@playwright/test');
+            test.describe('Root describe', () => {
+              test.describe(() => {
+                test('Test passed', async ({}) => {
+                  expect(1).toBe(1);
+                });
+              });
+            });
+          `,
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
+
+      expect(result.exitCode).toBe(0);
+      expect(result.passed).toBe(1);
+
+      await showReport();
+
+      await expect(page.locator('.test-file-test')).toHaveCount(1);
+
+      await expect(page.locator('.test-file-test').locator('a').first()).toHaveAttribute('title', 'Root describe › Test passed');
+      await expect(page.locator('.test-file-title')).toHaveText('Root describe › Test passed');
+      const testFilePathLink = page.locator('.test-file-path-link');
+      await expect(testFilePathLink).toHaveAttribute('title', 'Root describe › Test passed');
+
+      await testFilePathLink.click();
+      await expect(page.locator('.test-case-path')).toHaveText('Root describe');
     });
   });
 }

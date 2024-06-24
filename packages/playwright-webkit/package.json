@@ -1,6 +1,6 @@
 {
   "name": "playwright-webkit",
-  "version": "1.44.0",
+  "version": "1.45.0",
   "description": "A high-level API to automate WebKit",
   "repository": {
     "type": "git",
@@ -8,7 +8,7 @@
   },
   "homepage": "https://playwright.dev",
   "engines": {
-    "node": ">=16"
+    "node": ">=18"
   },
   "author": {
     "name": "Microsoft Corporation"
@@ -30,6 +30,6 @@
     "install": "node install.js"
   },
   "dependencies": {
-    "playwright-core": "1.44.0"
+    "playwright-core": "1.45.0"
   }
 }

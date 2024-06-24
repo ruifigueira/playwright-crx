@@ -17,7 +17,7 @@
 import { colors } from 'playwright-core/lib/utilsBundle';
 import { debugTest, relativeFilePath, serializeError } from '../util';
 import { type TestBeginPayload, type TestEndPayload, type RunPayload, type DonePayload, type WorkerInitParams, type TeardownErrorsPayload, stdioChunkToParams } from '../common/ipc';
-import { setCurrentTestInfo, setIsWorkerProcess } from '../common/globals';
+import { setCurrentTestInfo, setIsWorkerProcess, testLifecycleInstrumentation } from '../common/globals';
 import { deserializeConfig } from '../common/configLoader';
 import type { Suite, TestCase } from '../common/test';
 import type { Annotation, FullConfigInternal, FullProjectInternal } from '../common/config';
@@ -30,7 +30,7 @@ import { applyRepeatEachIndex, bindFileSuiteToProject, filterTestsRemoveEmptySui
 import { PoolBuilder } from '../common/poolBuilder';
 import type { TestInfoError } from '../../types/test';
 import type { Location } from '../../types/testReporter';
-import { inheritFixutreNames } from '../common/fixtures';
+import { inheritFixtureNames } from '../common/fixtures';
 import { type TimeSlot, TimeoutManagerError } from './timeoutManager';
 
 export class WorkerMain extends ProcessRunner {
@@ -100,12 +100,17 @@ export class WorkerMain extends ProcessRunner {
   override async gracefullyClose() {
     try {
       await this._stop();
+      // Ignore top-level errors, they are already inside TestInfo.errors.
+      const fakeTestInfo = new TestInfoImpl(this._config, this._project, this._params, undefined, 0, () => {}, () => {}, () => {});
+      const runnable = { type: 'teardown' } as const;
       // We have to load the project to get the right deadline below.
-      await this._loadIfNeeded();
-      await this._teardownScopes();
+      await fakeTestInfo._runAsStage({ title: 'worker cleanup', runnable }, () => this._loadIfNeeded()).catch(() => {});
+      await this._fixtureRunner.teardownScope('test', fakeTestInfo, runnable).catch(() => {});
+      await this._fixtureRunner.teardownScope('worker', fakeTestInfo, runnable).catch(() => {});
       // Close any other browsers launched in this process. This includes anything launched
       // manually in the test/hooks and internal browsers like Playwright Inspector.
-      await gracefullyCloseAll();
+      await fakeTestInfo._runAsStage({ title: 'worker cleanup', runnable }, () => gracefullyCloseAll()).catch(() => {});
+      this._fatalErrors.push(...fakeTestInfo.errors);
     } catch (e) {
       this._fatalErrors.push(serializeError(e));
     }
@@ -142,15 +147,6 @@ export class WorkerMain extends ProcessRunner {
     } else if (error.value) {
       error.value += message;
     }
-  }
-
-  private async _teardownScopes() {
-    const fakeTestInfo = new TestInfoImpl(this._config, this._project, this._params, undefined, 0, () => {}, () => {}, () => {});
-    const runnable = { type: 'teardown' } as const;
-    // Ignore top-level errors, they are already inside TestInfo.errors.
-    await this._fixtureRunner.teardownScope('test', fakeTestInfo, runnable).catch(() => {});
-    await this._fixtureRunner.teardownScope('worker', fakeTestInfo, runnable).catch(() => {});
-    this._fatalErrors.push(...fakeTestInfo.errors);
   }
 
   unhandledError(error: Error | any) {
@@ -308,10 +304,11 @@ export class WorkerMain extends ProcessRunner {
     if (this._lastRunningTests.length > 10)
       this._lastRunningTests.shift();
     let shouldRunAfterEachHooks = false;
+    const tracingSlot = { timeout: this._project.project.timeout, elapsed: 0 };
 
     testInfo._allowSkips = true;
     await testInfo._runAsStage({ title: 'setup and test' }, async () => {
-      await testInfo._runAsStage({ title: 'start tracing', runnable: { type: 'test' } }, async () => {
+      await testInfo._runAsStage({ title: 'start tracing', runnable: { type: 'test', slot: tracingSlot } }, async () => {
         // Ideally, "trace" would be an config-level option belonging to the
         // test runner instead of a fixture belonging to Playwright.
         // However, for backwards compatibility, we have to read it from a fixture today.
@@ -322,6 +319,7 @@ export class WorkerMain extends ProcessRunner {
         if (typeof traceFixtureRegistration.fn === 'function')
           throw new Error(`"trace" option cannot be a function`);
         await testInfo._tracing.startIfNeeded(traceFixtureRegistration.fn);
+        await testLifecycleInstrumentation()?.onTestBegin?.();
       });
 
       if (this._isStopped || isSkipped) {
@@ -376,10 +374,10 @@ export class WorkerMain extends ProcessRunner {
 
       try {
         // Run "immediately upon test function finish" callback.
-        await testInfo._runAsStage({ title: 'on-test-function-finish', runnable: { type: 'test', slot: afterHooksSlot } }, async () => testInfo._onDidFinishTestFunction?.());
+        await testInfo._runAsStage({ title: 'on-test-function-finish', runnable: { type: 'test', slot: tracingSlot } }, async () => {
+          await testLifecycleInstrumentation()?.onTestFunctionEnd?.();
+        });
       } catch (error) {
-        if (error instanceof TimeoutManagerError)
-          didTimeoutInAfterHooks = true;
         firstAfterHooksError = firstAfterHooksError ?? error;
       }
 
@@ -462,8 +460,8 @@ export class WorkerMain extends ProcessRunner {
       }).catch(() => {});  // Ignore the top-level error, it is already inside TestInfo.errors.
     }
 
-    const tracingSlot = { timeout: this._project.project.timeout, elapsed: 0 };
     await testInfo._runAsStage({ title: 'stop tracing', runnable: { type: 'test', slot: tracingSlot } }, async () => {
+      await testLifecycleInstrumentation()?.onTestEnd?.();
       await testInfo._tracing.stopIfNeeded();
     }).catch(() => {});  // Ignore the top-level error, it is already inside TestInfo.errors.
 
@@ -490,7 +488,7 @@ export class WorkerMain extends ProcessRunner {
         const result = await modifier.fn(fixtures);
         testInfo[modifier.type](!!result, modifier.description);
       };
-      inheritFixutreNames(modifier.fn, fn);
+      inheritFixtureNames(modifier.fn, fn);
       runnables.push({
         title: `${modifier.type} modifier`,
         location: modifier.location,
