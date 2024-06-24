@@ -124,6 +124,18 @@ export class InjectedScript {
       (this.window as any).__injectedScript = this;
   }
 
+  builtinSetTimeout(callback: Function, timeout: number) {
+    if (this.window.__pwClock?.builtin)
+      return this.window.__pwClock.builtin.setTimeout(callback, timeout);
+    return setTimeout(callback, timeout);
+  }
+
+  builtinRequestAnimationFrame(callback: FrameRequestCallback) {
+    if (this.window.__pwClock?.builtin)
+      return this.window.__pwClock.builtin.requestAnimationFrame(callback);
+    return requestAnimationFrame(callback);
+  }
+
   eval(expression: string): any {
     return this.window.eval(expression);
   }
@@ -427,7 +439,7 @@ export class InjectedScript {
       observer.observe(element);
       // Firefox doesn't call IntersectionObserver callback unless
       // there are rafs.
-      requestAnimationFrame(() => {});
+      this.builtinRequestAnimationFrame(() => {});
     });
   }
 
@@ -536,12 +548,12 @@ export class InjectedScript {
         if (success !== continuePolling)
           fulfill(success);
         else
-          requestAnimationFrame(raf);
+          this.builtinRequestAnimationFrame(raf);
       } catch (e) {
         reject(e);
       }
     };
-    requestAnimationFrame(raf);
+    this.builtinRequestAnimationFrame(raf);
 
     return result;
   }
@@ -983,7 +995,7 @@ export class InjectedScript {
         attrs.push(` ${name}="${value}"`);
     }
     attrs.sort((a, b) => a.length - b.length);
-    const attrText = trimStringWithEllipsis(attrs.join(''), 50);
+    const attrText = trimStringWithEllipsis(attrs.join(''), 500);
     if (autoClosingTags.has(element.nodeName))
       return oneLine(`<${element.nodeName.toLowerCase()}${attrText}/>`);
 
@@ -1509,4 +1521,15 @@ function deepEquals(a: any, b: any): boolean {
     return isNaN(a) && isNaN(b);
 
   return false;
+}
+
+declare global {
+  interface Window {
+    __pwClock?: {
+      builtin: {
+        setTimeout: Window['setTimeout'],
+        requestAnimationFrame: Window['requestAnimationFrame'],
+      }
+    }
+  }
 }

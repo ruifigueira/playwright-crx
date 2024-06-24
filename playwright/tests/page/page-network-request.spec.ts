@@ -19,11 +19,9 @@ import { test as it, expect } from './pageTest';
 import { attachFrame } from '../config/utils';
 import fs from 'fs';
 
-function adjustServerHeaders(headers: Object, browserName: string, channel: string) {
-  if (browserName === 'firefox' && channel === 'firefox-beta') {
-    // This is a new experimental feature, only enabled in Firefox Beta for now.
+function adjustServerHeaders(headers: Object, browserName: string) {
+  if (browserName === 'firefox')
     delete headers['priority'];
-  }
   return headers;
 }
 
@@ -90,7 +88,7 @@ it('should return headers', async ({ page, server, browserName }) => {
     expect(response.request().headers()['user-agent']).toContain('WebKit');
 });
 
-it('should get the same headers as the server', async ({ page, server, browserName, platform, isElectron, browserMajorVersion, channel }) => {
+it('should get the same headers as the server', async ({ page, server, browserName, platform, isElectron, browserMajorVersion }) => {
   it.skip(isElectron && browserMajorVersion < 99, 'This needs Chromium >= 99');
   it.fail(browserName === 'webkit' && platform === 'win32', 'Curl does not show accept-encoding and accept-language');
   let serverRequest;
@@ -100,10 +98,10 @@ it('should get the same headers as the server', async ({ page, server, browserNa
   });
   const response = await page.goto(server.PREFIX + '/empty.html');
   const headers = await response.request().allHeaders();
-  expect(headers).toEqual(adjustServerHeaders(serverRequest.headers, browserName, channel));
+  expect(headers).toEqual(adjustServerHeaders(serverRequest.headers, browserName));
 });
 
-it('should not return allHeaders() until they are available', async ({ page, server, browserName, platform, isElectron, browserMajorVersion, channel }) => {
+it('should not return allHeaders() until they are available', async ({ page, server, browserName, platform, isElectron, browserMajorVersion }) => {
   it.skip(isElectron && browserMajorVersion < 99, 'This needs Chromium >= 99');
   it.fail(browserName === 'webkit' && platform === 'win32', 'Curl does not show accept-encoding and accept-language');
 
@@ -122,13 +120,13 @@ it('should not return allHeaders() until they are available', async ({ page, ser
 
   await page.goto(server.PREFIX + '/empty.html');
   const requestHeaders = await requestHeadersPromise;
-  expect(requestHeaders).toEqual(adjustServerHeaders(serverRequest.headers, browserName, channel));
+  expect(requestHeaders).toEqual(adjustServerHeaders(serverRequest.headers, browserName));
 
   const responseHeaders = await responseHeadersPromise;
   expect(responseHeaders['foo']).toBe('bar');
 });
 
-it('should get the same headers as the server CORS', async ({ page, server, browserName, platform, isElectron, browserMajorVersion, channel }) => {
+it('should get the same headers as the server CORS', async ({ page, server, browserName, platform, isElectron, browserMajorVersion,  }) => {
   it.skip(isElectron && browserMajorVersion < 99, 'This needs Chromium >= 99');
   it.fail(browserName === 'webkit' && platform === 'win32', 'Curl does not show accept-encoding and accept-language');
 
@@ -147,7 +145,7 @@ it('should get the same headers as the server CORS', async ({ page, server, brow
   expect(text).toBe('done');
   const response = await responsePromise;
   const headers = await response.request().allHeaders();
-  expect(headers).toEqual(adjustServerHeaders(serverRequest.headers, browserName, channel));
+  expect(headers).toEqual(adjustServerHeaders(serverRequest.headers, browserName));
 });
 
 it('should not get preflight CORS requests when intercepting', async ({ page, server, browserName, isAndroid }) => {
@@ -317,6 +315,31 @@ it('should get |undefined| with postDataJSON() when there is no post data', asyn
   expect(response.request().postDataJSON()).toBe(null);
 });
 
+it('should return multipart/form-data', async ({ page, server, browserName, browserMajorVersion }) => {
+  it.fixme(browserName === 'webkit', 'File content is missing in WebKit');
+  it.skip(browserName === 'chromium' && browserMajorVersion < 126, 'Requires a recent enough protocol');
+
+  await page.goto(server.EMPTY_PAGE);
+  server.setRoute('/post', (req, res) => res.end());
+  await page.route('**/*', route => route.continue());
+  const requestPromise = page.waitForRequest('**/post');
+  await page.evaluate(async () => {
+    const body = new FormData();
+    body.set('name1', 'value1');
+    body.set('file', new File(['file-value'], 'foo.txt'));
+    body.set('name2', 'value2');
+    body.append('name2', 'another-value2');
+    await fetch('/post', { method: 'POST', body });
+  });
+  const request = await requestPromise;
+  const contentType = await request.headerValue('Content-Type');
+  const re = /^multipart\/form-data; boundary=(.*)$/;
+  expect(contentType).toMatch(re);
+  const b = contentType.match(re)[1]!;
+  const expected = `--${b}\r\nContent-Disposition: form-data; name=\"name1\"\r\n\r\nvalue1\r\n--${b}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"foo.txt\"\r\nContent-Type: application/octet-stream\r\n\r\nfile-value\r\n--${b}\r\nContent-Disposition: form-data; name=\"name2\"\r\n\r\nvalue2\r\n--${b}\r\nContent-Disposition: form-data; name=\"name2\"\r\n\r\nanother-value2\r\n--${b}--\r\n`;
+  expect(request.postDataBuffer().toString('utf8')).toEqual(expected);
+});
+
 it('should return event source', async ({ page, server }) => {
   const SSE_MESSAGE = { foo: 'bar' };
   // 1. Setup server-sent events on server that immediately sends a message to the client.
@@ -384,10 +407,9 @@ it('should report raw headers', async ({ page, server, browserName, platform, is
         return { name, value: values[0] };
       });
     }
-    if (browserName === 'firefox' && channel === 'firefox-beta') {
-      // This is a new experimental feature, only enabled in Firefox Beta for now.
+    if (browserName === 'firefox')
       expectedHeaders = expectedHeaders.filter(({ name }) => name.toLowerCase() !== 'priority');
-    }
+
     res.end();
   });
   await page.goto(server.EMPTY_PAGE);

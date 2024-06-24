@@ -164,7 +164,7 @@ export default defineConfig({
 * since: v1.10
 - type: ?<[RegExp]|[Array]<[RegExp]>>
 
-Filter to only run tests with a title matching one of the patterns. For example, passing `grep: /cart/` should only run tests with "cart" in the title. Also available in the [command line](../test-cli.md) with the `-g` option. The regular expression will be tested against the string that consists of the test file name, `test.describe` name (if any) and the test name divided by spaces, e.g. `my-test.spec.ts my-suite my-test`.
+Filter to only run tests with a title matching one of the patterns. For example, passing `grep: /cart/` should only run tests with "cart" in the title. Also available in the [command line](../test-cli.md) with the `-g` option. The regular expression will be tested against the string that consists of the project name, the test file name, the `test.describe` name (if any), the test name and the test tags divided by spaces, e.g. `chromium my-test.spec.ts my-suite my-test`.
 
 `grep` option is also useful for [tagging tests](../test-annotations.md#tag-tests).
 
@@ -438,6 +438,12 @@ export default defineConfig({
 **Details**
 
 Test files that took more than `threshold` milliseconds are considered slow, and the slowest ones are reported, no more than `max` number of them. Passing zero as `max` reports all test files that exceed the threshold.
+
+## property: TestConfig.respectGitIgnore
+* since: v1.45
+- type: ?<[boolean]>
+
+Whether to skip entries from `.gitignore` when searching for test files. By default, if neither [`property: TestConfig.testDir`] nor [`property: TestProject.testDir`] are explicitly specified, Playwright will ignore any test files matching `.gitignore` entries.
 
 ## property: TestConfig.retries
 * since: v1.10

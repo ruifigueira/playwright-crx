@@ -198,6 +198,20 @@ it('should follow redirects', async ({ context, server }) => {
   expect(await response.json()).toEqual({ foo: 'bar' });
 });
 
+it('should follow redirects correctly when Location header contains UTF-8 characters', async ({ context, server }) => {
+  it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/30903' });
+  server.setRoute('/redirect', (req, res) => {
+    // Node.js only allows US-ASCII, so we can't send invalid headers directly. Sending it as a raw response instead.
+    res.socket.write('HTTP/1.1 301 Moved Permanently\r\n');
+    res.socket.write(`Location: ${server.PREFIX}/empty.html?message=マスクПривет\r\n`);
+    res.socket.write('\r\n');
+    res.socket.uncork();
+    res.socket.end();
+  });
+  const response = await context.request.get(server.PREFIX + '/redirect');
+  expect(response.url()).toBe(server.PREFIX + '/empty.html?' + new URLSearchParams({ message: 'マスクПривет' }));
+});
+
 it('should add cookies from Set-Cookie header', async ({ context, page, server }) => {
   server.setRoute('/setcookie.html', (req, res) => {
     res.setHeader('Set-Cookie', ['session=value', 'foo=bar; max-age=3600']);
@@ -419,6 +433,55 @@ it('should return error with wrong credentials', async ({ context, server }) => 
   await context.setHTTPCredentials({ username: 'user', password: 'wrong' });
   const response2 = await context.request.get(server.EMPTY_PAGE);
   expect(response2.status()).toBe(401);
+});
+
+it('should support HTTPCredentials.sendImmediately for newContext', async ({ contextFactory, server }) => {
+  it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/30534' });
+  const context = await contextFactory({
+    httpCredentials: { username: 'user', password: 'pass', origin: server.PREFIX.toUpperCase(), send: 'always' }
+  });
+  {
+    const [serverRequest, response] = await Promise.all([
+      server.waitForRequest('/empty.html'),
+      context.request.get(server.EMPTY_PAGE)
+    ]);
+    expect(serverRequest.headers.authorization).toBe('Basic ' + Buffer.from('user:pass').toString('base64'));
+    expect(response.status()).toBe(200);
+  }
+  {
+    const [serverRequest, response] = await Promise.all([
+      server.waitForRequest('/empty.html'),
+      context.request.get(server.CROSS_PROCESS_PREFIX + '/empty.html')
+    ]);
+    // Not sent to another origin.
+    expect(serverRequest.headers.authorization).toBe(undefined);
+    expect(response.status()).toBe(200);
+  }
+});
+
+it('should support HTTPCredentials.sendImmediately for browser.newPage', async ({ contextFactory, server, browser }) => {
+  it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/30534' });
+  const page = await browser.newPage({
+    httpCredentials: { username: 'user', password: 'pass', origin: server.PREFIX.toUpperCase(), send: 'always' }
+  });
+  {
+    const [serverRequest, response] = await Promise.all([
+      server.waitForRequest('/empty.html'),
+      page.request.get(server.EMPTY_PAGE)
+    ]);
+    expect(serverRequest.headers.authorization).toBe('Basic ' + Buffer.from('user:pass').toString('base64'));
+    expect(response.status()).toBe(200);
+  }
+  {
+    const [serverRequest, response] = await Promise.all([
+      server.waitForRequest('/empty.html'),
+      page.request.get(server.CROSS_PROCESS_PREFIX + '/empty.html')
+    ]);
+    // Not sent to another origin.
+    expect(serverRequest.headers.authorization).toBe(undefined);
+    expect(response.status()).toBe(200);
+  }
+  await page.close();
 });
 
 it('delete should support post data', async ({ context, server }) => {
@@ -770,21 +833,6 @@ it('should respect timeout after redirects', async function({ context, server })
   expect(error.message).toContain(`Request timed out after 100ms`);
 });
 
-it('should throw on a redirect with an invalid URL', async ({ context, server }) => {
-  server.setRedirect('/redirect', '/test');
-  server.setRoute('/test', (req, res) => {
-    // Node.js prevents us from responding with an invalid header, therefore we manually write the response.
-    const conn = res.connection!;
-    conn.write('HTTP/1.1 302\r\n');
-    conn.write('Location: https://здравствуйте/\r\n');
-    conn.write('\r\n');
-    conn.uncork();
-    conn.end();
-  });
-  const error = await context.request.get(server.PREFIX + '/redirect').catch(e => e);
-  expect(error.message).toContain('apiRequestContext.get: uri requested responds with an invalid redirect URL');
-});
-
 it('should not hang on a brotli encoded Range request', async ({ context, server }) => {
   it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/18190' });
   it.skip(+process.versions.node.split('.')[0] < 18);
@@ -805,7 +853,7 @@ it('should not hang on a brotli encoded Range request', async ({ context, server
     headers: {
       range: 'bytes=0-2',
     },
-  })).rejects.toThrow(`failed to decompress 'br' encoding: Error: unexpected end of file`);
+  })).rejects.toThrow(/(failed to decompress 'br' encoding: Error: unexpected end of file|Parse Error: Data after \`Connection: close\`)/);
 });
 
 it('should dispose', async function({ context, server }) {
@@ -1179,7 +1227,7 @@ it('fetch should not throw on long set-cookie value', async ({ context, server }
   expect(cookies.map(c => c.name)).toContain('bar');
 });
 
-it('should support set-cookie with SameSite and without Secure attribute over HTTP', async ({ page, server, browserName, isWindows }) => {
+it('should support set-cookie with SameSite and without Secure attribute over HTTP', async ({ page, server, browserName, isWindows, isLinux }) => {
   for (const value of ['None', 'Lax', 'Strict']) {
     await it.step(`SameSite=${value}`, async () => {
       server.setRoute('/empty.html', (req, res) => {
@@ -1189,6 +1237,8 @@ it('should support set-cookie with SameSite and without Secure attribute over HT
       await page.request.get(server.EMPTY_PAGE);
       const [cookie] = await page.context().cookies();
       if (browserName === 'chromium' && value === 'None')
+        expect(cookie).toBeFalsy();
+      else if (browserName === 'webkit' && isLinux && value === 'None')
         expect(cookie).toBeFalsy();
       else if (browserName === 'webkit' && isWindows)
         expect(cookie.sameSite).toBe('None');
@@ -1231,4 +1281,9 @@ it('should not work after dispose', async ({ context, server }) => {
   it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/27822' });
   await context.request.dispose();
   expect(await context.request.get(server.EMPTY_PAGE).catch(e => e.message)).toContain(kTargetClosedErrorMessage);
+});
+
+it('should not work after context dispose', async ({ context, server }) => {
+  await context.close({ reason: 'Test ended.' });
+  expect(await context.request.get(server.EMPTY_PAGE).catch(e => e.message)).toContain('Test ended.');
 });

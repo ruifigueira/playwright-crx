@@ -22,7 +22,7 @@ import { Worker } from './worker';
 import type { Headers, RemoteAddr, SecurityDetails, WaitForEventOptions } from './types';
 import fs from 'fs';
 import { mime } from '../utilsBundle';
-import { assert, isString, headersObjectToArray, isRegExp } from '../utils';
+import { assert, isString, headersObjectToArray, isRegExp, rewriteErrorMessage } from '../utils';
 import { ManualPromise, LongStandingScope } from '../utils/manualPromise';
 import { Events } from './events';
 import type { Page } from './page';
@@ -34,6 +34,7 @@ import { MultiMap } from '../utils/multimap';
 import { APIResponse } from './fetch';
 import type { Serializable } from '../../types/structs';
 import type { BrowserContext } from './browserContext';
+import { isTargetClosedError } from './errors';
 
 export type NetworkCookie = {
   name: string,
@@ -101,7 +102,6 @@ export class Request extends ChannelOwner<channels.RequestChannel> implements ap
     if (this._redirectedFrom)
       this._redirectedFrom._redirectedTo = this;
     this._provisionalHeaders = new RawHeaders(initializer.headers);
-    this._fallbackOverrides.postDataBuffer = initializer.postData;
     this._timing = {
       startTime: 0,
       domainLookupStart: -1,
@@ -128,11 +128,11 @@ export class Request extends ChannelOwner<channels.RequestChannel> implements ap
   }
 
   postData(): string | null {
-    return this._fallbackOverrides.postDataBuffer?.toString('utf-8') || null;
+    return (this._fallbackOverrides.postDataBuffer || this._initializer.postData)?.toString('utf-8') || null;
   }
 
   postDataBuffer(): Buffer | null {
-    return this._fallbackOverrides.postDataBuffer || null;
+    return this._fallbackOverrides.postDataBuffer || this._initializer.postData || null;
   }
 
   postDataJSON(): Object | null {
@@ -692,6 +692,11 @@ export class RouteHandler {
       // If the handler was stopped (without waiting for completion), we ignore all exceptions.
       if (this._ignoreException)
         return false;
+      if (isTargetClosedError(e)) {
+        // We are failing in the handler because the target close closed.
+        // Give user a hint!
+        rewriteErrorMessage(e, `"${e.message}" while running route callback.\nConsider awaiting \`await page.unrouteAll({ behavior: 'ignoreErrors' })\`\nbefore the end of the test to ignore remaining routes in flight.`);
+      }
       throw e;
     } finally {
       handlerInvocation.complete.resolve();

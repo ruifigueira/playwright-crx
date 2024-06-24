@@ -33,24 +33,6 @@ export function currentlyLoadingFileSuite() {
   return currentFileSuite;
 }
 
-let currentExpectConfigureTimeout: number | undefined;
-
-export function setCurrentExpectConfigureTimeout(timeout: number | undefined) {
-  currentExpectConfigureTimeout = timeout;
-}
-
-export function currentExpectTimeout(options: { timeout?: number }) {
-  const testInfo = currentTestInfo();
-  if (options.timeout !== undefined)
-    return options.timeout;
-  if (currentExpectConfigureTimeout !== undefined)
-    return currentExpectConfigureTimeout;
-  let defaultExpectTimeout = testInfo?._projectInternal?.expect?.timeout;
-  if (typeof defaultExpectTimeout === 'undefined')
-    defaultExpectTimeout = 5000;
-  return defaultExpectTimeout;
-}
-
 let _isWorkerProcess = false;
 
 export function setIsWorkerProcess() {
@@ -59,4 +41,20 @@ export function setIsWorkerProcess() {
 
 export function isWorkerProcess() {
   return _isWorkerProcess;
+}
+
+export interface TestLifecycleInstrumentation {
+  onTestBegin?(): Promise<void>;
+  onTestFunctionEnd?(): Promise<void>;
+  onTestEnd?(): Promise<void>;
+}
+
+let _testLifecycleInstrumentation: TestLifecycleInstrumentation | undefined;
+
+export function setTestLifecycleInstrumentation(instrumentation: TestLifecycleInstrumentation | undefined) {
+  _testLifecycleInstrumentation = instrumentation;
+}
+
+export function testLifecycleInstrumentation() {
+  return _testLifecycleInstrumentation;
 }

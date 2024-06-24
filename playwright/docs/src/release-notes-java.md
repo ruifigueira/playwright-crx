@@ -4,6 +4,133 @@ title: "Release notes"
 toc_max_heading_level: 2
 ---
 
+## Version 1.45
+
+### Clock
+
+Utilizing the new [Clock] API allows to manipulate and control time within tests to verify time-related behavior. This API covers many common scenarios, including:
+* testing with predefined time;
+* keeping consistent time and timers;
+* monitoring inactivity;
+* ticking through time manually.
+
+```java
+// Initialize clock with some time before the test time and let the page load
+// naturally. `Date.now` will progress as the timers fire.
+page.clock().install(new Clock.InstallOptions().setTime("2024-02-02T08:00:00"));
+page.navigate("http://localhost:3333");
+Locator locator = page.getByTestId("current-time");
+
+// Pretend that the user closed the laptop lid and opened it again at 10am.
+// Pause the time once reached that point.
+page.clock().pauseAt("2024-02-02T10:00:00");
+
+// Assert the page state.
+assertThat(locator).hasText("2/2/2024, 10:00:00 AM");
+
+// Close the laptop lid again and open it at 10:30am.
+page.clock().fastForward("30:00");
+assertThat(locator).hasText("2/2/2024, 10:30:00 AM");
+```
+
+See [the clock guide](./clock.md) for more details.
+
+### Miscellaneous
+
+- Method [`method: Locator.setInputFiles`] now supports uploading a directory for `<input type=file webkitdirectory>` elements.
+  ```java
+  page.getByLabel("Upload directory").setInputFiles(Paths.get("mydir"));
+  ```
+
+- Multiple methods like [`method: Locator.click`] or [`method: Locator.press`] now support a `ControlOrMeta` modifier key. This key maps to `Meta` on macOS and maps to `Control` on Windows and Linux.
+  ```java
+  // Press the common keyboard shortcut Control+S or Meta+S to trigger a "Save" operation.
+  page.keyboard.press("ControlOrMeta+S");
+  ```
+
+- New property `httpCredentials.send` in [`method: APIRequest.newContext`] that allows to either always send the `Authorization` header or only send it in response to `401 Unauthorized`.
+
+- Playwright now supports Chromium, Firefox and WebKit on Ubuntu 24.04.
+
+- v1.45 is the last release to receive WebKit update for macOS 12 Monterey. Please update macOS to keep using the latest WebKit.
+
+### Browser Versions
+
+* Chromium 127.0.6533.5
+* Mozilla Firefox 127.0
+* WebKit 17.4
+
+This version was also tested against the following stable channels:
+
+* Google Chrome 126
+* Microsoft Edge 126
+
+## Version 1.44
+
+### New APIs
+
+**Accessibility assertions**
+
+- [`method: LocatorAssertions.toHaveAccessibleName`] checks if the element has the specified accessible name:
+  ```java
+  Locator locator = page.getByRole(AriaRole.BUTTON);
+  assertThat(locator).hasAccessibleName("Submit");
+  ```
+
+- [`method: LocatorAssertions.toHaveAccessibleDescription`] checks if the element has the specified accessible description:
+  ```java
+  Locator locator = page.getByRole(AriaRole.BUTTON);
+  assertThat(locator).hasAccessibleDescription("Upload a photo");
+  ```
+
+- [`method: LocatorAssertions.toHaveRole`] checks if the element has the specified ARIA role:
+  ```java
+  Locator locator = page.getByTestId("save-button");
+  assertThat(locator).hasRole(AriaRole.BUTTON);
+  ```
+
+**Locator handler**
+
+- After executing the handler added with [`method: Page.addLocatorHandler`], Playwright will now wait until the overlay that triggered the handler is not visible anymore. You can opt-out of this behavior with the new `setNoWaitAfter` option.
+- You can use new `setTimes` option in [`method: Page.addLocatorHandler`] to specify maximum number of times the handler should be run.
+- The handler in [`method: Page.addLocatorHandler`] now accepts the locator as argument.
+- New [`method: Page.removeLocatorHandler`] method for removing previously added locator handlers.
+
+```java
+Locator locator = page.getByText("This interstitial covers the button");
+page.addLocatorHandler(locator, overlay -> {
+  overlay.locator("#close").click();
+}, new Page.AddLocatorHandlerOptions().setTimes(3).setNoWaitAfter(true));
+// Run your tests that can be interrupted by the overlay.
+// ...
+page.removeLocatorHandler(locator);
+```
+
+**Miscellaneous options**
+
+- New method [`method: FormData.append`] allows to specify repeating fields with the same name in [`setMultipart`](./api/class-requestoptions#request-options-set-multipart) option in `RequestOptions`:
+  ```java
+  FormData formData = FormData.create();
+  formData.append("file", new FilePayload("f1.js", "text/javascript",
+  "var x = 2024;".getBytes(StandardCharsets.UTF_8)));
+  formData.append("file", new FilePayload("f2.txt", "text/plain",
+    "hello".getBytes(StandardCharsets.UTF_8)));
+  APIResponse response = context.request().post("https://example.com/uploadFile", RequestOptions.create().setMultipart(formData));
+  ```
+
+- `expect(page).toHaveURL(url)` now supports `setIgnoreCase` [option](./api/class-pageassertions#page-assertions-to-have-url-option-ignore-case).
+
+### Browser Versions
+
+* Chromium 125.0.6422.14
+* Mozilla Firefox 125.0.1
+* WebKit 17.4
+
+This version was also tested against the following stable channels:
+
+* Google Chrome 124
+* Microsoft Edge 124
+
 ## Version 1.43
 
 ### New APIs
@@ -135,7 +262,7 @@ Learn more about the fixtures in our [JUnit guide](./junit.md).
 ### New Locator Handler
 
 New method [`method: Page.addLocatorHandler`] registers a callback that will be invoked when specified element becomes visible and may block Playwright actions. The callback can get rid of the overlay. Here is an example that closes a cookie dialog when it appears.
-  
+
 ```java
 // Setup the handler.
 page.addLocatorHandler(

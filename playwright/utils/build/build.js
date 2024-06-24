@@ -311,6 +311,7 @@ steps.push({
 onChanges.push({
   inputs: [
     'packages/playwright-core/src/server/injected/**',
+    'packages/playwright-core/src/third_party/**',
     'packages/playwright-ct-core/src/injected/**',
     'packages/playwright-core/src/utils/isomorphic/**',
     'utils/generate_injected.js',
@@ -339,7 +340,6 @@ onChanges.push({
     'packages/playwright-core/src/server/chromium/protocol.d.ts',
   ],
   mustExist: [
-    'packages/playwright-core/lib/server/deviceDescriptors.js',
     'packages/playwright-core/lib/server/deviceDescriptorsSource.json',
   ],
   script: 'utils/generate_types/index.js',

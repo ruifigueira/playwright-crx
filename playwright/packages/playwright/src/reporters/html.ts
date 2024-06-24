@@ -62,14 +62,14 @@ class HtmlReporter extends EmptyReporter {
   private _outputFolder!: string;
   private _attachmentsBaseURL!: string;
   private _open: string | undefined;
+  private _port: number | undefined;
+  private _host: string | undefined;
   private _buildResult: { ok: boolean, singleTestId: string | undefined } | undefined;
   private _topLevelErrors: TestError[] = [];
 
   constructor(options: HtmlReporterOptions) {
     super();
     this._options = options;
-    if (options._mode === 'test')
-      process.env.PW_HTML_REPORT = '1';
   }
 
   override printsToStdio() {
@@ -81,13 +81,15 @@ class HtmlReporter extends EmptyReporter {
   }
 
   override onBegin(suite: Suite) {
-    const { outputFolder, open, attachmentsBaseURL } = this._resolveOptions();
+    const { outputFolder, open, attachmentsBaseURL, host, port } = this._resolveOptions();
     this._outputFolder = outputFolder;
     this._open = open;
+    this._host = host;
+    this._port = port;
     this._attachmentsBaseURL = attachmentsBaseURL;
     const reportedWarnings = new Set<string>();
     for (const project of this.config.projects) {
-      if (outputFolder.startsWith(project.outputDir) || project.outputDir.startsWith(outputFolder)) {
+      if (this._isSubdirectory(outputFolder, project.outputDir) || this._isSubdirectory(project.outputDir, outputFolder)) {
         const key = outputFolder + '|' + project.outputDir;
         if (reportedWarnings.has(key))
           continue;
@@ -104,13 +106,20 @@ class HtmlReporter extends EmptyReporter {
     this.suite = suite;
   }
 
-  _resolveOptions(): { outputFolder: string, open: HtmlReportOpenOption, attachmentsBaseURL: string } {
+  _resolveOptions(): { outputFolder: string, open: HtmlReportOpenOption, attachmentsBaseURL: string, host: string | undefined, port: number | undefined } {
     const outputFolder = reportFolderFromEnv() ?? resolveReporterOutputPath('playwright-report', this._options.configDir, this._options.outputFolder);
     return {
       outputFolder,
       open: getHtmlReportOptionProcessEnv() || this._options.open || 'on-failure',
-      attachmentsBaseURL: this._options.attachmentsBaseURL || 'data/'
+      attachmentsBaseURL: process.env.PLAYWRIGHT_HTML_ATTACHMENTS_BASE_URL || this._options.attachmentsBaseURL || 'data/',
+      host: process.env.PLAYWRIGHT_HTML_HOST || this._options.host,
+      port: process.env.PLAYWRIGHT_HTML_PORT ? +process.env.PLAYWRIGHT_HTML_PORT : this._options.port,
     };
+  }
+
+  _isSubdirectory(parentDir: string, dir: string): boolean {
+    const relativePath = path.relative(parentDir, dir);
+    return !!relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
   }
 
   override onError(error: TestError): void {
@@ -130,12 +139,12 @@ class HtmlReporter extends EmptyReporter {
     const { ok, singleTestId } = this._buildResult;
     const shouldOpen = !this._options._isTestServer && (this._open === 'always' || (!ok && this._open === 'on-failure'));
     if (shouldOpen) {
-      await showHTMLReport(this._outputFolder, this._options.host, this._options.port, singleTestId);
+      await showHTMLReport(this._outputFolder, this._host, this._port, singleTestId);
     } else if (this._options._mode === 'test') {
       const packageManagerCommand = getPackageManagerExecCommand();
       const relativeReportPath = this._outputFolder === standaloneDefaultFolder() ? '' : ' ' + path.relative(process.cwd(), this._outputFolder);
-      const hostArg = this._options.host ? ` --host ${this._options.host}` : '';
-      const portArg = this._options.port ? ` --port ${this._options.port}` : '';
+      const hostArg = this._host ? ` --host ${this._host}` : '';
+      const portArg = this._port ? ` --port ${this._port}` : '';
       console.log('');
       console.log('To open last HTML report run:');
       console.log(colors.cyan(`
@@ -146,18 +155,18 @@ class HtmlReporter extends EmptyReporter {
 }
 
 function reportFolderFromEnv(): string | undefined {
-  if (process.env[`PLAYWRIGHT_HTML_REPORT`])
-    return path.resolve(process.cwd(), process.env[`PLAYWRIGHT_HTML_REPORT`]);
-  return undefined;
+  // Note: PLAYWRIGHT_HTML_REPORT is for backwards compatibility.
+  const envValue = process.env.PLAYWRIGHT_HTML_OUTPUT_DIR || process.env.PLAYWRIGHT_HTML_REPORT;
+  return envValue ? path.resolve(envValue) : undefined;
 }
 
 function getHtmlReportOptionProcessEnv(): HtmlReportOpenOption | undefined {
-  const processKey = 'PW_TEST_HTML_REPORT_OPEN';
-  const htmlOpenEnv = process.env[processKey];
+  // Note: PW_TEST_HTML_REPORT_OPEN is for backwards compatibility.
+  const htmlOpenEnv = process.env.PLAYWRIGHT_HTML_OPEN || process.env.PW_TEST_HTML_REPORT_OPEN;
   if (!htmlOpenEnv)
     return undefined;
   if (!isHtmlReportOption(htmlOpenEnv)) {
-    console.log(colors.red(`Configuration Error: HTML reporter Invalid value for ${processKey}: ${htmlOpenEnv}. Valid values are: ${htmlReportOptions.join(', ')}`));
+    console.log(colors.red(`Configuration Error: HTML reporter Invalid value for PLAYWRIGHT_HTML_OPEN: ${htmlOpenEnv}. Valid values are: ${htmlReportOptions.join(', ')}`));
     return undefined;
   }
   return htmlOpenEnv;
@@ -177,7 +186,8 @@ export async function showHTMLReport(reportFolder: string | undefined, host: str
     return;
   }
   const server = startHtmlReportServer(folder);
-  let url = await server.start({ port, host, preferredPort: port ? undefined : 9323 });
+  await server.start({ port, host, preferredPort: port ? undefined : 9323 });
+  let url = server.urlPrefix('human-readable');
   console.log('');
   console.log(colors.cyan(`  Serving HTML report at ${url}. Press Ctrl+C to quit.`));
   if (testId)
@@ -359,7 +369,7 @@ class HtmlBuilder {
   private _createTestEntry(test: TestCasePublic, projectName: string, path: string[]): TestEntry {
     const duration = test.results.reduce((a, r) => a + r.duration, 0);
     const location = this._relativeLocation(test.location)!;
-    path = path.slice(1);
+    path = path.slice(1).filter(path => path.length > 0);
     const results = test.results.map(r => this._createTestResult(test, r));
 
     return {

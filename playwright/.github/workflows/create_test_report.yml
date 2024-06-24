@@ -1,7 +1,7 @@
 name: Publish Test Results
 on:
   workflow_run:
-    workflows: ["tests 1", "tests 2"]
+    workflows: ["tests 1", "tests 2", "tests others"]
     types:
       - completed
 jobs:
@@ -58,7 +58,7 @@ jobs:
         path: '.'
 
     - name: Comment on PR
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |

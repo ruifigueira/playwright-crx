@@ -814,21 +814,6 @@ export interface Page {
    * })();
    * ```
    *
-   * An example of passing an element handle:
-   *
-   * ```js
-   * await page.exposeBinding('clicked', async (source, element) => {
-   *   console.log(await element.textContent());
-   * }, { handle: true });
-   * await page.setContent(`
-   *   <script>
-   *     document.addEventListener('click', event => window.clicked(event.target));
-   *   </script>
-   *   <div>Click me</div>
-   *   <div>Or click me</div>
-   * `);
-   * ```
-   *
    * @param name Name of the function on the window object.
    * @param callback Callback function that will be called in the Playwright's context.
    * @param options
@@ -873,21 +858,6 @@ export interface Page {
    *   `);
    *   await page.click('button');
    * })();
-   * ```
-   *
-   * An example of passing an element handle:
-   *
-   * ```js
-   * await page.exposeBinding('clicked', async (source, element) => {
-   *   console.log(await element.textContent());
-   * }, { handle: true });
-   * await page.setContent(`
-   *   <script>
-   *     document.addEventListener('click', event => window.clicked(event.target));
-   *   </script>
-   *   <div>Click me</div>
-   *   <div>Or click me</div>
-   * `);
    * ```
    *
    * @param name Name of the function on the window object.
@@ -4055,7 +4025,8 @@ export interface Page {
    * instead. Read more about [locators](https://playwright.dev/docs/locators).
    *
    * Sets the value of the file input to these file paths or files. If some of the `filePaths` are relative paths, then
-   * they are resolved relative to the current working directory. For empty array, clears the selected files.
+   * they are resolved relative to the current working directory. For empty array, clears the selected files. For inputs
+   * with a `[webkitdirectory]` attribute, only a single directory path is supported.
    *
    * This method expects `selector` to point to an
    * [input element](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input). However, if the element is inside
@@ -4390,7 +4361,7 @@ export interface Page {
    */
   unrouteAll(options?: {
     /**
-     * Specifies wether to wait for already running handlers and what to do if they throw errors:
+     * Specifies whether to wait for already running handlers and what to do if they throw errors:
      * - `'default'` - do not wait for current handler calls (if any) to finish, if unrouted handler throws, it may
      *   result in unhandled error
      * - `'wait'` - wait for current handler calls (if any) to finish
@@ -4769,6 +4740,7 @@ export interface Page {
    * // Alternative way with a predicate. Note no await.
    * const responsePromise = page.waitForResponse(response =>
    *   response.url() === 'https://example.com' && response.status() === 200
+   *       && response.request().method() === 'GET'
    * );
    * await page.getByText('trigger response').click();
    * const response = await responsePromise;
@@ -4861,6 +4833,11 @@ export interface Page {
    * with Axe.
    */
   accessibility: Accessibility;
+
+  /**
+   * Playwright has ability to mock clock and passage of time.
+   */
+  clock: Clock;
 
   /**
    * **NOTE** Only available for Chromium atm.
@@ -7630,21 +7607,6 @@ export interface BrowserContext {
    * })();
    * ```
    *
-   * An example of passing an element handle:
-   *
-   * ```js
-   * await context.exposeBinding('clicked', async (source, element) => {
-   *   console.log(await element.textContent());
-   * }, { handle: true });
-   * await page.setContent(`
-   *   <script>
-   *     document.addEventListener('click', event => window.clicked(event.target));
-   *   </script>
-   *   <div>Click me</div>
-   *   <div>Or click me</div>
-   * `);
-   * ```
-   *
    * @param name Name of the function on the window object.
    * @param callback Callback function that will be called in the Playwright's context.
    * @param options
@@ -7684,21 +7646,6 @@ export interface BrowserContext {
    *   `);
    *   await page.getByRole('button').click();
    * })();
-   * ```
-   *
-   * An example of passing an element handle:
-   *
-   * ```js
-   * await context.exposeBinding('clicked', async (source, element) => {
-   *   console.log(await element.textContent());
-   * }, { handle: true });
-   * await page.setContent(`
-   *   <script>
-   *     document.addEventListener('click', event => window.clicked(event.target));
-   *   </script>
-   *   <div>Click me</div>
-   *   <div>Or click me</div>
-   * `);
    * ```
    *
    * @param name Name of the function on the window object.
@@ -8510,21 +8457,22 @@ export interface BrowserContext {
    * Grants specified permissions to the browser context. Only grants corresponding permissions to the given origin if
    * specified.
    * @param permissions A permission or an array of permissions to grant. Permissions can be one of the following values:
-   * - `'geolocation'`
-   * - `'midi'`
-   * - `'midi-sysex'` (system-exclusive midi)
-   * - `'notifications'`
-   * - `'camera'`
-   * - `'microphone'`
-   * - `'background-sync'`
-   * - `'ambient-light-sensor'`
    * - `'accelerometer'`
-   * - `'gyroscope'`
-   * - `'magnetometer'`
    * - `'accessibility-events'`
+   * - `'ambient-light-sensor'`
+   * - `'background-sync'`
+   * - `'camera'`
    * - `'clipboard-read'`
    * - `'clipboard-write'`
+   * - `'geolocation'`
+   * - `'gyroscope'`
+   * - `'magnetometer'`
+   * - `'microphone'`
+   * - `'midi-sysex'` (system-exclusive midi)
+   * - `'midi'`
+   * - `'notifications'`
    * - `'payment-handler'`
+   * - `'storage-access'`
    * @param options
    */
   grantPermissions(permissions: ReadonlyArray<string>, options?: {
@@ -8827,7 +8775,7 @@ export interface BrowserContext {
    */
   unrouteAll(options?: {
     /**
-     * Specifies wether to wait for already running handlers and what to do if they throw errors:
+     * Specifies whether to wait for already running handlers and what to do if they throw errors:
      * - `'default'` - do not wait for current handler calls (if any) to finish, if unrouted handler throws, it may
      *   result in unhandled error
      * - `'wait'` - wait for current handler calls (if any) to finish
@@ -8978,6 +8926,11 @@ export interface BrowserContext {
    */
   waitForEvent(event: 'weberror', optionsOrPredicate?: { predicate?: (webError: WebError) => boolean | Promise<boolean>, timeout?: number } | ((webError: WebError) => boolean | Promise<boolean>)): Promise<WebError>;
 
+
+  /**
+   * Playwright has ability to mock clock and passage of time.
+   */
+  clock: Clock;
 
   /**
    * API testing helper associated with this context. Requests made with this API will use context cookies.
@@ -10374,6 +10327,8 @@ export interface ElementHandle<T=Node> extends JSHandle<T> {
    *
    * Throws when `elementHandle` does not point to an element
    * [connected](https://developer.mozilla.org/en-US/docs/Web/API/Node/isConnected) to a Document or a ShadowRoot.
+   *
+   * See [scrolling](https://playwright.dev/docs/input#scrolling) for alternative ways to scroll.
    * @param options
    */
   scrollIntoViewIfNeeded(options?: {
@@ -10566,7 +10521,8 @@ export interface ElementHandle<T=Node> extends JSHandle<T> {
    * instead. Read more about [locators](https://playwright.dev/docs/locators).
    *
    * Sets the value of the file input to these file paths or files. If some of the `filePaths` are relative paths, then
-   * they are resolved relative to the current working directory. For empty array, clears the selected files.
+   * they are resolved relative to the current working directory. For empty array, clears the selected files. For inputs
+   * with a `[webkitdirectory]` attribute, only a single directory path is supported.
    *
    * This method expects {@link ElementHandle} to point to an
    * [input element](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input). However, if the element is inside
@@ -12574,6 +12530,8 @@ export interface Locator {
    * This method waits for [actionability](https://playwright.dev/docs/actionability) checks, then tries to scroll element into view, unless
    * it is completely visible as defined by
    * [IntersectionObserver](https://developer.mozilla.org/en-US/docs/Web/API/Intersection_Observer_API)'s `ratio`.
+   *
+   * See [scrolling](https://playwright.dev/docs/input#scrolling) for alternative ways to scroll.
    * @param options
    */
   scrollIntoViewIfNeeded(options?: {
@@ -12771,7 +12729,8 @@ export interface Locator {
   }): Promise<void>;
 
   /**
-   * Upload file or multiple files into `<input type=file>`.
+   * Upload file or multiple files into `<input type=file>`. For inputs with a `[webkitdirectory]` attribute, only a
+   * single directory path is supported.
    *
    * **Usage**
    *
@@ -12784,6 +12743,9 @@ export interface Locator {
    *   path.join(__dirname, 'file1.txt'),
    *   path.join(__dirname, 'file2.txt'),
    * ]);
+   *
+   * // Select a directory
+   * await page.getByLabel('Upload directory').setInputFiles(path.join(__dirname, 'mydir'));
    *
    * // Remove all the selected files
    * await page.getByLabel('Upload file').setInputFiles([]);
@@ -13376,6 +13338,14 @@ export interface BrowserType<Unused = {}> {
        * Restrain sending http credentials on specific origin (scheme://host:port).
        */
       origin?: string;
+
+      /**
+       * This option only applies to the requests sent from corresponding {@link APIRequestContext} and does not affect
+       * requests sent from the browser. `'always'` - `Authorization` header with basic authentication credentials will be
+       * sent with the each API request. `'unauthorized` - the credentials are only sent when 401 (Unauthorized) response
+       * with `WWW-Authenticate` header is received. Defaults to `'unauthorized'`.
+       */
+      send?: "unauthorized"|"always";
     };
 
     /**
@@ -13732,6 +13702,13 @@ export interface BrowserType<Unused = {}> {
      * `devtools` option is `true`.
      */
     headless?: boolean;
+
+    /**
+     * Host to use for the web socket. It is optional and if it is omitted, the server will accept connections on the
+     * unspecified IPv6 address (::) when IPv6 is available, or the unspecified IPv4 address (0.0.0.0) otherwise. Consider
+     * hardening it with picking a specific interface.
+     */
+    host?: string;
 
     /**
      * If `true`, Playwright does not pass its own configurations args and only uses the ones from `args`. If an array is
@@ -14610,6 +14587,13 @@ export interface Android {
     deviceSerialNumber?: string;
 
     /**
+     * Host to use for the web socket. It is optional and if it is omitted, the server will accept connections on the
+     * unspecified IPv6 address (::) when IPv6 is available, or the unspecified IPv4 address (0.0.0.0) otherwise. Consider
+     * hardening it with picking a specific interface.
+     */
+    host?: string;
+
+    /**
      * Prevents automatic playwright driver installation on attach. Assumes that the drivers have been installed already.
      */
     omitDriverInstall?: boolean;
@@ -14892,6 +14876,14 @@ export interface AndroidDevice {
        * Restrain sending http credentials on specific origin (scheme://host:port).
        */
       origin?: string;
+
+      /**
+       * This option only applies to the requests sent from corresponding {@link APIRequestContext} and does not affect
+       * requests sent from the browser. `'always'` - `Authorization` header with basic authentication credentials will be
+       * sent with the each API request. `'unauthorized` - the credentials are only sent when 401 (Unauthorized) response
+       * with `WWW-Authenticate` header is received. Defaults to `'unauthorized'`.
+       */
+      send?: "unauthorized"|"always";
     };
 
     /**
@@ -15616,6 +15608,14 @@ export interface APIRequest {
        * Restrain sending http credentials on specific origin (scheme://host:port).
        */
       origin?: string;
+
+      /**
+       * This option only applies to the requests sent from corresponding {@link APIRequestContext} and does not affect
+       * requests sent from the browser. `'always'` - `Authorization` header with basic authentication credentials will be
+       * sent with the each API request. `'unauthorized` - the credentials are only sent when 401 (Unauthorized) response
+       * with `WWW-Authenticate` header is received. Defaults to `'unauthorized'`.
+       */
+      send?: "unauthorized"|"always";
     };
 
     /**
@@ -15820,8 +15820,14 @@ export interface APIRequestContext {
    * and similar methods are stored in the memory, so that you can later call
    * [apiResponse.body()](https://playwright.dev/docs/api/class-apiresponse#api-response-body).This method discards all
    * its resources, calling any method on disposed {@link APIRequestContext} will throw an exception.
+   * @param options
    */
-  dispose(): Promise<void>;
+  dispose(options?: {
+    /**
+     * The reason to be reported to the operations interrupted by the context disposal.
+     */
+    reason?: string;
+  }): Promise<void>;
 
   /**
    * Sends HTTP(S) request and returns its response. The method will populate request cookies from the context and
@@ -16760,6 +16766,14 @@ export interface Browser extends EventEmitter {
        * Restrain sending http credentials on specific origin (scheme://host:port).
        */
       origin?: string;
+
+      /**
+       * This option only applies to the requests sent from corresponding {@link APIRequestContext} and does not affect
+       * requests sent from the browser. `'always'` - `Authorization` header with basic authentication credentials will be
+       * sent with the each API request. `'unauthorized` - the credentials are only sent when 401 (Unauthorized) response
+       * with `WWW-Authenticate` header is received. Defaults to `'unauthorized'`.
+       */
+      send?: "unauthorized"|"always";
     };
 
     /**
@@ -17162,6 +17176,9 @@ export interface BrowserServer {
    * Browser websocket endpoint which can be used as an argument to
    * [browserType.connect(wsEndpoint[, options])](https://playwright.dev/docs/api/class-browsertype#browser-type-connect)
    * to establish connection to the browser.
+   *
+   * Note that if the listen `host` option in `launchServer` options is not specified, localhost will be output anyway,
+   * even if the actual listening address is an unspecified address.
    */
   wsEndpoint(): string;
 
@@ -17169,9 +17186,131 @@ export interface BrowserServer {
 }
 
 /**
+ * Accurately simulating time-dependent behavior is essential for verifying the correctness of applications. Learn
+ * more about [clock emulation](https://playwright.dev/docs/clock).
+ *
+ * Note that clock is installed for the entire {@link BrowserContext}, so the time in all the pages and iframes is
+ * controlled by the same clock.
+ */
+export interface Clock {
+  /**
+   * Advance the clock by jumping forward in time. Only fires due timers at most once. This is equivalent to user
+   * closing the laptop lid for a while and reopening it later, after given time.
+   *
+   * **Usage**
+   *
+   * ```js
+   * await page.clock.fastForward(1000);
+   * await page.clock.fastForward('30:00');
+   * ```
+   *
+   * @param ticks Time may be the number of milliseconds to advance the clock by or a human-readable string. Valid string formats are
+   * "08" for eight seconds, "01:00" for one minute and "02:34:10" for two hours, 34 minutes and ten seconds.
+   */
+  fastForward(ticks: number|string): Promise<void>;
+
+  /**
+   * Install fake implementations for the following time-related functions:
+   * - `Date`
+   * - `setTimeout`
+   * - `clearTimeout`
+   * - `setInterval`
+   * - `clearInterval`
+   * - `requestAnimationFrame`
+   * - `cancelAnimationFrame`
+   * - `requestIdleCallback`
+   * - `cancelIdleCallback`
+   * - `performance`
+   *
+   * Fake timers are used to manually control the flow of time in tests. They allow you to advance time, fire timers,
+   * and control the behavior of time-dependent functions. See
+   * [clock.runFor(ticks)](https://playwright.dev/docs/api/class-clock#clock-run-for) and
+   * [clock.fastForward(ticks)](https://playwright.dev/docs/api/class-clock#clock-fast-forward) for more information.
+   * @param options
+   */
+  install(options?: {
+    /**
+     * Time to initialize with, current system time by default.
+     */
+    time?: number|string|Date;
+  }): Promise<void>;
+
+  /**
+   * Advance the clock by jumping forward in time and pause the time. Once this method is called, no timers are fired
+   * unless [clock.runFor(ticks)](https://playwright.dev/docs/api/class-clock#clock-run-for),
+   * [clock.fastForward(ticks)](https://playwright.dev/docs/api/class-clock#clock-fast-forward),
+   * [clock.pauseAt(time)](https://playwright.dev/docs/api/class-clock#clock-pause-at) or
+   * [clock.resume()](https://playwright.dev/docs/api/class-clock#clock-resume) is called.
+   *
+   * Only fires due timers at most once. This is equivalent to user closing the laptop lid for a while and reopening it
+   * at the specified time and pausing.
+   *
+   * **Usage**
+   *
+   * ```js
+   * await page.clock.pauseAt(new Date('2020-02-02'));
+   * await page.clock.pauseAt('2020-02-02');
+   * ```
+   *
+   * @param time
+   */
+  pauseAt(time: number|string|Date): Promise<void>;
+
+  /**
+   * Resumes timers. Once this method is called, time resumes flowing, timers are fired as usual.
+   */
+  resume(): Promise<void>;
+
+  /**
+   * Advance the clock, firing all the time-related callbacks.
+   *
+   * **Usage**
+   *
+   * ```js
+   * await page.clock.runFor(1000);
+   * await page.clock.runFor('30:00');
+   * ```
+   *
+   * @param ticks Time may be the number of milliseconds to advance the clock by or a human-readable string. Valid string formats are
+   * "08" for eight seconds, "01:00" for one minute and "02:34:10" for two hours, 34 minutes and ten seconds.
+   */
+  runFor(ticks: number|string): Promise<void>;
+
+  /**
+   * Makes `Date.now` and `new Date()` return fixed fake time at all times, keeps all the timers running.
+   *
+   * **Usage**
+   *
+   * ```js
+   * await page.clock.setFixedTime(Date.now());
+   * await page.clock.setFixedTime(new Date('2020-02-02'));
+   * await page.clock.setFixedTime('2020-02-02');
+   * ```
+   *
+   * @param time Time to be set.
+   */
+  setFixedTime(time: number|string|Date): Promise<void>;
+
+  /**
+   * Sets current system time but does not trigger any timers.
+   *
+   * **Usage**
+   *
+   * ```js
+   * await page.clock.setSystemTime(Date.now());
+   * await page.clock.setSystemTime(new Date('2020-02-02'));
+   * await page.clock.setSystemTime('2020-02-02');
+   * ```
+   *
+   * @param time
+   */
+  setSystemTime(time: number|string|Date): Promise<void>;
+}
+
+/**
  * {@link ConsoleMessage} objects are dispatched by page via the
- * [page.on('console')](https://playwright.dev/docs/api/class-page#page-event-console) event. For each console
- * messages logged in the page there will be corresponding event in the Playwright context.
+ * [page.on('console')](https://playwright.dev/docs/api/class-page#page-event-console) event. For each console message
+ * logged in the page there will be corresponding event in the Playwright context.
  *
  * ```js
  * // Listen for all console logs
@@ -17647,6 +17786,14 @@ export interface Electron {
        * Restrain sending http credentials on specific origin (scheme://host:port).
        */
       origin?: string;
+
+      /**
+       * This option only applies to the requests sent from corresponding {@link APIRequestContext} and does not affect
+       * requests sent from the browser. `'always'` - `Authorization` header with basic authentication credentials will be
+       * sent with the each API request. `'unauthorized` - the credentials are only sent when 401 (Unauthorized) response
+       * with `WWW-Authenticate` header is received. Defaults to `'unauthorized'`.
+       */
+      send?: "unauthorized"|"always";
     };
 
     /**
@@ -18614,7 +18761,8 @@ export interface Mouse {
   }): Promise<void>;
 
   /**
-   * Dispatches a `wheel` event.
+   * Dispatches a `wheel` event. This method is usually used to manually scroll the page. See
+   * [scrolling](https://playwright.dev/docs/input#scrolling) for alternative ways to scroll.
    *
    * **NOTE** Wheel events may cause scrolling if they are not handled, and this method does not wait for the scrolling
    * to finish before returning.
@@ -20307,6 +20455,14 @@ export interface HTTPCredentials {
    * Restrain sending http credentials on specific origin (scheme://host:port).
    */
   origin?: string;
+
+  /**
+   * This option only applies to the requests sent from corresponding {@link APIRequestContext} and does not affect
+   * requests sent from the browser. `'always'` - `Authorization` header with basic authentication credentials will be
+   * sent with the each API request. `'unauthorized` - the credentials are only sent when 401 (Unauthorized) response
+   * with `WWW-Authenticate` header is received. Defaults to `'unauthorized'`.
+   */
+  send?: "unauthorized"|"always";
 }
 
 export interface Geolocation {
