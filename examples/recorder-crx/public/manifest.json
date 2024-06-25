@@ -1,6 +1,6 @@
 {
   "name": "Playwright CRX",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "manifest_version": 3,
   "icons": {
     "16": "icon-16x16.png",
@@ -23,6 +23,5 @@
     "page": "options.html",
     "open_in_tab": false
   },
-  "permissions": ["debugger", "tabs", "contextMenus", "storage", "cookies"],
-  "host_permissions": ["<all_urls>"]
+  "permissions": ["debugger", "tabs", "contextMenus", "storage"]
 }
