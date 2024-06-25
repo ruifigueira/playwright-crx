@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import type * as channels from '@protocol/channels';
-import descriptors from 'playwright-core/lib/server/deviceDescriptors';
+import { deviceDescriptors as descriptors } from 'playwright-core/lib/server/deviceDescriptors';
 import { AndroidDispatcher } from 'playwright-core/lib/server/dispatchers/androidDispatcher';
 import { BrowserTypeDispatcher } from 'playwright-core/lib/server/dispatchers/browserTypeDispatcher';
 import type { RootDispatcher } from 'playwright-core/lib/server/dispatchers/dispatcher';

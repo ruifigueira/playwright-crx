@@ -17,19 +17,15 @@
 import { expectTypes, callLogText } from '../util';
 import { matcherHint } from './matcherHint';
 import type { MatcherResult } from './matcherHint';
-import { currentExpectTimeout } from '../common/globals';
-import type { ExpectMatcherContext } from './expect';
+import type { ExpectMatcherState } from '../../types/test';
 import type { Locator } from 'playwright-core';
 
 // Omit colon and one or more spaces, so can call getLabelPrinter.
 const EXPECTED_LABEL = 'Expected';
 const RECEIVED_LABEL = 'Received';
 
-// The optional property of matcher context is true if undefined.
-const isExpand = (expand?: boolean): boolean => expand !== false;
-
 export async function toEqual<T>(
-  this: ExpectMatcherContext,
+  this: ExpectMatcherState,
   matcherName: string,
   receiver: Locator,
   receiverType: string,
@@ -45,7 +41,7 @@ export async function toEqual<T>(
     promise: this.promise,
   };
 
-  const timeout = currentExpectTimeout(options);
+  const timeout = options.timeout ?? this.timeout;
 
   const { matches: pass, received, log, timedOut } = await query(!!this.isNot, timeout);
 
@@ -61,7 +57,7 @@ export async function toEqual<T>(
           received,
           EXPECTED_LABEL,
           RECEIVED_LABEL,
-          isExpand(this.expand),
+          false,
       ) + callLogText(log);
 
   // Passing the actual and expected objects so that a custom reporter

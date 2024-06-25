@@ -758,7 +758,7 @@ Does not always exist (e.g. for unsafe form submission urls).
      * Enum indicating the reason a response has been blocked. These reasons are
 refinements of the net error BLOCKED_BY_RESPONSE.
      */
-    export type BlockedByResponseReason = "CoepFrameResourceNeedsCoepHeader"|"CoopSandboxedIFrameCannotNavigateToCoopPage"|"CorpNotSameOrigin"|"CorpNotSameOriginAfterDefaultedToSameOriginByCoep"|"CorpNotSameSite";
+    export type BlockedByResponseReason = "CoepFrameResourceNeedsCoepHeader"|"CoopSandboxedIFrameCannotNavigateToCoopPage"|"CorpNotSameOrigin"|"CorpNotSameOriginAfterDefaultedToSameOriginByCoep"|"CorpNotSameOriginAfterDefaultedToSameOriginByDip"|"CorpNotSameOriginAfterDefaultedToSameOriginByCoepAndDip"|"CorpNotSameSite";
     /**
      * Details for a request that has been blocked with the BLOCKED_BY_RESPONSE
 code. Currently only used for COEP/COOP, but may be extended to include
@@ -841,6 +841,7 @@ CORS RFC1918 enforcement.
       clientSecurityState?: Network.ClientSecurityState;
     }
     export type AttributionReportingIssueType = "PermissionPolicyDisabled"|"UntrustworthyReportingOrigin"|"InsecureContext"|"InvalidHeader"|"InvalidRegisterTriggerHeader"|"SourceAndTriggerHeaders"|"SourceIgnored"|"TriggerIgnored"|"OsSourceIgnored"|"OsTriggerIgnored"|"InvalidRegisterOsSourceHeader"|"InvalidRegisterOsTriggerHeader"|"WebAndOsHeaders"|"NoWebOrOsSupport"|"NavigationRegistrationWithoutTransientUserActivation"|"InvalidInfoHeader"|"NoRegisterSourceHeader"|"NoRegisterTriggerHeader"|"NoRegisterOsSourceHeader"|"NoRegisterOsTriggerHeader";
+    export type SharedDictionaryError = "UseErrorCrossOriginNoCorsRequest"|"UseErrorDictionaryLoadFailure"|"UseErrorMatchingDictionaryNotUsed"|"UseErrorUnexpectedContentDictionaryHeader"|"WriteErrorCossOriginNoCorsRequest"|"WriteErrorDisallowedBySettings"|"WriteErrorExpiredResponse"|"WriteErrorFeatureDisabled"|"WriteErrorInsufficientResources"|"WriteErrorInvalidMatchField"|"WriteErrorInvalidStructuredHeader"|"WriteErrorNavigationRequest"|"WriteErrorNoMatchField"|"WriteErrorNonListMatchDestField"|"WriteErrorNonSecureContext"|"WriteErrorNonStringIdField"|"WriteErrorNonStringInMatchDestList"|"WriteErrorNonStringMatchField"|"WriteErrorNonTokenTypeField"|"WriteErrorRequestAborted"|"WriteErrorShuttingDown"|"WriteErrorTooLongIdField"|"WriteErrorUnsupportedType";
     /**
      * Details for issues around "Attribution Reporting API" usage.
 Explainer: https://github.com/WICG/attribution-reporting-api
@@ -869,6 +870,10 @@ instead of "limited-quirks".
     export interface NavigatorUserAgentIssueDetails {
       url: string;
       location?: SourceCodeLocation;
+    }
+    export interface SharedDictionaryIssueDetails {
+      sharedDictionaryError: SharedDictionaryError;
+      request: AffectedRequest;
     }
     export type GenericIssueErrorType = "CrossOriginPortalPostMessageError"|"FormLabelForNameError"|"FormDuplicateIdForInputError"|"FormInputWithNoLabelError"|"FormAutocompleteAttributeEmptyError"|"FormEmptyIdAndNameAttributesForInputError"|"FormAriaLabelledByToNonExistingId"|"FormInputAssignedAutocompleteValueToIdOrNameAttributeError"|"FormLabelHasNeitherForNorNestedInput"|"FormLabelForMatchesNonExistingIdError"|"FormInputHasWrongButWellIntendedAutocompleteValueError"|"ResponseWasBlockedByORB";
     /**
@@ -915,6 +920,9 @@ would be `example.test`.
      */
     export interface CookieDeprecationMetadataIssueDetails {
       allowedSites: string[];
+      optOutPercentage: number;
+      isOptOutTopLevel: boolean;
+      operation: CookieOperation;
     }
     export type ClientHintIssueReason = "MetaTagAllowListInvalidOrigin"|"MetaTagModifiedHTML";
     export interface FederatedAuthRequestIssueDetails {
@@ -926,7 +934,7 @@ Should be updated alongside RequestIdTokenStatus in
 third_party/blink/public/mojom/devtools/inspector_issue.mojom to include
 all cases except for success.
      */
-    export type FederatedAuthRequestIssueReason = "ShouldEmbargo"|"TooManyRequests"|"WellKnownHttpNotFound"|"WellKnownNoResponse"|"WellKnownInvalidResponse"|"WellKnownListEmpty"|"WellKnownInvalidContentType"|"ConfigNotInWellKnown"|"WellKnownTooBig"|"ConfigHttpNotFound"|"ConfigNoResponse"|"ConfigInvalidResponse"|"ConfigInvalidContentType"|"ClientMetadataHttpNotFound"|"ClientMetadataNoResponse"|"ClientMetadataInvalidResponse"|"ClientMetadataInvalidContentType"|"DisabledInSettings"|"ErrorFetchingSignin"|"InvalidSigninResponse"|"AccountsHttpNotFound"|"AccountsNoResponse"|"AccountsInvalidResponse"|"AccountsListEmpty"|"AccountsInvalidContentType"|"IdTokenHttpNotFound"|"IdTokenNoResponse"|"IdTokenInvalidResponse"|"IdTokenIdpErrorResponse"|"IdTokenCrossSiteIdpErrorResponse"|"IdTokenInvalidRequest"|"IdTokenInvalidContentType"|"ErrorIdToken"|"Canceled"|"RpPageNotVisible"|"SilentMediationFailure"|"ThirdPartyCookiesBlocked"|"NotSignedInWithIdp"|"MissingTransientUserActivation"|"ReplacedByButtonMode";
+    export type FederatedAuthRequestIssueReason = "ShouldEmbargo"|"TooManyRequests"|"WellKnownHttpNotFound"|"WellKnownNoResponse"|"WellKnownInvalidResponse"|"WellKnownListEmpty"|"WellKnownInvalidContentType"|"ConfigNotInWellKnown"|"WellKnownTooBig"|"ConfigHttpNotFound"|"ConfigNoResponse"|"ConfigInvalidResponse"|"ConfigInvalidContentType"|"ClientMetadataHttpNotFound"|"ClientMetadataNoResponse"|"ClientMetadataInvalidResponse"|"ClientMetadataInvalidContentType"|"DisabledInSettings"|"ErrorFetchingSignin"|"InvalidSigninResponse"|"AccountsHttpNotFound"|"AccountsNoResponse"|"AccountsInvalidResponse"|"AccountsListEmpty"|"AccountsInvalidContentType"|"IdTokenHttpNotFound"|"IdTokenNoResponse"|"IdTokenInvalidResponse"|"IdTokenIdpErrorResponse"|"IdTokenCrossSiteIdpErrorResponse"|"IdTokenInvalidRequest"|"IdTokenInvalidContentType"|"ErrorIdToken"|"Canceled"|"RpPageNotVisible"|"SilentMediationFailure"|"ThirdPartyCookiesBlocked"|"NotSignedInWithIdp"|"MissingTransientUserActivation"|"ReplacedByButtonMode"|"RelyingPartyOriginIsOpaque"|"TypeNotMatching";
     export interface FederatedAuthUserInfoRequestIssueDetails {
       federatedAuthUserInfoRequestIssueReason: FederatedAuthUserInfoRequestIssueReason;
     }
@@ -997,7 +1005,7 @@ registrations being ignored.
 optional fields in InspectorIssueDetails to convey more specific
 information about the kind of issue.
      */
-    export type InspectorIssueCode = "CookieIssue"|"MixedContentIssue"|"BlockedByResponseIssue"|"HeavyAdIssue"|"ContentSecurityPolicyIssue"|"SharedArrayBufferIssue"|"LowTextContrastIssue"|"CorsIssue"|"AttributionReportingIssue"|"QuirksModeIssue"|"NavigatorUserAgentIssue"|"GenericIssue"|"DeprecationIssue"|"ClientHintIssue"|"FederatedAuthRequestIssue"|"BounceTrackingIssue"|"CookieDeprecationMetadataIssue"|"StylesheetLoadingIssue"|"FederatedAuthUserInfoRequestIssue"|"PropertyRuleIssue";
+    export type InspectorIssueCode = "CookieIssue"|"MixedContentIssue"|"BlockedByResponseIssue"|"HeavyAdIssue"|"ContentSecurityPolicyIssue"|"SharedArrayBufferIssue"|"LowTextContrastIssue"|"CorsIssue"|"AttributionReportingIssue"|"QuirksModeIssue"|"NavigatorUserAgentIssue"|"GenericIssue"|"DeprecationIssue"|"ClientHintIssue"|"FederatedAuthRequestIssue"|"BounceTrackingIssue"|"CookieDeprecationMetadataIssue"|"StylesheetLoadingIssue"|"FederatedAuthUserInfoRequestIssue"|"PropertyRuleIssue"|"SharedDictionaryIssue";
     /**
      * This struct holds a list of optional fields with additional information
 specific to the kind of issue. When adding a new issue code, please also
@@ -1024,6 +1032,7 @@ add a new optional field to this type.
       stylesheetLoadingIssueDetails?: StylesheetLoadingIssueDetails;
       propertyRuleIssueDetails?: PropertyRuleIssueDetails;
       federatedAuthUserInfoRequestIssueDetails?: FederatedAuthUserInfoRequestIssueDetails;
+      sharedDictionaryIssueDetails?: SharedDictionaryIssueDetails;
     }
     /**
      * A unique id for a DevTools inspector issue. Allows other entities (e.g.
@@ -1118,6 +1127,33 @@ using Audits.issueAdded event.
     }
     export type checkFormsIssuesReturnValue = {
       formIssues: GenericIssueDetails[];
+    }
+  }
+  
+  /**
+   * Defines commands and events for browser extensions. Available if the client
+is connected using the --remote-debugging-pipe flag and
+the --enable-unsafe-extension-debugging flag is set.
+   */
+  export module Extensions {
+    
+    
+    /**
+     * Installs an unpacked extension from the filesystem similar to
+--load-extension CLI flags. Returns extension ID once the extension
+has been installed.
+     */
+    export type loadUnpackedParameters = {
+      /**
+       * Absolute file path.
+       */
+      path: string;
+    }
+    export type loadUnpackedReturnValue = {
+      /**
+       * Extension id.
+       */
+      id: string;
     }
   }
   
@@ -3450,7 +3486,7 @@ front-end.
     /**
      * Pseudo element type.
      */
-    export type PseudoType = "first-line"|"first-letter"|"before"|"after"|"marker"|"backdrop"|"selection"|"target-text"|"spelling-error"|"grammar-error"|"highlight"|"first-line-inherited"|"scroll-marker"|"scroll-markers"|"scrollbar"|"scrollbar-thumb"|"scrollbar-button"|"scrollbar-track"|"scrollbar-track-piece"|"scrollbar-corner"|"resizer"|"input-list-button"|"view-transition"|"view-transition-group"|"view-transition-image-pair"|"view-transition-old"|"view-transition-new";
+    export type PseudoType = "first-line"|"first-letter"|"before"|"after"|"marker"|"backdrop"|"selection"|"search-text"|"target-text"|"spelling-error"|"grammar-error"|"highlight"|"first-line-inherited"|"scroll-marker"|"scroll-marker-group"|"scrollbar"|"scrollbar-thumb"|"scrollbar-button"|"scrollbar-track"|"scrollbar-track-piece"|"scrollbar-corner"|"resizer"|"input-list-button"|"view-transition"|"view-transition-group"|"view-transition-image-pair"|"view-transition-old"|"view-transition-new";
     /**
      * Shadow root type.
      */
@@ -4427,6 +4463,25 @@ appear on top of all other content.
       nodeIds: NodeId[];
     }
     /**
+     * Returns the NodeId of the matched element according to certain relations.
+     */
+    export type getElementByRelationParameters = {
+      /**
+       * Id of the node from which to query the relation.
+       */
+      nodeId: NodeId;
+      /**
+       * Type of relation to get.
+       */
+      relation: "PopoverTarget";
+    }
+    export type getElementByRelationReturnValue = {
+      /**
+       * NodeId of the element matching the queried relation.
+       */
+      nodeId: NodeId;
+    }
+    /**
      * Re-does the last undone action.
      */
     export type redoParameters = {
@@ -4745,6 +4800,29 @@ container queries against this container.
        * Descendant nodes with container queries against the given container.
        */
       nodeIds: NodeId[];
+    }
+    /**
+     * Returns the target anchor element of the given anchor query according to
+https://www.w3.org/TR/css-anchor-position-1/#target.
+     */
+    export type getAnchorElementParameters = {
+      /**
+       * Id of the positioned element from which to find the anchor.
+       */
+      nodeId: NodeId;
+      /**
+       * An optional anchor specifier, as defined in
+https://www.w3.org/TR/css-anchor-position-1/#anchor-specifier.
+If not provided, it will return the implicit anchor element for
+the given positioned element.
+       */
+      anchorSpecifier?: string;
+    }
+    export type getAnchorElementReturnValue = {
+      /**
+       * The anchor element of the given anchor query.
+       */
+      nodeId: NodeId;
     }
   }
   
@@ -8062,6 +8140,14 @@ milliseconds relatively to this requestTime.
        */
       workerRespondWithSettled: number;
       /**
+       * Started ServiceWorker static routing source evaluation.
+       */
+      workerRouterEvaluationStart?: number;
+      /**
+       * Started cache lookup when the source was evaluated to `cache`.
+       */
+      workerCacheLookupStart?: number;
+      /**
        * Started sending request.
        */
       sendStart: number;
@@ -8268,7 +8354,7 @@ applicable or not known.
     /**
      * The reason why request was blocked.
      */
-    export type BlockedReason = "other"|"csp"|"mixed-content"|"origin"|"inspector"|"subresource-filter"|"content-type"|"coep-frame-resource-needs-coep-header"|"coop-sandboxed-iframe-cannot-navigate-to-coop-page"|"corp-not-same-origin"|"corp-not-same-origin-after-defaulted-to-same-origin-by-coep"|"corp-not-same-site";
+    export type BlockedReason = "other"|"csp"|"mixed-content"|"origin"|"inspector"|"subresource-filter"|"content-type"|"coep-frame-resource-needs-coep-header"|"coop-sandboxed-iframe-cannot-navigate-to-coop-page"|"corp-not-same-origin"|"corp-not-same-origin-after-defaulted-to-same-origin-by-coep"|"corp-not-same-origin-after-defaulted-to-same-origin-by-dip"|"corp-not-same-origin-after-defaulted-to-same-origin-by-coep-and-dip"|"corp-not-same-site";
     /**
      * The reason why request was blocked.
      */
@@ -8309,8 +8395,20 @@ records.
      */
     export type ServiceWorkerRouterSource = "network"|"cache"|"fetch-event"|"race-network-and-fetch-handler";
     export interface ServiceWorkerRouterInfo {
-      ruleIdMatched: number;
-      matchedSourceType: ServiceWorkerRouterSource;
+      /**
+       * ID of the rule matched. If there is a matched rule, this field will
+be set, otherwiser no value will be set.
+       */
+      ruleIdMatched?: number;
+      /**
+       * The router source of the matched rule. If there is a matched rule, this
+field will be set, otherwise no value will be set.
+       */
+      matchedSourceType?: ServiceWorkerRouterSource;
+      /**
+       * The actual router source used.
+       */
+      actualSourceType?: ServiceWorkerRouterSource;
     }
     /**
      * HTTP response data.
@@ -8385,7 +8483,10 @@ records.
        */
       fromEarlyHints?: boolean;
       /**
-       * Information about how Service Worker Static Router was used.
+       * Information about how ServiceWorker Static Router API was used. If this
+field is set with `matchedSourceType` field, a matching rule is found.
+If this field is set without `matchedSource`, no matching rule is found.
+Otherwise, the API is not used.
        */
       serviceWorkerRouterInfo?: ServiceWorkerRouterInfo;
       /**
@@ -8535,6 +8636,21 @@ module) (0-based).
       requestId?: RequestId;
     }
     /**
+     * cookiePartitionKey object
+The representation of the components of the key that are created by the cookiePartitionKey class contained in net/cookies/cookie_partition_key.h.
+     */
+    export interface CookiePartitionKey {
+      /**
+       * The site of the top-level URL the browser was visiting at the start
+of the request to the endpoint that set the cookie.
+       */
+      topLevelSite: string;
+      /**
+       * Indicates if the cookie has any ancestors that are cross-site to the topLevelSite.
+       */
+      hasCrossSiteAncestor: boolean;
+    }
+    /**
      * Cookie object
      */
     export interface Cookie {
@@ -8597,10 +8713,9 @@ This is a temporary ability and it will be removed in the future.
        */
       sourcePort: number;
       /**
-       * Cookie partition key. The site of the top-level URL the browser was visiting at the start
-of the request to the endpoint that set the cookie.
+       * Cookie partition key.
        */
-      partitionKey?: string;
+      partitionKey?: CookiePartitionKey;
       /**
        * True if cookie partition key is opaque.
        */
@@ -8617,7 +8732,7 @@ of the request to the endpoint that set the cookie.
     /**
      * Types of reasons why a cookie should have been blocked by 3PCD but is exempted for the request.
      */
-    export type CookieExemptionReason = "None"|"UserSetting"|"TPCDMetadata"|"TPCDDeprecationTrial"|"TPCDHeuristics"|"EnterprisePolicy"|"StorageAccess"|"TopLevelStorageAccess"|"CorsOptIn";
+    export type CookieExemptionReason = "None"|"UserSetting"|"TPCDMetadata"|"TPCDDeprecationTrial"|"TPCDHeuristics"|"EnterprisePolicy"|"StorageAccess"|"TopLevelStorageAccess"|"CorsOptIn"|"Scheme";
     /**
      * A cookie which was not stored from a response with the corresponding reason.
      */
@@ -8735,11 +8850,9 @@ This is a temporary ability and it will be removed in the future.
        */
       sourcePort?: number;
       /**
-       * Cookie partition key. The site of the top-level URL the browser was visiting at the start
-of the request to the endpoint that set the cookie.
-If not set, the cookie will be set as not partitioned.
+       * Cookie partition key. If not set, the cookie will be set as not partitioned.
        */
-      partitionKey?: string;
+      partitionKey?: CookiePartitionKey;
     }
     /**
      * Authorization challenge for HTTP status code 401 or 407.
@@ -9563,7 +9676,7 @@ available, such as in the case of HTTP/2 or QUIC.
        * The cookie partition key that will be used to store partitioned cookies set in this response.
 Only sent when partitioned cookies are enabled.
        */
-      cookiePartitionKey?: string;
+      cookiePartitionKey?: CookiePartitionKey;
       /**
        * True if partitioned cookies are enabled, but the partition key is not serializable to string.
        */
@@ -9602,7 +9715,7 @@ or after the response was received.
 of the operation already exists und thus, the operation was abort
 preemptively (e.g. a cache hit).
        */
-      status: "Ok"|"InvalidArgument"|"MissingIssuerKeys"|"FailedPrecondition"|"ResourceExhausted"|"AlreadyExists"|"Unavailable"|"Unauthorized"|"BadResponse"|"InternalError"|"UnknownError"|"FulfilledLocally";
+      status: "Ok"|"InvalidArgument"|"MissingIssuerKeys"|"FailedPrecondition"|"ResourceExhausted"|"AlreadyExists"|"ResourceLimited"|"Unauthorized"|"BadResponse"|"InternalError"|"UnknownError"|"FulfilledLocally";
       type: TrustTokenOperationType;
       requestId: RequestId;
       /**
@@ -9839,10 +9952,10 @@ provided URL.
        */
       path?: string;
       /**
-       * If specified, deletes only cookies with the the given name and partitionKey where domain
-matches provided URL.
+       * If specified, deletes only cookies with the the given name and partitionKey where
+all partition key attributes match the cookie partition key attribute.
        */
-      partitionKey?: string;
+      partitionKey?: CookiePartitionKey;
     }
     export type deleteCookiesReturnValue = {
     }
@@ -10152,11 +10265,9 @@ This is a temporary ability and it will be removed in the future.
        */
       sourcePort?: number;
       /**
-       * Cookie partition key. The site of the top-level URL the browser was visiting at the start
-of the request to the endpoint that set the cookie.
-If not set, the cookie will be set as not partitioned.
+       * Cookie partition key. If not set, the cookie will be set as not partitioned.
        */
-      partitionKey?: string;
+      partitionKey?: CookiePartitionKey;
     }
     export type setCookieReturnValue = {
       /**
@@ -11167,7 +11278,7 @@ as an ad.
      * All Permissions Policy features. This enum should match the one defined
 in third_party/blink/renderer/core/permissions_policy/permissions_policy_features.json5.
      */
-    export type PermissionsPolicyFeature = "accelerometer"|"ambient-light-sensor"|"attribution-reporting"|"autoplay"|"bluetooth"|"browsing-topics"|"camera"|"captured-surface-control"|"ch-dpr"|"ch-device-memory"|"ch-downlink"|"ch-ect"|"ch-prefers-color-scheme"|"ch-prefers-reduced-motion"|"ch-prefers-reduced-transparency"|"ch-rtt"|"ch-save-data"|"ch-ua"|"ch-ua-arch"|"ch-ua-bitness"|"ch-ua-platform"|"ch-ua-model"|"ch-ua-mobile"|"ch-ua-form-factors"|"ch-ua-full-version"|"ch-ua-full-version-list"|"ch-ua-platform-version"|"ch-ua-wow64"|"ch-viewport-height"|"ch-viewport-width"|"ch-width"|"clipboard-read"|"clipboard-write"|"compute-pressure"|"cross-origin-isolated"|"direct-sockets"|"display-capture"|"document-domain"|"encrypted-media"|"execution-while-out-of-viewport"|"execution-while-not-rendered"|"focus-without-user-activation"|"fullscreen"|"frobulate"|"gamepad"|"geolocation"|"gyroscope"|"hid"|"identity-credentials-get"|"idle-detection"|"interest-cohort"|"join-ad-interest-group"|"keyboard-map"|"local-fonts"|"magnetometer"|"microphone"|"midi"|"otp-credentials"|"payment"|"picture-in-picture"|"private-aggregation"|"private-state-token-issuance"|"private-state-token-redemption"|"publickey-credentials-create"|"publickey-credentials-get"|"run-ad-auction"|"screen-wake-lock"|"serial"|"shared-autofill"|"shared-storage"|"shared-storage-select-url"|"smart-card"|"speaker-selection"|"storage-access"|"sub-apps"|"sync-xhr"|"unload"|"usb"|"usb-unrestricted"|"vertical-scroll"|"web-printing"|"web-share"|"window-management"|"window-placement"|"xr-spatial-tracking";
+    export type PermissionsPolicyFeature = "accelerometer"|"ambient-light-sensor"|"attribution-reporting"|"autoplay"|"bluetooth"|"browsing-topics"|"camera"|"captured-surface-control"|"ch-dpr"|"ch-device-memory"|"ch-downlink"|"ch-ect"|"ch-prefers-color-scheme"|"ch-prefers-reduced-motion"|"ch-prefers-reduced-transparency"|"ch-rtt"|"ch-save-data"|"ch-ua"|"ch-ua-arch"|"ch-ua-bitness"|"ch-ua-platform"|"ch-ua-model"|"ch-ua-mobile"|"ch-ua-form-factors"|"ch-ua-full-version"|"ch-ua-full-version-list"|"ch-ua-platform-version"|"ch-ua-wow64"|"ch-viewport-height"|"ch-viewport-width"|"ch-width"|"clipboard-read"|"clipboard-write"|"compute-pressure"|"cross-origin-isolated"|"deferred-fetch"|"direct-sockets"|"display-capture"|"document-domain"|"encrypted-media"|"execution-while-out-of-viewport"|"execution-while-not-rendered"|"focus-without-user-activation"|"fullscreen"|"frobulate"|"gamepad"|"geolocation"|"gyroscope"|"hid"|"identity-credentials-get"|"idle-detection"|"interest-cohort"|"join-ad-interest-group"|"keyboard-map"|"local-fonts"|"magnetometer"|"microphone"|"midi"|"otp-credentials"|"payment"|"picture-in-picture"|"private-aggregation"|"private-state-token-issuance"|"private-state-token-redemption"|"publickey-credentials-create"|"publickey-credentials-get"|"run-ad-auction"|"screen-wake-lock"|"serial"|"shared-autofill"|"shared-storage"|"shared-storage-select-url"|"smart-card"|"speaker-selection"|"storage-access"|"sub-apps"|"sync-xhr"|"unload"|"usb"|"usb-unrestricted"|"vertical-scroll"|"web-printing"|"web-share"|"window-management"|"xr-spatial-tracking";
     /**
      * Reason for a permissions policy feature to be disabled.
      */
@@ -11755,7 +11866,7 @@ https://github.com/WICG/manifest-incubations/blob/gh-pages/scope_extensions-expl
     /**
      * List of not restored reasons for back-forward cache.
      */
-    export type BackForwardCacheNotRestoredReason = "NotPrimaryMainFrame"|"BackForwardCacheDisabled"|"RelatedActiveContentsExist"|"HTTPStatusNotOK"|"SchemeNotHTTPOrHTTPS"|"Loading"|"WasGrantedMediaAccess"|"DisableForRenderFrameHostCalled"|"DomainNotAllowed"|"HTTPMethodNotGET"|"SubframeIsNavigating"|"Timeout"|"CacheLimit"|"JavaScriptExecution"|"RendererProcessKilled"|"RendererProcessCrashed"|"SchedulerTrackedFeatureUsed"|"ConflictingBrowsingInstance"|"CacheFlushed"|"ServiceWorkerVersionActivation"|"SessionRestored"|"ServiceWorkerPostMessage"|"EnteredBackForwardCacheBeforeServiceWorkerHostAdded"|"RenderFrameHostReused_SameSite"|"RenderFrameHostReused_CrossSite"|"ServiceWorkerClaim"|"IgnoreEventAndEvict"|"HaveInnerContents"|"TimeoutPuttingInCache"|"BackForwardCacheDisabledByLowMemory"|"BackForwardCacheDisabledByCommandLine"|"NetworkRequestDatapipeDrainedAsBytesConsumer"|"NetworkRequestRedirected"|"NetworkRequestTimeout"|"NetworkExceedsBufferLimit"|"NavigationCancelledWhileRestoring"|"NotMostRecentNavigationEntry"|"BackForwardCacheDisabledForPrerender"|"UserAgentOverrideDiffers"|"ForegroundCacheLimit"|"BrowsingInstanceNotSwapped"|"BackForwardCacheDisabledForDelegate"|"UnloadHandlerExistsInMainFrame"|"UnloadHandlerExistsInSubFrame"|"ServiceWorkerUnregistration"|"CacheControlNoStore"|"CacheControlNoStoreCookieModified"|"CacheControlNoStoreHTTPOnlyCookieModified"|"NoResponseHead"|"Unknown"|"ActivationNavigationsDisallowedForBug1234857"|"ErrorDocument"|"FencedFramesEmbedder"|"CookieDisabled"|"HTTPAuthRequired"|"CookieFlushed"|"BroadcastChannelOnMessage"|"WebSocket"|"WebTransport"|"WebRTC"|"MainResourceHasCacheControlNoStore"|"MainResourceHasCacheControlNoCache"|"SubresourceHasCacheControlNoStore"|"SubresourceHasCacheControlNoCache"|"ContainsPlugins"|"DocumentLoaded"|"OutstandingNetworkRequestOthers"|"RequestedMIDIPermission"|"RequestedAudioCapturePermission"|"RequestedVideoCapturePermission"|"RequestedBackForwardCacheBlockedSensors"|"RequestedBackgroundWorkPermission"|"BroadcastChannel"|"WebXR"|"SharedWorker"|"WebLocks"|"WebHID"|"WebShare"|"RequestedStorageAccessGrant"|"WebNfc"|"OutstandingNetworkRequestFetch"|"OutstandingNetworkRequestXHR"|"AppBanner"|"Printing"|"WebDatabase"|"PictureInPicture"|"Portal"|"SpeechRecognizer"|"IdleManager"|"PaymentManager"|"SpeechSynthesis"|"KeyboardLock"|"WebOTPService"|"OutstandingNetworkRequestDirectSocket"|"InjectedJavascript"|"InjectedStyleSheet"|"KeepaliveRequest"|"IndexedDBEvent"|"Dummy"|"JsNetworkRequestReceivedCacheControlNoStoreResource"|"WebRTCSticky"|"WebTransportSticky"|"WebSocketSticky"|"SmartCard"|"LiveMediaStreamTrack"|"UnloadHandler"|"ParserAborted"|"ContentSecurityHandler"|"ContentWebAuthenticationAPI"|"ContentFileChooser"|"ContentSerial"|"ContentFileSystemAccess"|"ContentMediaDevicesDispatcherHost"|"ContentWebBluetooth"|"ContentWebUSB"|"ContentMediaSessionService"|"ContentScreenReader"|"EmbedderPopupBlockerTabHelper"|"EmbedderSafeBrowsingTriggeredPopupBlocker"|"EmbedderSafeBrowsingThreatDetails"|"EmbedderAppBannerManager"|"EmbedderDomDistillerViewerSource"|"EmbedderDomDistillerSelfDeletingRequestDelegate"|"EmbedderOomInterventionTabHelper"|"EmbedderOfflinePage"|"EmbedderChromePasswordManagerClientBindCredentialManager"|"EmbedderPermissionRequestManager"|"EmbedderModalDialog"|"EmbedderExtensions"|"EmbedderExtensionMessaging"|"EmbedderExtensionMessagingForOpenPort"|"EmbedderExtensionSentMessageToCachedFrame";
+    export type BackForwardCacheNotRestoredReason = "NotPrimaryMainFrame"|"BackForwardCacheDisabled"|"RelatedActiveContentsExist"|"HTTPStatusNotOK"|"SchemeNotHTTPOrHTTPS"|"Loading"|"WasGrantedMediaAccess"|"DisableForRenderFrameHostCalled"|"DomainNotAllowed"|"HTTPMethodNotGET"|"SubframeIsNavigating"|"Timeout"|"CacheLimit"|"JavaScriptExecution"|"RendererProcessKilled"|"RendererProcessCrashed"|"SchedulerTrackedFeatureUsed"|"ConflictingBrowsingInstance"|"CacheFlushed"|"ServiceWorkerVersionActivation"|"SessionRestored"|"ServiceWorkerPostMessage"|"EnteredBackForwardCacheBeforeServiceWorkerHostAdded"|"RenderFrameHostReused_SameSite"|"RenderFrameHostReused_CrossSite"|"ServiceWorkerClaim"|"IgnoreEventAndEvict"|"HaveInnerContents"|"TimeoutPuttingInCache"|"BackForwardCacheDisabledByLowMemory"|"BackForwardCacheDisabledByCommandLine"|"NetworkRequestDatapipeDrainedAsBytesConsumer"|"NetworkRequestRedirected"|"NetworkRequestTimeout"|"NetworkExceedsBufferLimit"|"NavigationCancelledWhileRestoring"|"NotMostRecentNavigationEntry"|"BackForwardCacheDisabledForPrerender"|"UserAgentOverrideDiffers"|"ForegroundCacheLimit"|"BrowsingInstanceNotSwapped"|"BackForwardCacheDisabledForDelegate"|"UnloadHandlerExistsInMainFrame"|"UnloadHandlerExistsInSubFrame"|"ServiceWorkerUnregistration"|"CacheControlNoStore"|"CacheControlNoStoreCookieModified"|"CacheControlNoStoreHTTPOnlyCookieModified"|"NoResponseHead"|"Unknown"|"ActivationNavigationsDisallowedForBug1234857"|"ErrorDocument"|"FencedFramesEmbedder"|"CookieDisabled"|"HTTPAuthRequired"|"CookieFlushed"|"BroadcastChannelOnMessage"|"WebViewSettingsChanged"|"WebViewJavaScriptObjectChanged"|"WebViewMessageListenerInjected"|"WebViewSafeBrowsingAllowlistChanged"|"WebViewDocumentStartJavascriptChanged"|"WebSocket"|"WebTransport"|"WebRTC"|"MainResourceHasCacheControlNoStore"|"MainResourceHasCacheControlNoCache"|"SubresourceHasCacheControlNoStore"|"SubresourceHasCacheControlNoCache"|"ContainsPlugins"|"DocumentLoaded"|"OutstandingNetworkRequestOthers"|"RequestedMIDIPermission"|"RequestedAudioCapturePermission"|"RequestedVideoCapturePermission"|"RequestedBackForwardCacheBlockedSensors"|"RequestedBackgroundWorkPermission"|"BroadcastChannel"|"WebXR"|"SharedWorker"|"WebLocks"|"WebHID"|"WebShare"|"RequestedStorageAccessGrant"|"WebNfc"|"OutstandingNetworkRequestFetch"|"OutstandingNetworkRequestXHR"|"AppBanner"|"Printing"|"WebDatabase"|"PictureInPicture"|"Portal"|"SpeechRecognizer"|"IdleManager"|"PaymentManager"|"SpeechSynthesis"|"KeyboardLock"|"WebOTPService"|"OutstandingNetworkRequestDirectSocket"|"InjectedJavascript"|"InjectedStyleSheet"|"KeepaliveRequest"|"IndexedDBEvent"|"Dummy"|"JsNetworkRequestReceivedCacheControlNoStoreResource"|"WebRTCSticky"|"WebTransportSticky"|"WebSocketSticky"|"SmartCard"|"LiveMediaStreamTrack"|"UnloadHandler"|"ParserAborted"|"ContentSecurityHandler"|"ContentWebAuthenticationAPI"|"ContentFileChooser"|"ContentSerial"|"ContentFileSystemAccess"|"ContentMediaDevicesDispatcherHost"|"ContentWebBluetooth"|"ContentWebUSB"|"ContentMediaSessionService"|"ContentScreenReader"|"EmbedderPopupBlockerTabHelper"|"EmbedderSafeBrowsingTriggeredPopupBlocker"|"EmbedderSafeBrowsingThreatDetails"|"EmbedderAppBannerManager"|"EmbedderDomDistillerViewerSource"|"EmbedderDomDistillerSelfDeletingRequestDelegate"|"EmbedderOomInterventionTabHelper"|"EmbedderOfflinePage"|"EmbedderChromePasswordManagerClientBindCredentialManager"|"EmbedderPermissionRequestManager"|"EmbedderModalDialog"|"EmbedderExtensions"|"EmbedderExtensionMessaging"|"EmbedderExtensionMessagingForOpenPort"|"EmbedderExtensionSentMessageToCachedFrame"|"RequestedByWebViewClient";
     /**
      * Types of not restored reasons for back-forward cache.
      */
@@ -12334,7 +12445,7 @@ option, use with caution.
   This API always waits for the manifest to be loaded.
   If manifestId is provided, and it does not match the manifest of the
     current document, this API errors out.
-  If there isn’t a loaded page, this API errors out immediately.
+  If there is not a loaded page, this API errors out immediately.
      */
     export type getAppManifestParameters = {
       manifestId?: string;
@@ -12671,6 +12782,12 @@ in which case the content will be scaled to fit the paper size.
 Argument will be ignored if reloading dataURL origin.
        */
       scriptToEvaluateOnLoad?: string;
+      /**
+       * If set, an error will be thrown if the target page's main frame's
+loader id does not match the provided id. This prevents accidentally
+reloading an unintended target in case there's a racing navigation.
+       */
+      loaderId?: Network.LoaderId;
     }
     export type reloadReturnValue = {
     }
@@ -16690,7 +16807,7 @@ possible for multiple rule sets and links to trigger a single attempt.
     /**
      * List of FinalStatus reasons for Prerender2.
      */
-    export type PrerenderFinalStatus = "Activated"|"Destroyed"|"LowEndDevice"|"InvalidSchemeRedirect"|"InvalidSchemeNavigation"|"NavigationRequestBlockedByCsp"|"MainFrameNavigation"|"MojoBinderPolicy"|"RendererProcessCrashed"|"RendererProcessKilled"|"Download"|"TriggerDestroyed"|"NavigationNotCommitted"|"NavigationBadHttpStatus"|"ClientCertRequested"|"NavigationRequestNetworkError"|"CancelAllHostsForTesting"|"DidFailLoad"|"Stop"|"SslCertificateError"|"LoginAuthRequested"|"UaChangeRequiresReload"|"BlockedByClient"|"AudioOutputDeviceRequested"|"MixedContent"|"TriggerBackgrounded"|"MemoryLimitExceeded"|"DataSaverEnabled"|"TriggerUrlHasEffectiveUrl"|"ActivatedBeforeStarted"|"InactivePageRestriction"|"StartFailed"|"TimeoutBackgrounded"|"CrossSiteRedirectInInitialNavigation"|"CrossSiteNavigationInInitialNavigation"|"SameSiteCrossOriginRedirectNotOptInInInitialNavigation"|"SameSiteCrossOriginNavigationNotOptInInInitialNavigation"|"ActivationNavigationParameterMismatch"|"ActivatedInBackground"|"EmbedderHostDisallowed"|"ActivationNavigationDestroyedBeforeSuccess"|"TabClosedByUserGesture"|"TabClosedWithoutUserGesture"|"PrimaryMainFrameRendererProcessCrashed"|"PrimaryMainFrameRendererProcessKilled"|"ActivationFramePolicyNotCompatible"|"PreloadingDisabled"|"BatterySaverEnabled"|"ActivatedDuringMainFrameNavigation"|"PreloadingUnsupportedByWebContents"|"CrossSiteRedirectInMainFrameNavigation"|"CrossSiteNavigationInMainFrameNavigation"|"SameSiteCrossOriginRedirectNotOptInInMainFrameNavigation"|"SameSiteCrossOriginNavigationNotOptInInMainFrameNavigation"|"MemoryPressureOnTrigger"|"MemoryPressureAfterTriggered"|"PrerenderingDisabledByDevTools"|"SpeculationRuleRemoved"|"ActivatedWithAuxiliaryBrowsingContexts"|"MaxNumOfRunningEagerPrerendersExceeded"|"MaxNumOfRunningNonEagerPrerendersExceeded"|"MaxNumOfRunningEmbedderPrerendersExceeded"|"PrerenderingUrlHasEffectiveUrl"|"RedirectedPrerenderingUrlHasEffectiveUrl"|"ActivationUrlHasEffectiveUrl";
+    export type PrerenderFinalStatus = "Activated"|"Destroyed"|"LowEndDevice"|"InvalidSchemeRedirect"|"InvalidSchemeNavigation"|"NavigationRequestBlockedByCsp"|"MainFrameNavigation"|"MojoBinderPolicy"|"RendererProcessCrashed"|"RendererProcessKilled"|"Download"|"TriggerDestroyed"|"NavigationNotCommitted"|"NavigationBadHttpStatus"|"ClientCertRequested"|"NavigationRequestNetworkError"|"CancelAllHostsForTesting"|"DidFailLoad"|"Stop"|"SslCertificateError"|"LoginAuthRequested"|"UaChangeRequiresReload"|"BlockedByClient"|"AudioOutputDeviceRequested"|"MixedContent"|"TriggerBackgrounded"|"MemoryLimitExceeded"|"DataSaverEnabled"|"TriggerUrlHasEffectiveUrl"|"ActivatedBeforeStarted"|"InactivePageRestriction"|"StartFailed"|"TimeoutBackgrounded"|"CrossSiteRedirectInInitialNavigation"|"CrossSiteNavigationInInitialNavigation"|"SameSiteCrossOriginRedirectNotOptInInInitialNavigation"|"SameSiteCrossOriginNavigationNotOptInInInitialNavigation"|"ActivationNavigationParameterMismatch"|"ActivatedInBackground"|"EmbedderHostDisallowed"|"ActivationNavigationDestroyedBeforeSuccess"|"TabClosedByUserGesture"|"TabClosedWithoutUserGesture"|"PrimaryMainFrameRendererProcessCrashed"|"PrimaryMainFrameRendererProcessKilled"|"ActivationFramePolicyNotCompatible"|"PreloadingDisabled"|"BatterySaverEnabled"|"ActivatedDuringMainFrameNavigation"|"PreloadingUnsupportedByWebContents"|"CrossSiteRedirectInMainFrameNavigation"|"CrossSiteNavigationInMainFrameNavigation"|"SameSiteCrossOriginRedirectNotOptInInMainFrameNavigation"|"SameSiteCrossOriginNavigationNotOptInInMainFrameNavigation"|"MemoryPressureOnTrigger"|"MemoryPressureAfterTriggered"|"PrerenderingDisabledByDevTools"|"SpeculationRuleRemoved"|"ActivatedWithAuxiliaryBrowsingContexts"|"MaxNumOfRunningEagerPrerendersExceeded"|"MaxNumOfRunningNonEagerPrerendersExceeded"|"MaxNumOfRunningEmbedderPrerendersExceeded"|"PrerenderingUrlHasEffectiveUrl"|"RedirectedPrerenderingUrlHasEffectiveUrl"|"ActivationUrlHasEffectiveUrl"|"JavaScriptInterfaceAdded"|"JavaScriptInterfaceRemoved"|"AllPrerenderingCanceled";
     /**
      * Preloading status values, see also PreloadingTriggeringOutcome. This
 status is shared by prefetchStatusUpdated and prerenderStatusUpdated.
@@ -16920,6 +17037,86 @@ https://web.dev/learn/pwa/web-app-manifest.
     export type getOsAppStateReturnValue = {
       badgeCount: number;
       fileHandlers: FileHandler[];
+    }
+    /**
+     * Installs the given manifest identity, optionally using the given install_url
+or IWA bundle location.
+
+TODO(crbug.com/337872319) Support IWA to meet the following specific
+requirement.
+IWA-specific install description: If the manifest_id is isolated-app://,
+install_url_or_bundle_url is required, and can be either an http(s) URL or
+file:// URL pointing to a signed web bundle (.swbn). The .swbn file's
+signing key must correspond to manifest_id. If Chrome is not in IWA dev
+mode, the installation will fail, regardless of the state of the allowlist.
+     */
+    export type installParameters = {
+      manifestId: string;
+      /**
+       * The location of the app or bundle overriding the one derived from the
+manifestId.
+       */
+      installUrlOrBundleUrl?: string;
+    }
+    export type installReturnValue = {
+    }
+    /**
+     * Uninstals the given manifest_id and closes any opened app windows.
+     */
+    export type uninstallParameters = {
+      manifestId: string;
+    }
+    export type uninstallReturnValue = {
+    }
+    /**
+     * Launches the installed web app, or an url in the same web app instead of the
+default start url if it is provided. Returns a page Target.TargetID which
+can be used to attach to via Target.attachToTarget or similar APIs.
+     */
+    export type launchParameters = {
+      manifestId: string;
+      url?: string;
+    }
+    export type launchReturnValue = {
+      /**
+       * ID of the tab target created as a result.
+       */
+      targetId: Target.TargetID;
+    }
+    /**
+     * Opens one or more local files from an installed web app identified by its
+manifestId. The web app needs to have file handlers registered to process
+the files. The API returns one or more page Target.TargetIDs which can be
+used to attach to via Target.attachToTarget or similar APIs.
+If some files in the parameters cannot be handled by the web app, they will
+be ignored. If none of the files can be handled, this API returns an error.
+If no files provided as the parameter, this API also returns an error.
+
+According to the definition of the file handlers in the manifest file, one
+Target.TargetID may represent a page handling one or more files. The order
+of the returned Target.TargetIDs is not guaranteed.
+
+TODO(crbug.com/339454034): Check the existences of the input files.
+     */
+    export type launchFilesInAppParameters = {
+      manifestId: string;
+      files: string[];
+    }
+    export type launchFilesInAppReturnValue = {
+      /**
+       * IDs of the tab targets created as the result.
+       */
+      targetIds: Target.TargetID[];
+    }
+    /**
+     * Opens the current page in its web app identified by the manifest id, needs
+to be called on a page target. This function returns immediately without
+waiting for the app finishing loading.
+     */
+    export type openCurrentPageInAppParameters = {
+      manifestId: string;
+    }
+    export type openCurrentPageInAppReturnValue = {
     }
   }
   
@@ -19773,6 +19970,7 @@ Error was thrown.
     "Audits.enable": Audits.enableParameters;
     "Audits.checkContrast": Audits.checkContrastParameters;
     "Audits.checkFormsIssues": Audits.checkFormsIssuesParameters;
+    "Extensions.loadUnpacked": Extensions.loadUnpackedParameters;
     "Autofill.trigger": Autofill.triggerParameters;
     "Autofill.setAddresses": Autofill.setAddressesParameters;
     "Autofill.disable": Autofill.disableParameters;
@@ -19870,6 +20068,7 @@ Error was thrown.
     "DOM.querySelector": DOM.querySelectorParameters;
     "DOM.querySelectorAll": DOM.querySelectorAllParameters;
     "DOM.getTopLayerElements": DOM.getTopLayerElementsParameters;
+    "DOM.getElementByRelation": DOM.getElementByRelationParameters;
     "DOM.redo": DOM.redoParameters;
     "DOM.removeAttribute": DOM.removeAttributeParameters;
     "DOM.removeNode": DOM.removeNodeParameters;
@@ -19890,6 +20089,7 @@ Error was thrown.
     "DOM.getFrameOwner": DOM.getFrameOwnerParameters;
     "DOM.getContainerForNode": DOM.getContainerForNodeParameters;
     "DOM.getQueryingDescendantsForContainer": DOM.getQueryingDescendantsForContainerParameters;
+    "DOM.getAnchorElement": DOM.getAnchorElementParameters;
     "DOMDebugger.getEventListeners": DOMDebugger.getEventListenersParameters;
     "DOMDebugger.removeDOMBreakpoint": DOMDebugger.removeDOMBreakpointParameters;
     "DOMDebugger.removeEventListenerBreakpoint": DOMDebugger.removeEventListenerBreakpointParameters;
@@ -20256,6 +20456,11 @@ Error was thrown.
     "FedCm.dismissDialog": FedCm.dismissDialogParameters;
     "FedCm.resetCooldown": FedCm.resetCooldownParameters;
     "PWA.getOsAppState": PWA.getOsAppStateParameters;
+    "PWA.install": PWA.installParameters;
+    "PWA.uninstall": PWA.uninstallParameters;
+    "PWA.launch": PWA.launchParameters;
+    "PWA.launchFilesInApp": PWA.launchFilesInAppParameters;
+    "PWA.openCurrentPageInApp": PWA.openCurrentPageInAppParameters;
     "Console.clearMessages": Console.clearMessagesParameters;
     "Console.disable": Console.disableParameters;
     "Console.enable": Console.enableParameters;
@@ -20361,6 +20566,7 @@ Error was thrown.
     "Audits.enable": Audits.enableReturnValue;
     "Audits.checkContrast": Audits.checkContrastReturnValue;
     "Audits.checkFormsIssues": Audits.checkFormsIssuesReturnValue;
+    "Extensions.loadUnpacked": Extensions.loadUnpackedReturnValue;
     "Autofill.trigger": Autofill.triggerReturnValue;
     "Autofill.setAddresses": Autofill.setAddressesReturnValue;
     "Autofill.disable": Autofill.disableReturnValue;
@@ -20458,6 +20664,7 @@ Error was thrown.
     "DOM.querySelector": DOM.querySelectorReturnValue;
     "DOM.querySelectorAll": DOM.querySelectorAllReturnValue;
     "DOM.getTopLayerElements": DOM.getTopLayerElementsReturnValue;
+    "DOM.getElementByRelation": DOM.getElementByRelationReturnValue;
     "DOM.redo": DOM.redoReturnValue;
     "DOM.removeAttribute": DOM.removeAttributeReturnValue;
     "DOM.removeNode": DOM.removeNodeReturnValue;
@@ -20478,6 +20685,7 @@ Error was thrown.
     "DOM.getFrameOwner": DOM.getFrameOwnerReturnValue;
     "DOM.getContainerForNode": DOM.getContainerForNodeReturnValue;
     "DOM.getQueryingDescendantsForContainer": DOM.getQueryingDescendantsForContainerReturnValue;
+    "DOM.getAnchorElement": DOM.getAnchorElementReturnValue;
     "DOMDebugger.getEventListeners": DOMDebugger.getEventListenersReturnValue;
     "DOMDebugger.removeDOMBreakpoint": DOMDebugger.removeDOMBreakpointReturnValue;
     "DOMDebugger.removeEventListenerBreakpoint": DOMDebugger.removeEventListenerBreakpointReturnValue;
@@ -20844,6 +21052,11 @@ Error was thrown.
     "FedCm.dismissDialog": FedCm.dismissDialogReturnValue;
     "FedCm.resetCooldown": FedCm.resetCooldownReturnValue;
     "PWA.getOsAppState": PWA.getOsAppStateReturnValue;
+    "PWA.install": PWA.installReturnValue;
+    "PWA.uninstall": PWA.uninstallReturnValue;
+    "PWA.launch": PWA.launchReturnValue;
+    "PWA.launchFilesInApp": PWA.launchFilesInAppReturnValue;
+    "PWA.openCurrentPageInApp": PWA.openCurrentPageInAppReturnValue;
     "Console.clearMessages": Console.clearMessagesReturnValue;
     "Console.disable": Console.disableReturnValue;
     "Console.enable": Console.enableReturnValue;

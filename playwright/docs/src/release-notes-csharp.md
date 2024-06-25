@@ -4,6 +4,145 @@ title: "Release notes"
 toc_max_heading_level: 2
 ---
 
+## Version 1.45
+
+### Clock
+
+Utilizing the new [Clock] API allows to manipulate and control time within tests to verify time-related behavior. This API covers many common scenarios, including:
+* testing with predefined time;
+* keeping consistent time and timers;
+* monitoring inactivity;
+* ticking through time manually.
+
+```csharp
+// Initialize clock with some time before the test time and let the page load naturally.
+// `Date.now` will progress as the timers fire.
+await Page.Clock.InstallAsync(new
+{
+  Time = new DateTime(2024, 2, 2, 8, 0, 0)
+});
+await Page.GotoAsync("http://localhost:3333");
+
+// Pretend that the user closed the laptop lid and opened it again at 10am.
+// Pause the time once reached that point.
+await Page.Clock.PauseAtAsync(new DateTime(2024, 2, 2, 10, 0, 0));
+
+// Assert the page state.
+await Expect(Page.GetByTestId("current-time")).ToHaveText("2/2/2024, 10:00:00 AM");
+
+// Close the laptop lid again and open it at 10:30am.
+await Page.Clock.FastForwardAsync("30:00");
+await Expect(Page.GetByTestId("current-time")).ToHaveText("2/2/2024, 10:30:00 AM");
+```
+
+See [the clock guide](./clock.md) for more details.
+
+### Miscellaneous
+
+- Method [`method: Locator.setInputFiles`] now supports uploading a directory for `<input type=file webkitdirectory>` elements.
+  ```csharp
+  await page.GetByLabel("Upload directory").SetInputFilesAsync("mydir");
+  ```
+
+- Multiple methods like [`method: Locator.click`] or [`method: Locator.press`] now support a `ControlOrMeta` modifier key. This key maps to `Meta` on macOS and maps to `Control` on Windows and Linux.
+  ```csharp
+  // Press the common keyboard shortcut Control+S or Meta+S to trigger a "Save" operation.
+  await page.Keyboard.PressAsync("ControlOrMeta+S");
+  ```
+
+- New property `httpCredentials.send` in [`method: APIRequest.newContext`] that allows to either always send the `Authorization` header or only send it in response to `401 Unauthorized`.
+
+- Playwright now supports Chromium, Firefox and WebKit on Ubuntu 24.04.
+
+- v1.45 is the last release to receive WebKit update for macOS 12 Monterey. Please update macOS to keep using the latest WebKit.
+
+### Browser Versions
+
+* Chromium 127.0.6533.5
+* Mozilla Firefox 127.0
+* WebKit 17.4
+
+This version was also tested against the following stable channels:
+
+* Google Chrome 126
+* Microsoft Edge 126
+
+## Version 1.44
+
+### New APIs
+
+**Accessibility assertions**
+
+- [`method: LocatorAssertions.toHaveAccessibleName`] checks if the element has the specified accessible name:
+  ```csharp
+  var locator = Page.GetByRole(AriaRole.Button);
+  await Expect(locator).ToHaveAccessibleNameAsync("Submit");
+  ```
+
+- [`method: LocatorAssertions.toHaveAccessibleDescription`] checks if the element has the specified accessible description:
+  ```csharp
+  var locator = Page.GetByRole(AriaRole.Button);
+  await Expect(locator).ToHaveAccessibleDescriptionAsync("Upload a photo");
+  ```
+
+- [`method: LocatorAssertions.toHaveRole`] checks if the element has the specified ARIA role:
+  ```csharp
+  var locator = Page.GetByTestId("save-button");
+  await Expect(locator).ToHaveRoleAsync(AriaRole.Button);
+  ```
+
+**Locator handler**
+
+- After executing the handler added with [`method: Page.addLocatorHandler`], Playwright will now wait until the overlay that triggered the handler is not visible anymore. You can opt-out of this behavior with the new `NoWaitAfter` option.
+- You can use new `Times` option in [`method: Page.addLocatorHandler`] to specify maximum number of times the handler should be run.
+- The handler in [`method: Page.addLocatorHandler`] now accepts the locator as argument.
+- New [`method: Page.removeLocatorHandler`] method for removing previously added locator handlers.
+
+```csharp
+var locator = Page.GetByText("This interstitial covers the button");
+await Page.AddLocatorHandlerAsync(locator, async (overlay) =>
+{
+    await overlay.Locator("#close").ClickAsync();
+}, new() { Times = 3, NoWaitAfter = true });
+// Run your tests that can be interrupted by the overlay.
+// ...
+await Page.RemoveLocatorHandlerAsync(locator);
+```
+
+**Miscellaneous options**
+
+- New method [`method: FormData.append`] allows to specify repeating fields with the same name in [`Multipart`](./api/class-apirequestcontext#api-request-context-fetch-option-multipart) option in `APIRequestContext.FetchAsync()`:
+- ```
+  ```csharp
+  var formData = Context.APIRequest.CreateFormData();
+  formData.Append("file", new FilePayload()
+  {
+      Name = "f1.js",
+      MimeType = "text/javascript",
+      Buffer = System.Text.Encoding.UTF8.GetBytes("var x = 2024;")
+  });
+  formData.Append("file", new FilePayload()
+  {
+      Name = "f2.txt",
+      MimeType = "text/plain",
+      Buffer = System.Text.Encoding.UTF8.GetBytes("hello")
+  });
+  var response = await Context.APIRequest.PostAsync("https://example.com/uploadFiles", new() { Multipart = formData });
+  ```
+
+- [`method: PageAssertions.toHaveURL`] now supports `IgnoreCase` [option](./api/class-pageassertions#page-assertions-to-have-url-option-ignore-case).
+
+### Browser Versions
+
+* Chromium 125.0.6422.14
+* Mozilla Firefox 125.0.1
+* WebKit 17.4
+
+This version was also tested against the following stable channels:
+
+* Google Chrome 124
+* Microsoft Edge 124
+
 ## Version 1.43
 
 ### New APIs
@@ -53,7 +192,7 @@ This version was also tested against the following stable channels:
 ### New Locator Handler
 
 New method [`method: Page.addLocatorHandler`] registers a callback that will be invoked when specified element becomes visible and may block Playwright actions. The callback can get rid of the overlay. Here is an example that closes a cookie dialog when it appears.
-  
+
 ```csharp
 // Setup the handler.
 await Page.AddLocatorHandlerAsync(
@@ -561,7 +700,7 @@ This version was also tested against the following stable channels:
 ### Other highlights
 
 - New option `MaxRedirects` for [`method: APIRequestContext.get`] and others to limit redirect count.
-- Codegen now supports NUnit and MSTest frameworks.
+- Codegen now supports MSTest and NUnit frameworks.
 - ASP .NET is now supported.
 
 ### Behavior Change

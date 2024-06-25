@@ -52,6 +52,7 @@ export class FullConfigInternal {
   cliProjectFilter?: string[];
   cliListOnly = false;
   cliPassWithNoTests?: boolean;
+  cliFailOnFlakyTests?: boolean;
   testIdMatcher?: Matcher;
   defineConfigWasUsed = false;
 
@@ -104,7 +105,7 @@ export class FullConfigInternal {
         const cpus = os.cpus().length;
         this.config.workers = Math.max(1, Math.floor(cpus * (parseInt(workers, 10) / 100)));
       } else {
-        this.config.workers = parseInt(workers, 10);
+        this.config.workers = parseWorkers(workers);
       }
     } else {
       this.config.workers = workers;
@@ -193,7 +194,7 @@ export class FullProjectInternal {
       const stylePaths = Array.isArray(this.expect.toHaveScreenshot.stylePath) ? this.expect.toHaveScreenshot.stylePath : [this.expect.toHaveScreenshot.stylePath];
       this.expect.toHaveScreenshot.stylePath = stylePaths.map(stylePath => path.resolve(configDir, stylePath));
     }
-    this.respectGitIgnore = !projectConfig.testDir && !config.testDir;
+    this.respectGitIgnore = takeFirst(projectConfig.respectGitIgnore, config.respectGitIgnore, !projectConfig.testDir && !config.testDir);
     this.ignoreSnapshots = takeFirst(configCLIOverrides.ignoreSnapshots,  projectConfig.ignoreSnapshots, config.ignoreSnapshots, false);
   }
 }
@@ -218,6 +219,14 @@ function resolveReporters(reporters: Config['reporter'], rootDir: string): Repor
       return [id, arg];
     return [require.resolve(id, { paths: [rootDir] }), arg];
   });
+}
+
+function parseWorkers(workers: string) {
+  const parsedWorkers = parseInt(workers, 10);
+  if (isNaN(parsedWorkers))
+    throw new Error(`Workers ${workers} must be a number or percentage.`);
+
+  return parsedWorkers;
 }
 
 function resolveProjectDependencies(projects: FullProjectInternal[]) {
@@ -265,7 +274,7 @@ export function toReporters(reporters: BuiltInReporter | ReporterDescription[] |
 export const builtInReporters = ['list', 'line', 'dot', 'json', 'junit', 'null', 'github', 'html', 'blob', 'markdown'] as const;
 export type BuiltInReporter = typeof builtInReporters[number];
 
-export type ContextReuseMode = 'none' | 'force' | 'when-possible';
+export type ContextReuseMode = 'none' | 'when-possible';
 
 function resolveScript(id: string | undefined, rootDir: string): string | undefined {
   if (!id)

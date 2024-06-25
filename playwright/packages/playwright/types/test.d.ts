@@ -266,8 +266,9 @@ interface TestProject<TestArgs = {}, WorkerArgs = {}> {
   /**
    * Filter to only run tests with a title matching one of the patterns. For example, passing `grep: /cart/` should only
    * run tests with "cart" in the title. Also available globally and in the [command line](https://playwright.dev/docs/test-cli) with the `-g`
-   * option. The regular expression will be tested against the string that consists of the test file name,
-   * `test.describe` name (if any) and the test name divided by spaces, e.g. `my-test.spec.ts my-suite my-test`.
+   * option. The regular expression will be tested against the string that consists of the project name, the test file
+   * name, the `test.describe` name (if any), the test name and the test tags divided by spaces, e.g. `chromium
+   * my-test.spec.ts my-suite my-test`.
    *
    * `grep` option is also useful for [tagging tests](https://playwright.dev/docs/test-annotations#tag-tests).
    */
@@ -362,6 +363,15 @@ interface TestProject<TestArgs = {}, WorkerArgs = {}> {
    * this option for all projects.
    */
   repeatEach?: number;
+
+  /**
+   * Whether to skip entries from `.gitignore` when searching for test files. By default, if neither
+   * [testConfig.testDir](https://playwright.dev/docs/api/class-testconfig#test-config-test-dir) nor
+   * [testProject.testDir](https://playwright.dev/docs/api/class-testproject#test-project-test-dir) are explicitely
+   * specified, Playwright will ignore any test files matching `.gitignore` entries. This option allows to override that
+   * behavior.
+   */
+  respectGitIgnore?: boolean;
 
   /**
    * The maximum number of retry attempts given to failed tests. Learn more about
@@ -1121,8 +1131,9 @@ interface TestConfig<TestArgs = {}, WorkerArgs = {}> {
   /**
    * Filter to only run tests with a title matching one of the patterns. For example, passing `grep: /cart/` should only
    * run tests with "cart" in the title. Also available in the [command line](https://playwright.dev/docs/test-cli) with the `-g` option. The
-   * regular expression will be tested against the string that consists of the test file name, `test.describe` name (if
-   * any) and the test name divided by spaces, e.g. `my-test.spec.ts my-suite my-test`.
+   * regular expression will be tested against the string that consists of the project name, the test file name, the
+   * `test.describe` name (if any), the test name and the test tags divided by spaces, e.g. `chromium my-test.spec.ts
+   * my-suite my-test`.
    *
    * `grep` option is also useful for [tagging tests](https://playwright.dev/docs/test-annotations#tag-tests).
    *
@@ -1359,6 +1370,14 @@ interface TestConfig<TestArgs = {}, WorkerArgs = {}> {
      */
     threshold: number;
   };
+
+  /**
+   * Whether to skip entries from `.gitignore` when searching for test files. By default, if neither
+   * [testConfig.testDir](https://playwright.dev/docs/api/class-testconfig#test-config-test-dir) nor
+   * [testProject.testDir](https://playwright.dev/docs/api/class-testproject#test-project-test-dir) are explicitly
+   * specified, Playwright will ignore any test files matching `.gitignore` entries.
+   */
+  respectGitIgnore?: boolean;
 
   /**
    * The maximum number of retry attempts given to failed tests. By default failing tests are not retried. Learn more
@@ -4233,7 +4252,7 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
    * });
    * ```
    *
-   * Alternatively, you can delcare a hook **with a title**.
+   * Alternatively, you can declare a hook **with a title**.
    *
    * ```js
    * // example.spec.ts
@@ -4283,7 +4302,7 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
    * });
    * ```
    *
-   * Alternatively, you can delcare a hook **with a title**.
+   * Alternatively, you can declare a hook **with a title**.
    *
    * ```js
    * // example.spec.ts
@@ -5032,7 +5051,7 @@ export interface PlaywrightWorkerOptions {
    * - `'on-first-retry'`: Record trace only when retrying a test for the first time.
    * - `'on-all-retries'`: Record trace only when retrying a test.
    * - `'retain-on-failure'`: Record trace for each test. When test run passes, remove the recorded trace.
-   * - `'retain-on-first-failure'`: Record trace for the first run of each test, but not for retires. When test run
+   * - `'retain-on-first-failure'`: Record trace for the first run of each test, but not for retries. When test run
    *   passes, remove the recorded trace.
    *
    * For more control, pass an object that specifies `mode` and trace features to enable.
@@ -6467,9 +6486,21 @@ export interface ExpectMatcherUtils {
 }
 
 export type ExpectMatcherState = {
+  /**
+   * Whether this matcher was called with the negated .not modifier.
+   */
   isNot: boolean;
+  /**
+   * - 'rejects' if matcher was called with the promise .rejects modifier
+   * - 'resolves' if matcher was called with the promise .resolves modifier
+   * - '' if matcher was not called with a promise modifier
+   */
   promise: 'rejects' | 'resolves' | '';
   utils: ExpectMatcherUtils;
+  /**
+   * Timeout in milliseconds for the assertion to be fulfilled.
+   */
+  timeout: number;
 };
 
 export type MatcherReturnType = {
@@ -6513,7 +6544,7 @@ export type Expect<ExtendedMatchers = {}> = {
     timeout?: number,
     soft?: boolean,
   }) => Expect<ExtendedMatchers>;
-  getState(): ExpectMatcherState;
+  getState(): unknown;
   not: Omit<AsymmetricMatchers, 'any' | 'anything'>;
 } & AsymmetricMatchers;
 
@@ -7510,112 +7541,7 @@ interface PageAssertions {
    * @param name Snapshot name.
    * @param options
    */
-  toHaveScreenshot(name: string|ReadonlyArray<string>, options?: {
-    /**
-     * When set to `"disabled"`, stops CSS animations, CSS transitions and Web Animations. Animations get different
-     * treatment depending on their duration:
-     * - finite animations are fast-forwarded to completion, so they'll fire `transitionend` event.
-     * - infinite animations are canceled to initial state, and then played over after the screenshot.
-     *
-     * Defaults to `"disabled"` that disables animations.
-     */
-    animations?: "disabled"|"allow";
-
-    /**
-     * When set to `"hide"`, screenshot will hide text caret. When set to `"initial"`, text caret behavior will not be
-     * changed.  Defaults to `"hide"`.
-     */
-    caret?: "hide"|"initial";
-
-    /**
-     * An object which specifies clipping of the resulting image.
-     */
-    clip?: {
-      /**
-       * x-coordinate of top-left corner of clip area
-       */
-      x: number;
-
-      /**
-       * y-coordinate of top-left corner of clip area
-       */
-      y: number;
-
-      /**
-       * width of clipping area
-       */
-      width: number;
-
-      /**
-       * height of clipping area
-       */
-      height: number;
-    };
-
-    /**
-     * When true, takes a screenshot of the full scrollable page, instead of the currently visible viewport. Defaults to
-     * `false`.
-     */
-    fullPage?: boolean;
-
-    /**
-     * Specify locators that should be masked when the screenshot is taken. Masked elements will be overlaid with a pink
-     * box `#FF00FF` (customized by `maskColor`) that completely covers its bounding box.
-     */
-    mask?: Array<Locator>;
-
-    /**
-     * Specify the color of the overlay box for masked elements, in
-     * [CSS color format](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value). Default color is pink `#FF00FF`.
-     */
-    maskColor?: string;
-
-    /**
-     * An acceptable ratio of pixels that are different to the total amount of pixels, between `0` and `1`. Default is
-     * configurable with `TestConfig.expect`. Unset by default.
-     */
-    maxDiffPixelRatio?: number;
-
-    /**
-     * An acceptable amount of pixels that could be different. Default is configurable with `TestConfig.expect`. Unset by
-     * default.
-     */
-    maxDiffPixels?: number;
-
-    /**
-     * Hides default white background and allows capturing screenshots with transparency. Not applicable to `jpeg` images.
-     * Defaults to `false`.
-     */
-    omitBackground?: boolean;
-
-    /**
-     * When set to `"css"`, screenshot will have a single pixel per each css pixel on the page. For high-dpi devices, this
-     * will keep screenshots small. Using `"device"` option will produce a single pixel per each device pixel, so
-     * screenshots of high-dpi devices will be twice as large or even larger.
-     *
-     * Defaults to `"css"`.
-     */
-    scale?: "css"|"device";
-
-    /**
-     * File name containing the stylesheet to apply while making the screenshot. This is where you can hide dynamic
-     * elements, make elements invisible or change their properties to help you creating repeatable screenshots. This
-     * stylesheet pierces the Shadow DOM and applies to the inner frames.
-     */
-    stylePath?: string|Array<string>;
-
-    /**
-     * An acceptable perceived color difference in the [YIQ color space](https://en.wikipedia.org/wiki/YIQ) between the
-     * same pixel in compared images, between zero (strict) and one (lax), default is configurable with
-     * `TestConfig.expect`. Defaults to `0.2`.
-     */
-    threshold?: number;
-
-    /**
-     * Time to retry the assertion for in milliseconds. Defaults to `timeout` in `TestConfig.expect`.
-     */
-    timeout?: number;
-  }): Promise<void>;
+  toHaveScreenshot(name: string|ReadonlyArray<string>, options?: PageAssertionsToHaveScreenshotOptions): Promise<void>;
 
   /**
    * This function will wait until two consecutive page screenshots yield the same result, and then compare the last
@@ -7630,112 +7556,7 @@ interface PageAssertions {
    * Note that screenshot assertions only work with Playwright test runner.
    * @param options
    */
-  toHaveScreenshot(options?: {
-    /**
-     * When set to `"disabled"`, stops CSS animations, CSS transitions and Web Animations. Animations get different
-     * treatment depending on their duration:
-     * - finite animations are fast-forwarded to completion, so they'll fire `transitionend` event.
-     * - infinite animations are canceled to initial state, and then played over after the screenshot.
-     *
-     * Defaults to `"disabled"` that disables animations.
-     */
-    animations?: "disabled"|"allow";
-
-    /**
-     * When set to `"hide"`, screenshot will hide text caret. When set to `"initial"`, text caret behavior will not be
-     * changed.  Defaults to `"hide"`.
-     */
-    caret?: "hide"|"initial";
-
-    /**
-     * An object which specifies clipping of the resulting image.
-     */
-    clip?: {
-      /**
-       * x-coordinate of top-left corner of clip area
-       */
-      x: number;
-
-      /**
-       * y-coordinate of top-left corner of clip area
-       */
-      y: number;
-
-      /**
-       * width of clipping area
-       */
-      width: number;
-
-      /**
-       * height of clipping area
-       */
-      height: number;
-    };
-
-    /**
-     * When true, takes a screenshot of the full scrollable page, instead of the currently visible viewport. Defaults to
-     * `false`.
-     */
-    fullPage?: boolean;
-
-    /**
-     * Specify locators that should be masked when the screenshot is taken. Masked elements will be overlaid with a pink
-     * box `#FF00FF` (customized by `maskColor`) that completely covers its bounding box.
-     */
-    mask?: Array<Locator>;
-
-    /**
-     * Specify the color of the overlay box for masked elements, in
-     * [CSS color format](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value). Default color is pink `#FF00FF`.
-     */
-    maskColor?: string;
-
-    /**
-     * An acceptable ratio of pixels that are different to the total amount of pixels, between `0` and `1`. Default is
-     * configurable with `TestConfig.expect`. Unset by default.
-     */
-    maxDiffPixelRatio?: number;
-
-    /**
-     * An acceptable amount of pixels that could be different. Default is configurable with `TestConfig.expect`. Unset by
-     * default.
-     */
-    maxDiffPixels?: number;
-
-    /**
-     * Hides default white background and allows capturing screenshots with transparency. Not applicable to `jpeg` images.
-     * Defaults to `false`.
-     */
-    omitBackground?: boolean;
-
-    /**
-     * When set to `"css"`, screenshot will have a single pixel per each css pixel on the page. For high-dpi devices, this
-     * will keep screenshots small. Using `"device"` option will produce a single pixel per each device pixel, so
-     * screenshots of high-dpi devices will be twice as large or even larger.
-     *
-     * Defaults to `"css"`.
-     */
-    scale?: "css"|"device";
-
-    /**
-     * File name containing the stylesheet to apply while making the screenshot. This is where you can hide dynamic
-     * elements, make elements invisible or change their properties to help you creating repeatable screenshots. This
-     * stylesheet pierces the Shadow DOM and applies to the inner frames.
-     */
-    stylePath?: string|Array<string>;
-
-    /**
-     * An acceptable perceived color difference in the [YIQ color space](https://en.wikipedia.org/wiki/YIQ) between the
-     * same pixel in compared images, between zero (strict) and one (lax), default is configurable with
-     * `TestConfig.expect`. Defaults to `0.2`.
-     */
-    threshold?: number;
-
-    /**
-     * Time to retry the assertion for in milliseconds. Defaults to `timeout` in `TestConfig.expect`.
-     */
-    timeout?: number;
-  }): Promise<void>;
+  toHaveScreenshot(options?: PageAssertionsToHaveScreenshotOptions): Promise<void>;
 
   /**
    * Ensures the page has the given title.
@@ -8415,6 +8236,113 @@ export interface WorkerInfo {
    * with Playwright Test.
    */
   workerIndex: number;
+}
+
+export interface PageAssertionsToHaveScreenshotOptions {
+  /**
+   * When set to `"disabled"`, stops CSS animations, CSS transitions and Web Animations. Animations get different
+   * treatment depending on their duration:
+   * - finite animations are fast-forwarded to completion, so they'll fire `transitionend` event.
+   * - infinite animations are canceled to initial state, and then played over after the screenshot.
+   *
+   * Defaults to `"disabled"` that disables animations.
+   */
+  animations?: "disabled"|"allow";
+
+  /**
+   * When set to `"hide"`, screenshot will hide text caret. When set to `"initial"`, text caret behavior will not be
+   * changed.  Defaults to `"hide"`.
+   */
+  caret?: "hide"|"initial";
+
+  /**
+   * An object which specifies clipping of the resulting image.
+   */
+  clip?: {
+    /**
+     * x-coordinate of top-left corner of clip area
+     */
+    x: number;
+
+    /**
+     * y-coordinate of top-left corner of clip area
+     */
+    y: number;
+
+    /**
+     * width of clipping area
+     */
+    width: number;
+
+    /**
+     * height of clipping area
+     */
+    height: number;
+  };
+
+  /**
+   * When true, takes a screenshot of the full scrollable page, instead of the currently visible viewport. Defaults to
+   * `false`.
+   */
+  fullPage?: boolean;
+
+  /**
+   * Specify locators that should be masked when the screenshot is taken. Masked elements will be overlaid with a pink
+   * box `#FF00FF` (customized by `maskColor`) that completely covers its bounding box.
+   */
+  mask?: Array<Locator>;
+
+  /**
+   * Specify the color of the overlay box for masked elements, in
+   * [CSS color format](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value). Default color is pink `#FF00FF`.
+   */
+  maskColor?: string;
+
+  /**
+   * An acceptable ratio of pixels that are different to the total amount of pixels, between `0` and `1`. Default is
+   * configurable with `TestConfig.expect`. Unset by default.
+   */
+  maxDiffPixelRatio?: number;
+
+  /**
+   * An acceptable amount of pixels that could be different. Default is configurable with `TestConfig.expect`. Unset by
+   * default.
+   */
+  maxDiffPixels?: number;
+
+  /**
+   * Hides default white background and allows capturing screenshots with transparency. Not applicable to `jpeg` images.
+   * Defaults to `false`.
+   */
+  omitBackground?: boolean;
+
+  /**
+   * When set to `"css"`, screenshot will have a single pixel per each css pixel on the page. For high-dpi devices, this
+   * will keep screenshots small. Using `"device"` option will produce a single pixel per each device pixel, so
+   * screenshots of high-dpi devices will be twice as large or even larger.
+   *
+   * Defaults to `"css"`.
+   */
+  scale?: "css"|"device";
+
+  /**
+   * File name containing the stylesheet to apply while making the screenshot. This is where you can hide dynamic
+   * elements, make elements invisible or change their properties to help you creating repeatable screenshots. This
+   * stylesheet pierces the Shadow DOM and applies to the inner frames.
+   */
+  stylePath?: string|Array<string>;
+
+  /**
+   * An acceptable perceived color difference in the [YIQ color space](https://en.wikipedia.org/wiki/YIQ) between the
+   * same pixel in compared images, between zero (strict) and one (lax), default is configurable with
+   * `TestConfig.expect`. Defaults to `0.2`.
+   */
+  threshold?: number;
+
+  /**
+   * Time to retry the assertion for in milliseconds. Defaults to `timeout` in `TestConfig.expect`.
+   */
+  timeout?: number;
 }
 
 interface TestConfigWebServer {

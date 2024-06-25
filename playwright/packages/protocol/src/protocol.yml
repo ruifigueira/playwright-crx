@@ -33,8 +33,8 @@ Metadata:
         column: number?
     apiName: string?
     internal: boolean?
-    # The number of milliseconds elapsed since midnight, January 1, 1970 UTC.
-    wallTime: number?
+    # Test runner step id.
+    stepId: string?
 
 ClientSideCallMetadata:
   type: object
@@ -330,6 +330,8 @@ APIRequestContext:
         fetchUid: string
 
     dispose:
+      parameters:
+        reason: string?
 
 
 APIResponse:
@@ -454,6 +456,11 @@ ContextOptions:
         username: string
         password: string
         origin: string?
+        send:
+          type: enum?
+          literals:
+          - always
+          - unauthorized
     deviceScaleFactor: number?
     isMobile: boolean?
     hasTouch: boolean?
@@ -671,6 +678,11 @@ Playwright:
             username: string
             password: string
             origin: string?
+            send:
+              type: enum?
+              literals:
+              - always
+              - unauthorized
         proxy:
           type: object?
           properties:
@@ -1172,12 +1184,21 @@ BrowserContext:
       returns:
         artifact: Artifact
 
-    createTempFile:
+    createTempFiles:
       parameters:
-        name: string
-        lastModifiedMs: number?
+        rootDirName: string?
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              name: string
+              lastModifiedMs: number?
       returns:
-        writableStream: WritableStream
+        rootDir: WritableStream?
+        writableStreams:
+          type: array
+          items: WritableStream
 
     updateSubscription:
       parameters:
@@ -1191,6 +1212,38 @@ BrowserContext:
           - requestFinished
           - requestFailed
         enabled: boolean
+
+    clockFastForward:
+      parameters:
+        ticksNumber: number?
+        ticksString: string?
+
+    clockInstall:
+      parameters:
+        timeNumber: number?
+        timeString: string?
+
+    clockPauseAt:
+      parameters:
+        timeNumber: number?
+        timeString: string?
+
+    clockResume:
+
+    clockRunFor:
+      parameters:
+        ticksNumber: number?
+        ticksString: string?
+
+    clockSetFixedTime:
+      parameters:
+        timeNumber: number?
+        timeString: string?
+
+    clockSetSystemTime:
+      parameters:
+        timeNumber: number?
+        timeString: string?
 
   events:
 
@@ -1876,7 +1929,6 @@ Frame:
       parameters:
         expression: string
         isFunction: boolean?
-        exposeUtilityScript: boolean?
         arg: SerializedArgument
       returns:
         value: SerializedValue
@@ -2141,6 +2193,8 @@ Frame:
               name: string
               mimeType: string?
               buffer: binary
+        localDirectory: string?
+        directoryStream: WritableStream?
         localPaths:
           type: array?
           items: string
@@ -2701,6 +2755,8 @@ ElementHandle:
               name: string
               mimeType: string?
               buffer: binary
+        localDirectory: string?
+        directoryStream: WritableStream?
         localPaths:
           type: array?
           items: string
@@ -3240,8 +3296,6 @@ ElectronApplication:
           literals:
           - console
         enabled: boolean
-
-    close:
 
   events:
     close:

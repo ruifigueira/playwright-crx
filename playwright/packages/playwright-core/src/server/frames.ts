@@ -76,7 +76,7 @@ export type NavigationEvent = {
   // Error for cross-document navigations if any. When error is present,
   // the navigation did not commit.
   error?: Error,
-  // Wether this event should be visible to the clients via the public APIs.
+  // Whether this event should be visible to the clients via the public APIs.
   isPublic?: boolean;
 };
 
@@ -745,13 +745,13 @@ export class Frame extends SdkObject {
     return this._context('utility');
   }
 
-  async evaluateExpression(expression: string, options: { isFunction?: boolean, exposeUtilityScript?: boolean, world?: types.World } = {}, arg?: any): Promise<any> {
+  async evaluateExpression(expression: string, options: { isFunction?: boolean, world?: types.World } = {}, arg?: any): Promise<any> {
     const context = await this._context(options.world ?? 'main');
     const value = await context.evaluateExpression(expression, options, arg);
     return value;
   }
 
-  async evaluateExpressionHandle(expression: string, options: { isFunction?: boolean, exposeUtilityScript?: boolean, world?: types.World } = {}, arg?: any): Promise<js.JSHandle<any>> {
+  async evaluateExpressionHandle(expression: string, options: { isFunction?: boolean, world?: types.World } = {}, arg?: any): Promise<js.JSHandle<any>> {
     const context = await this._context(options.world ?? 'main');
     const value = await context.evaluateExpressionHandle(expression, options, arg);
     return value;
@@ -1513,9 +1513,9 @@ export class Frame extends SdkObject {
                 return;
               }
               if (typeof polling !== 'number')
-                requestAnimationFrame(next);
+                injected.builtinRequestAnimationFrame(next);
               else
-                setTimeout(next, polling);
+                injected.builtinSetTimeout(next, polling);
             } catch (e) {
               reject(e);
             }

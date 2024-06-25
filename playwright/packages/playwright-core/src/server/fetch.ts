@@ -121,7 +121,7 @@ export abstract class APIRequestContext extends SdkObject {
 
   abstract tracing(): Tracing;
 
-  abstract dispose(): Promise<void>;
+  abstract dispose(options: { reason?: string }): Promise<void>;
 
   abstract _defaultOptions(): FetchRequestOptions;
   abstract _addCookies(cookies: channels.NetworkCookie[]): Promise<void>;
@@ -157,6 +157,10 @@ export abstract class APIRequestContext extends SdkObject {
       for (const { name, value } of params.params)
         requestUrl.searchParams.set(name, value);
     }
+
+    const credentials = this._getHttpCredentials(requestUrl);
+    if (credentials?.send === 'always')
+      setBasicAuthorizationHeader(headers, credentials);
 
     const method = params.method?.toUpperCase() || 'GET';
     const proxy = defaults.proxy;
@@ -332,12 +336,15 @@ export abstract class APIRequestContext extends SdkObject {
             redirectOptions.rejectUnauthorized = false;
 
           // HTTP-redirect fetch step 4: If locationURL is null, then return response.
-          if (response.headers.location) {
+          // Best-effort UTF-8 decoding, per spec it's US-ASCII only, but browsers are more lenient.
+          // Node.js parses it as Latin1 via std::v8::String, so we convert it to UTF-8.
+          const locationHeaderValue = Buffer.from(response.headers.location ?? '', 'latin1').toString('utf8');
+          if (locationHeaderValue) {
             let locationURL;
             try {
-              locationURL = new URL(response.headers.location, url);
+              locationURL = new URL(locationHeaderValue, url);
             } catch (error) {
-              reject(new Error(`uri requested responds with an invalid redirect URL: ${response.headers.location}`));
+              reject(new Error(`uri requested responds with an invalid redirect URL: ${locationHeaderValue}`));
               request.destroy();
               return;
             }
@@ -355,9 +362,7 @@ export abstract class APIRequestContext extends SdkObject {
           const auth = response.headers['www-authenticate'];
           const credentials = this._getHttpCredentials(url);
           if (auth?.trim().startsWith('Basic') && credentials) {
-            const { username, password } = credentials;
-            const encoded = Buffer.from(`${username || ''}:${password || ''}`).toString('base64');
-            setHeader(options.headers, 'authorization', `Basic ${encoded}`);
+            setBasicAuthorizationHeader(options.headers, credentials);
             notifyRequestFinished();
             fulfill(this._sendRequest(progress, url, options, postData));
             request.destroy();
@@ -481,7 +486,8 @@ export class BrowserContextAPIRequestContext extends APIRequestContext {
     return this._context.tracing;
   }
 
-  override async dispose() {
+  override async dispose(options: { reason?: string }) {
+    this._closeReason = options.reason;
     this.fetchResponses.clear();
   }
 
@@ -550,7 +556,8 @@ export class GlobalAPIRequestContext extends APIRequestContext {
     return this._tracing;
   }
 
-  override async dispose() {
+  override async dispose(options: { reason?: string }) {
+    this._closeReason = options.reason;
     await this._tracing.flush();
     await this._tracing.deleteTmpTracesDir();
     this._disposeImpl();
@@ -729,4 +736,10 @@ function shouldBypassProxy(url: URL, bypass?: string): boolean {
   });
   const domain = '.' + url.hostname;
   return domains.some(d => domain.endsWith(d));
+}
+
+function setBasicAuthorizationHeader(headers: { [name: string]: string }, credentials: HTTPCredentials) {
+  const { username, password } = credentials;
+  const encoded = Buffer.from(`${username || ''}:${password || ''}`).toString('base64');
+  setHeader(headers, 'authorization', `Basic ${encoded}`);
 }

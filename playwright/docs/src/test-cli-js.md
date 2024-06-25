@@ -81,10 +81,11 @@ Complete set of Playwright Test options is available in the [configuration file]
 | Non-option arguments | Each argument is treated as a regular expression matched against the full test file path. Only tests from the files matching the pattern will be executed. Special symbols like `$` or `*` should be escaped with `\`. In many shells/terminals you may need to quote the arguments. |
 | `-c <file>` or `--config <file>`| Configuration file. If not passed, defaults to `playwright.config.ts` or `playwright.config.js` in the current directory. |
 | `--debug`| Run tests with Playwright Inspector. Shortcut for `PWDEBUG=1` environment variable and `--timeout=0 --max-failures=1 --headed --workers=1` options.|
+| `--fail-on-flaky-tests` | Fails test runs that contain flaky tests. By default flaky tests count as successes. |
 | `--forbid-only` | Whether to disallow `test.only`. Useful on CI.|
 | `--global-timeout <number>` | Total timeout for the whole test run in milliseconds. By default, there is no global timeout. Learn more about [various timeouts](./test-timeouts.md).|
-| `-g <grep>` or `--grep <grep>` | Only run tests matching this regular expression. For example, this will run `'should add to cart'` when passed `-g "add to cart"`.  The regular expression will be tested against the string that consists of the test file name, `test.describe` titles if any, test title and all test tags, separated by spaces, e.g. `my-test.spec.ts my-suite my-test @smoke`. The filter does not apply to the tests from dependcy projects, i.e. Playwright will still run all tests from [project dependencies](./test-projects.md#dependencies). |
-| `--grep-invert <grep>` | Only run tests **not** matching this regular expression. The opposite of `--grep`. The filter does not apply to the tests from dependcy projects, i.e. Playwright will still run all tests from [project dependencies](./test-projects.md#dependencies).|
+| `-g <grep>` or `--grep <grep>` | Only run tests matching this regular expression. For example, this will run `'should add to cart'` when passed `-g "add to cart"`.  The regular expression will be tested against the string that consists of the project name, test file name, `test.describe` titles if any, test title and all test tags, separated by spaces, e.g. `chromium my-test.spec.ts my-suite my-test @smoke`. The filter does not apply to the tests from dependency projects, i.e. Playwright will still run all tests from [project dependencies](./test-projects.md#dependencies). |
+| `--grep-invert <grep>` | Only run tests **not** matching this regular expression. The opposite of `--grep`. The filter does not apply to the tests from dependency projects, i.e. Playwright will still run all tests from [project dependencies](./test-projects.md#dependencies).|
 | `--headed` | Run tests in headed browsers. Useful for debugging. |
 | `--ignore-snapshots` | Whether to ignore [snapshots](./test-snapshots.md). Use this when snapshot expectations are known to be different, e.g. running tests on Linux against Windows screenshots. |
 | `--last-failed` | Only re-run the failures.|
@@ -99,7 +100,6 @@ Complete set of Playwright Test options is available in the [configuration file]
 | `--reporter <reporter>` | Choose a reporter: minimalist `dot`, concise `line` or detailed `list`. See [reporters](./test-reporters.md) for more information. You can also pass a path to a [custom reporter](./test-reporters.md#custom-reporters) file. |
 | `--retries <number>` | The maximum number of [retries](./test-retries.md#retries) for flaky tests, defaults to zero (no retries). |
 | `--shard <shard>` | [Shard](./test-parallel.md#shard-tests-between-multiple-machines) tests and execute only selected shard, specified in the form `current/all`, 1-based, for example `3/5`.|
-| `--tag <tag>` | Only run tests with a tag matching this tag expression. Learn more about [tagging](./test-annotations.md#tag-tests). |
 | `--timeout <number>` | Maximum timeout in milliseconds for each test, defaults to 30 seconds. Learn more about [various timeouts](./test-timeouts.md).|
 | `--trace <mode>` | Force tracing mode, can be `on`, `off`, `on-first-retry`, `on-all-retries`, `retain-on-failure` |
 | `--update-snapshots` or `-u` | Whether to update [snapshots](./test-snapshots.md) with actual results instead of comparing them. Use this when snapshot expectations have changed.|
