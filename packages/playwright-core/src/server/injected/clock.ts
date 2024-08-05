@@ -53,7 +53,7 @@ type Timer = {
 
 interface Embedder {
   dateNow(): number;
-  performanceNow(): DOMHighResTimeStamp;
+  performanceNow(): EmbedderTicks;
   setTimeout(task: () => void, timeout?: number): () => void;
   setInterval(task: () => void, delay: number): () => void;
 }
@@ -147,6 +147,8 @@ export class ClockController {
   }
 
   private async _runTo(to: Ticks) {
+    to = Math.ceil(to) as Ticks;
+
     if (this._now.ticks > to)
       return;
 
@@ -182,7 +184,7 @@ export class ClockController {
   }
 
   private _innerResume() {
-    const now = this._embedder.performanceNow() as EmbedderTicks;
+    const now = this._embedder.performanceNow();
     this._realTime = { startTicks: now, lastSyncTicks: now };
     this._updateRealTimeTimer();
   }
@@ -209,7 +211,7 @@ export class ClockController {
     this._currentRealTimeTimer = {
       callAt,
       dispose: this._embedder.setTimeout(() => {
-        const now = Math.ceil(this._embedder.performanceNow()) as EmbedderTicks;
+        const now = this._embedder.performanceNow();
         this._currentRealTimeTimer = undefined;
         const sinceLastSync = now - this._realTime!.lastSyncTicks;
         this._realTime!.lastSyncTicks = now;
@@ -301,7 +303,11 @@ export class ClockController {
       if (typeof timer.func !== 'function') {
         let error: Error | undefined;
         try {
-          (() => { eval(timer.func); })();
+          // Using global this is not correct here,
+          // but it is already broken since the eval scope is different from the one
+          // on the original call site.
+          // eslint-disable-next-line no-restricted-globals
+          (() => { globalThis.eval(timer.func); })();
         } catch (e) {
           error = e;
         }
@@ -658,7 +664,7 @@ export function createClock(globalObject: WindowOrWorkerGlobalScope): { clock: C
   const originals = platformOriginals(globalObject);
   const embedder: Embedder = {
     dateNow: () => originals.raw.Date.now(),
-    performanceNow: () => originals.raw.performance!.now(),
+    performanceNow: () => Math.ceil(originals.raw.performance!.now()) as EmbedderTicks,
     setTimeout: (task: () => void, timeout?: number) => {
       const timerId = originals.bound.setTimeout(task, timeout);
       return () => originals.bound.clearTimeout(timerId);
@@ -705,11 +711,12 @@ export function install(globalObject: WindowOrWorkerGlobalScope, config: Install
 }
 
 export function inject(globalObject: WindowOrWorkerGlobalScope) {
+  const builtin = platformOriginals(globalObject).bound;
   const { clock: controller } = install(globalObject);
   controller.resume();
   return {
     controller,
-    builtin: platformOriginals(globalObject).bound,
+    builtin,
   };
 }
 

@@ -24,6 +24,7 @@ import type { Download } from './download';
 import type * as frames from './frames';
 import { helper } from './helper';
 import * as network from './network';
+import { InitScript } from './page';
 import type { PageDelegate } from './page';
 import { Page, PageBinding } from './page';
 import type { Progress, ProgressController } from './progress';
@@ -42,6 +43,7 @@ import * as consoleApiSource from '../generated/consoleApiSource';
 import { BrowserContextAPIRequestContext } from './fetch';
 import type { Artifact } from './artifact';
 import { Clock } from './clock';
+import { ClientCertificatesProxy } from './socksClientCertificatesInterceptor';
 
 export abstract class BrowserContext extends SdkObject {
   static Events = {
@@ -84,11 +86,12 @@ export abstract class BrowserContext extends SdkObject {
   private _customCloseHandler?: () => Promise<any>;
   readonly _tempDirs: string[] = [];
   private _settingStorageState = false;
-  readonly initScripts: string[] = [];
+  readonly initScripts: InitScript[] = [];
   private _routesInFlight = new Set<network.Route>();
   private _debugger!: Debugger;
   _closeReason: string | undefined;
   readonly clock: Clock;
+  _clientCertificatesProxy: ClientCertificatesProxy | undefined;
 
   constructor(browser: Browser, options: channels.BrowserNewContextParams, browserContextId: string | undefined) {
     super(browser, 'browser-context');
@@ -244,6 +247,7 @@ export abstract class BrowserContext extends SdkObject {
       // at the same time.
       return;
     }
+    this._clientCertificatesProxy?.close().catch(() => {});
     this.tracing.abort();
     if (this._isPersistentContext)
       this.onClosePersistent();
@@ -266,7 +270,7 @@ export abstract class BrowserContext extends SdkObject {
   protected abstract doGrantPermissions(origin: string, permissions: string[]): Promise<void>;
   protected abstract doClearPermissions(): Promise<void>;
   protected abstract doSetHTTPCredentials(httpCredentials?: types.Credentials): Promise<void>;
-  protected abstract doAddInitScript(expression: string): Promise<void>;
+  protected abstract doAddInitScript(initScript: InitScript): Promise<void>;
   protected abstract doRemoveInitScripts(): Promise<void>;
   protected abstract doExposeBinding(binding: PageBinding): Promise<void>;
   protected abstract doRemoveExposedBindings(): Promise<void>;
@@ -403,9 +407,10 @@ export abstract class BrowserContext extends SdkObject {
       this._options.httpCredentials = { username, password: password || '' };
   }
 
-  async addInitScript(script: string) {
-    this.initScripts.push(script);
-    await this.doAddInitScript(script);
+  async addInitScript(source: string) {
+    const initScript = new InitScript(source);
+    this.initScripts.push(initScript);
+    await this.doAddInitScript(initScript);
   }
 
   async _removeInitScripts(): Promise<void> {
@@ -505,7 +510,7 @@ export abstract class BrowserContext extends SdkObject {
       try {
         const storage = await page.mainFrame().nonStallingEvaluateInExistingContext(`({
           localStorage: Object.keys(localStorage).map(name => ({ name, value: localStorage.getItem(name) })),
-        })`, false, 'utility');
+        })`, 'utility');
         if (storage.localStorage.length)
           result.origins.push({ origin, localStorage: storage.localStorage } as channels.OriginStorage);
         originsToSave.delete(origin);
@@ -617,6 +622,10 @@ export abstract class BrowserContext extends SdkObject {
     return Promise.all(this.pages().map(installInPage));
   }
 
+  async safeNonStallingEvaluateInAllFrames(expression: string, world: types.World, options: { throwOnJSErrors?: boolean } = {}) {
+    await Promise.all(this.pages().map(page => page.safeNonStallingEvaluateInAllFrames(expression, world, options)));
+  }
+
   async _harStart(page: Page | null, options: channels.RecordHarOptions): Promise<string> {
     const harId = createGuid();
     this._harRecorders.set(harId, new HarRecorder(this, page, options));
@@ -649,13 +658,30 @@ export function assertBrowserContextIsNotOwned(context: BrowserContext) {
   }
 }
 
+export async function createClientCertificatesProxyIfNeeded(options: channels.BrowserNewContextOptions, browserOptions?: BrowserOptions) {
+  if (!options.clientCertificates?.length)
+    return;
+  if ((options.proxy?.server && options.proxy?.server !== 'per-context') || (browserOptions?.proxy?.server && browserOptions?.proxy?.server !== 'http://per-context'))
+    throw new Error('Cannot specify both proxy and clientCertificates');
+  verifyClientCertificates(options.clientCertificates);
+  const clientCertificatesProxy = new ClientCertificatesProxy(options);
+  options.proxy = { server: await clientCertificatesProxy.listen() };
+  options.ignoreHTTPSErrors = true;
+  return clientCertificatesProxy;
+}
+
 export function validateBrowserContextOptions(options: channels.BrowserNewContextParams, browserOptions: BrowserOptions) {
   if (options.noDefaultViewport && options.deviceScaleFactor !== undefined)
     throw new Error(`"deviceScaleFactor" option is not supported with null "viewport"`);
   if (options.noDefaultViewport && !!options.isMobile)
     throw new Error(`"isMobile" option is not supported with null "viewport"`);
-  if (options.acceptDownloads === undefined)
+  if (options.acceptDownloads === undefined && browserOptions.name !== 'electron')
     options.acceptDownloads = 'accept';
+  // Electron requires explicit acceptDownloads: true since we wait for
+  // https://github.com/electron/electron/pull/41718 to be widely shipped.
+  // In 6-12 months, we can remove this check.
+  else if (options.acceptDownloads === undefined && browserOptions.name === 'electron')
+    options.acceptDownloads = 'internal-browser-default';
   if (!options.viewport && !options.noDefaultViewport)
     options.viewport = { width: 1280, height: 720 };
   if (options.recordVideo) {
@@ -694,6 +720,23 @@ export function verifyGeolocation(geolocation?: types.Geolocation) {
     throw new Error(`geolocation.latitude: precondition -90 <= LATITUDE <= 90 failed.`);
   if (accuracy < 0)
     throw new Error(`geolocation.accuracy: precondition 0 <= ACCURACY failed.`);
+}
+
+export function verifyClientCertificates(clientCertificates?: channels.BrowserNewContextParams['clientCertificates']) {
+  if (!clientCertificates)
+    return;
+  for (const cert of clientCertificates) {
+    if (!cert.origin)
+      throw new Error(`clientCertificates.origin is required`);
+    if (!cert.cert && !cert.key && !cert.passphrase && !cert.pfx)
+      throw new Error('None of cert, key, passphrase or pfx is specified');
+    if (cert.cert && !cert.key)
+      throw new Error('cert is specified without key');
+    if (!cert.cert && cert.key)
+      throw new Error('key is specified without cert');
+    if (cert.pfx && (cert.cert || cert.key))
+      throw new Error('pfx is specified together with cert, key or passphrase');
+  }
 }
 
 export function normalizeProxySettings(proxy: types.ProxySettings): types.ProxySettings {

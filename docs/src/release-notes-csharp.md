@@ -4,6 +4,50 @@ title: "Release notes"
 toc_max_heading_level: 2
 ---
 
+## Version 1.46
+
+### TLS Client Certificates
+
+Playwright now allows to supply client-side certificates, so that server can verify them, as specified by TLS Client Authentication.
+
+You can provide client certificates as a parameter of [`method: Browser.newContext`] and [`method: APIRequest.newContext`]. The following snippet sets up a client certificate for `https://example.com`:
+
+```csharp
+var context = await Browser.NewContextAsync(new() {
+  ClientCertificates = [
+    new() {
+      Origin = "https://example.com",
+      CertPath = "client-certificates/cert.pem",
+      KeyPath = "client-certificates/key.pem",
+    }
+  ]
+});
+```
+
+### Trace Viewer Updates
+
+- Content of text attachments is now rendered inline in the attachments pane.
+- New setting to show/hide routing actions like [`method: Route.continue`].
+- Request method and status are shown in the network details tab.
+- New button to copy source file location to clipboard.
+- Metadata pane now displays the `BaseURL`.
+
+### Miscellaneous
+
+- New `maxRetries` option in [`method: APIRequestContext.fetch`] which retries on the `ECONNRESET` network error.
+
+### Browser Versions
+
+- Chromium 128.0.6613.18
+- Mozilla Firefox 128.0
+- WebKit 18.0
+
+This version was also tested against the following stable channels:
+
+- Google Chrome 127
+- Microsoft Edge 127
+
+
 ## Version 1.45
 
 ### Clock
@@ -17,9 +61,9 @@ Utilizing the new [Clock] API allows to manipulate and control time within tests
 ```csharp
 // Initialize clock with some time before the test time and let the page load naturally.
 // `Date.now` will progress as the timers fire.
-await Page.Clock.InstallAsync(new
+await Page.Clock.InstallAsync(new()
 {
-  Time = new DateTime(2024, 2, 2, 8, 0, 0)
+  TimeDate = new DateTime(2024, 2, 2, 8, 0, 0)
 });
 await Page.GotoAsync("http://localhost:3333");
 
@@ -28,11 +72,11 @@ await Page.GotoAsync("http://localhost:3333");
 await Page.Clock.PauseAtAsync(new DateTime(2024, 2, 2, 10, 0, 0));
 
 // Assert the page state.
-await Expect(Page.GetByTestId("current-time")).ToHaveText("2/2/2024, 10:00:00 AM");
+await Expect(Page.GetByTestId("current-time")).ToHaveTextAsync("2/2/2024, 10:00:00 AM");
 
 // Close the laptop lid again and open it at 10:30am.
 await Page.Clock.FastForwardAsync("30:00");
-await Expect(Page.GetByTestId("current-time")).ToHaveText("2/2/2024, 10:30:00 AM");
+await Expect(Page.GetByTestId("current-time")).ToHaveTextAsync("2/2/2024, 10:30:00 AM");
 ```
 
 See [the clock guide](./clock.md) for more details.
@@ -1012,7 +1056,7 @@ Read more in [our documentation](./test-assertions).
 
 ### Announcements
 
-- v1.20 is the last release to receive WebKit update for macOS 10.15 Catalina. Please update MacOS to keep using latest & greatest WebKit!
+- v1.20 is the last release to receive WebKit update for macOS 10.15 Catalina. Please update macOS to keep using latest & greatest WebKit!
 
 ### Browser Versions
 

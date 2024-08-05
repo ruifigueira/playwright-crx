@@ -559,6 +559,76 @@ await page.GetByLabel("Coun\\"try").ClickAsync();`);
     ]);
   });
 
+  test('should consume contextmenu events, despite a custom context menu', async ({ page, openRecorder, browserName, platform }) => {
+    const recorder = await openRecorder();
+
+    await recorder.setContentAndWait(`
+      <button>Right click me.</button>
+      <div id="menu" style="display: none; position: absolute;">
+        <button>Menu option 1</button>
+        <button>Menu option 2</button>
+      </div>
+      <script>
+        const button = document.querySelector('button');
+        button.addEventListener('contextmenu', e => {
+          e.preventDefault();
+          console.log('right-clicked');
+
+          // show custom context menu
+          const menu = document.getElementById("menu");
+          menu.style.display = "block";
+          menu.style.left = \`\${e.pageX}px\`;
+          menu.style.top = \`\${e.pageY}px\`;
+        });
+        const log = [];
+        for (const eventName of ['mousedown', 'mousemove', 'mouseup', 'pointerdown', 'pointermove', 'pointerup', 'click', 'contextmenu']) {
+          button.addEventListener(eventName, e => log.push('button: ' + e.type));
+          menu.addEventListener(eventName, e => log.push('menu: ' + e.type));
+        }
+      </script>
+    `);
+
+    await recorder.hoverOverElement('button');
+    expect(await page.evaluate('log')).toEqual(['button: pointermove', 'button: mousemove']);
+
+    const [message] = await Promise.all([
+      page.waitForEvent('console', msg => msg.type() !== 'error'),
+      recorder.waitForOutput('JavaScript', `button: 'right'`),
+      recorder.trustedClick({ button: 'right' }),
+    ]);
+    expect(message.text()).toBe('right-clicked');
+    if (browserName === 'chromium' && platform === 'win32') {
+      expect(await page.evaluate('log')).toEqual([
+        // hover
+        'button: pointermove',
+        'button: mousemove',
+        // trusted right click
+        'button: pointermove',
+        'button: mousemove',
+        'button: pointerdown',
+        'button: mousedown',
+        'button: pointerup',
+        'button: mouseup',
+        'button: contextmenu',
+      ]);
+    } else {
+      expect(await page.evaluate('log')).toEqual([
+        // hover
+        'button: pointermove',
+        'button: mousemove',
+        // trusted right click
+        'button: pointerup',
+        'button: pointermove',
+        'button: mousemove',
+        'button: pointerdown',
+        'button: mousedown',
+        'button: contextmenu',
+        'menu: pointerup',
+        'menu: mouseup',
+      ]);
+    }
+  });
+
   test('should assert value', async ({ openRecorder }) => {
     const recorder = await openRecorder();
 
@@ -629,6 +699,27 @@ await page.GetByLabel("Coun\\"try").ClickAsync();`);
     expect.soft(sources2.get('Python Async')!.text).toContain(`await expect(page.locator("#second")).to_have_value("bar")`);
     expect.soft(sources2.get('Java')!.text).toContain(`assertThat(page.locator("#second")).hasValue("bar")`);
     expect.soft(sources2.get('C#')!.text).toContain(`await Expect(page.Locator("#second")).ToHaveValueAsync("bar")`);
+  });
+
+  test('should assert value on disabled select', async ({ openRecorder, browserName }) => {
+    const recorder = await openRecorder();
+
+    await recorder.setContentAndWait(`
+      <select id=first><option value=foo1>Foo1</option><option value=bar1>Bar1</option></select>
+      <select id=second disabled><option value=foo2>Foo2</option><option value=bar2 selected>Bar2</option></select>
+    `);
+
+    await recorder.page.click('x-pw-tool-item.value');
+    await recorder.hoverOverElement('#second');
+    const [sources2] = await Promise.all([
+      recorder.waitForOutput('JavaScript', '#second'),
+      recorder.trustedClick(),
+    ]);
+    expect.soft(sources2.get('JavaScript')!.text).toContain(`await expect(page.locator('#second')).toHaveValue('bar2')`);
+    expect.soft(sources2.get('Python')!.text).toContain(`expect(page.locator("#second")).to_have_value("bar2")`);
+    expect.soft(sources2.get('Python Async')!.text).toContain(`await expect(page.locator("#second")).to_have_value("bar2")`);
+    expect.soft(sources2.get('Java')!.text).toContain(`assertThat(page.locator("#second")).hasValue("bar2")`);
+    expect.soft(sources2.get('C#')!.text).toContain(`await Expect(page.Locator("#second")).ToHaveValueAsync("bar2")`);
   });
 
   test('should assert visibility', async ({ openRecorder }) => {

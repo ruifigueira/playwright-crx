@@ -16,14 +16,13 @@
 
 import type { HTMLReport, TestCaseSummary, TestFileSummary } from './types';
 import * as React from 'react';
-import { msToString } from './uiUtils';
+import { hashStringToInt, msToString } from './utils';
 import { Chip } from './chip';
 import { filterWithToken, type Filter } from './filter';
 import { generateTraceUrl, Link, navigate, ProjectLink } from './links';
 import { statusIcon } from './statusIcon';
 import './testFileView.css';
 import { video, image, trace } from './icons';
-import { hashStringToInt } from './labelUtils';
 
 export const TestFileView: React.FC<React.PropsWithChildren<{
   report: HTMLReport;
@@ -42,8 +41,8 @@ export const TestFileView: React.FC<React.PropsWithChildren<{
     {file.tests.filter(t => filter.matches(t)).map(test =>
       <div key={`test-${test.testId}`} className={'test-file-test test-file-test-outcome-' + test.outcome}>
         <div className='hbox' style={{ alignItems: 'flex-start' }}>
-          <div className="hbox">
-            <span className="test-file-test-status-icon">
+          <div className='hbox'>
+            <span className='test-file-test-status-icon'>
               {statusIcon(test.outcome)}
             </span>
             <span>

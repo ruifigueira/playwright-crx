@@ -79,6 +79,8 @@ export interface TestServerInterface {
   listTests(params: {
     projects?: string[];
     locations?: string[];
+    grep?: string;
+    grepInvert?: string;
   }): Promise<{
     report: ReportEntry[],
     status: reporterTypes.FullResult['status']
@@ -93,6 +95,7 @@ export interface TestServerInterface {
     workers?: number | string;
     timeout?: number,
     outputDir?: string;
+    updateSnapshots?: 'all' | 'none' | 'missing';
     reporters?: string[],
     trace?: 'on' | 'off';
     video?: 'on' | 'off';

@@ -230,6 +230,9 @@ class RecordActionTool implements RecorderTool {
     // So we check the hovered element instead, and if it is a range input, we skip click handling
     if (isRangeInput(this._hoveredElement))
       return;
+    // Right clicks are handled by 'contextmenu' event if its auxclick
+    if (event.button === 2 && event.type === 'auxclick')
+      return;
     if (this._shouldIgnoreMouseEvent(event))
       return;
     if (this._actionInProgress(event))
@@ -256,6 +259,28 @@ class RecordActionTool implements RecorderTool {
       button: buttonForEvent(event),
       modifiers: modifiersForEvent(event),
       clickCount: event.detail
+    });
+  }
+
+  onContextMenu(event: MouseEvent) {
+    // the 'contextmenu' event is triggered by a right-click or equivalent action,
+    // and it prevents the click event from firing for that action, so we always
+    // convert 'contextmenu' into a right-click.
+    if (this._shouldIgnoreMouseEvent(event))
+      return;
+    if (this._actionInProgress(event))
+      return;
+    if (this._consumedDueToNoModel(event, this._hoveredModel))
+      return;
+
+    this._performAction({
+      name: 'click',
+      selector: this._hoveredModel!.selector,
+      position: positionForEvent(event),
+      signals: [],
+      button: 'right',
+      modifiers: 0,
+      clickCount: 0
     });
   }
 
@@ -356,7 +381,7 @@ class RecordActionTool implements RecorderTool {
         return;
       this._performAction({
         name: 'select',
-        selector: this._hoveredModel!.selector,
+        selector: this._activeModel!.selector,
         options: [...selectElement.selectedOptions].map(option => option.value),
         signals: []
       });
@@ -578,8 +603,8 @@ class TextAssertionTool implements RecorderTool {
 
   onPointerUp(event: PointerEvent) {
     const target = this._hoverHighlight?.elements[0];
-    if (this._kind === 'value' && target && target.nodeName === 'INPUT' && (target as HTMLInputElement).disabled) {
-      // Click on a disabled input does not produce a "click" event, but we still want
+    if (this._kind === 'value' && target && (target.nodeName === 'INPUT' || target.nodeName === 'SELECT') && (target as HTMLInputElement).disabled) {
+      // Click on a disabled input (or select) does not produce a "click" event, but we still want
       // to assert the value.
       this._commitAssertValue();
     }
@@ -973,7 +998,7 @@ export class Recorder {
       body[data-pw-cursor=text] *, body[data-pw-cursor=text] *::after { cursor: text !important; }
     `);
     this.installListeners();
-
+    injectedScript.utils.cacheNormalizedWhitespaces();
     if (injectedScript.isUnderTest)
       console.error('Recorder script ready for test'); // eslint-disable-line no-console
   }

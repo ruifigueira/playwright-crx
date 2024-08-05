@@ -139,15 +139,19 @@ export function copy(text: string) {
   textArea.remove();
 }
 
-export function useSetting<S>(name: string | undefined, defaultValue: S): [S, React.Dispatch<React.SetStateAction<S>>] {
-  const value = name ? settings.getObject(name, defaultValue) : defaultValue;
-  const [state, setState] = React.useState<S>(value);
-  const setStateWrapper = (value: React.SetStateAction<S>) => {
+export type Setting<T> = readonly [T, (value: T) => void, string];
+
+export function useSetting<S>(name: string | undefined, defaultValue: S, title?: string): [S, React.Dispatch<React.SetStateAction<S>>, Setting<S>] {
+  if (name)
+    defaultValue = settings.getObject(name, defaultValue);
+  const [value, setValue] = React.useState<S>(defaultValue);
+  const setValueWrapper = React.useCallback((value: React.SetStateAction<S>) => {
     if (name)
       settings.setObject(name, value);
-    setState(value);
-  };
-  return [state, setStateWrapper];
+    setValue(value);
+  }, [name, setValue]);
+  const setting = [value, setValueWrapper, title || name || ''] as Setting<S>;
+  return [value, setValueWrapper, setting];
 }
 
 export class Settings {
@@ -179,3 +183,6 @@ export class Settings {
 }
 
 export const settings = new Settings();
+
+const kControlCodesRe = '\\u0000-\\u0020\\u007f-\\u009f';
+export const kWebLinkRe = new RegExp('(?:[a-zA-Z][a-zA-Z0-9+.-]{2,}:\\/\\/|www\\.)[^\\s' + kControlCodesRe + '"]{2,}[^\\s' + kControlCodesRe + '"\')}\\],:;.!?]', 'ug');

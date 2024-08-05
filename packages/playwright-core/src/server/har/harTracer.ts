@@ -31,7 +31,7 @@ import { getPlaywrightVersion } from '../../utils/userAgent';
 import { urlMatches } from '../../utils/network';
 import { Frame } from '../frames';
 import type { HeadersArray, LifecycleEvent } from '../types';
-import { isTextualMimeType } from '../../utils/mimeType';
+import { isTextualMimeType } from '../../utils/isomorphic/mimeType';
 
 const FALLBACK_HTTP_VERSION = 'HTTP/1.1';
 
@@ -433,12 +433,6 @@ export class HarTracer {
     const page = response.frame()?._page;
     const pageEntry = this._createPageEntryIfNeeded(page);
     const request = response.request();
-
-    // Prefer "response received" time over "request sent" time
-    // for the purpose of matching requests that were used in a particular snapshot.
-    // Note that both snapshot time and request time are taken here in the Node process.
-    if (this._options.includeTraceInfo)
-      harEntry._monotonicTime = monotonicTime();
 
     harEntry.response = {
       status: response.status(),
