@@ -232,12 +232,14 @@ Let's say you'd like to test following component:
 ```js title="input-media.tsx"
 import React from 'react';
 
-export const InputMedia: React.FC<{
+type InputMediaProps = {
   // Media is a complex browser object we can't send to Node while testing.
-  onChange: (media: Media) => void,
-}> = ({ onChange }) => {
-  return <></> as any;
+  onChange(media: Media): void;
 };
+
+export function InputMedia(props: InputMediaProps) {
+  return <></> as any;
+}
 ```
 
 Create a story file for your component:
@@ -246,12 +248,14 @@ Create a story file for your component:
 import React from 'react';
 import InputMedia from './import-media';
 
-export const InputMediaForTest: React.FC<{
-  onMediaChange: (mediaName: string) => void,
-}> = ({ onMediaChange }) => {
-  // Instead of sending a complex `media` object to the test, send the media name.
-  return <InputMedia onChange={media => onMediaChange(media.name)} />;
+type InputMediaForTestProps = {
+  onMediaChange(mediaName: string): void;
 };
+
+export function InputMediaForTest(props: InputMediaForTestProps) {
+  // Instead of sending a complex `media` object to the test, send the media name.
+  return <InputMedia onChange={media => props.onMediaChange(media.name)} />;
+}
 // Export more stories here.
 ```
 
@@ -265,7 +269,6 @@ test('changes the image', async ({ mount }) => {
     <InputMediaForTest
       onMediaChange={mediaName => {
         mediaSelected = mediaName;
-        console.log({ mediaName });
       }}
     />
   );
@@ -455,7 +458,7 @@ test('slot', async ({ mount }) => {
 
 ### hooks
 
-You can use `beforeMount` and `afterMount` hooks to configure your app. This lets you setup things like your app router, fake server etc. giving you the flexibility you need. You can also pass custom configuration from the `mount` call from a test, which is accessible from the `hooksConfig` fixture. This includes any config that needs to be run before or after mounting the component. An example of configuring a router is provided below:
+You can use `beforeMount` and `afterMount` hooks to configure your app. This lets you set up things like your app router, fake server etc. giving you the flexibility you need. You can also pass custom configuration from the `mount` call from a test, which is accessible from the `hooksConfig` fixture. This includes any config that needs to be run before or after mounting the component. An example of configuring a router is provided below:
 
 <Tabs
   defaultValue="react"
@@ -720,6 +723,43 @@ test('update', async ({ mount }) => {
 </TabItem>
 
 </Tabs>
+
+### Handling network requests
+
+Playwright provides an **experimental** `router` fixture to intercept and handle network requests. There are two ways to use the `router` fixture:
+* Call `router.route(url, handler)` that behaves similarly to [`method: Page.route`]. See the [network mocking guide](./mock.md) for more details.
+* Call `router.use(handlers)` and pass [MSW library](https://mswjs.io/) request handlers to it.
+
+Here is an example of reusing your existing MSW handlers in the test.
+
+```ts
+import { handlers } from '@src/mocks/handlers';
+
+test.beforeEach(async ({ router }) => {
+  // install common handlers before each test
+  await router.use(...handlers);
+});
+
+test('example test', async ({ mount }) => {
+  // test as usual, your handlers are active
+  // ...
+});
+```
+
+You can also introduce a one-off handler for a specific test.
+
+```ts
+import { http, HttpResponse } from 'msw';
+
+test('example test', async ({ mount, router }) => {
+  await router.use(http.get('/data', async ({ request }) => {
+    return HttpResponse.json({ value: 'mocked' });
+  }));
+
+  // test as usual, your handler is active
+  // ...
+});
+```
 
 ## Frequently asked questions
 

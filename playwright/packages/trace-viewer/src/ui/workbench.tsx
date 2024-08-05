@@ -20,9 +20,10 @@ import { ActionList } from './actionList';
 import { CallTab } from './callTab';
 import { LogTab } from './logTab';
 import { ErrorsTab, useErrorsTabModel } from './errorsTab';
+import type { ConsoleEntry } from './consoleTab';
 import { ConsoleTab, useConsoleTabModel } from './consoleTab';
 import type * as modelUtil from './modelUtil';
-import type { ActionTraceEventInContext, MultiTraceModel } from './modelUtil';
+import { isRouteAction } from './modelUtil';
 import type { StackFrame } from '@protocol/channels';
 import { NetworkTab, useNetworkTabModel } from './networkTab';
 import { SnapshotTab } from './snapshotTab';
@@ -32,39 +33,56 @@ import type { TabbedPaneTabModel } from '@web/components/tabbedPane';
 import { Timeline } from './timeline';
 import { MetadataView } from './metadataView';
 import { AttachmentsTab } from './attachmentsTab';
+import { AnnotationsTab } from './annotationsTab';
 import type { Boundaries } from '../geometry';
 import { InspectorTab } from './inspectorTab';
 import { ToolbarButton } from '@web/components/toolbarButton';
-import { useSetting, msToString } from '@web/uiUtils';
+import { useSetting, msToString, type Setting } from '@web/uiUtils';
 import type { Entry } from '@trace/har';
 import './workbench.css';
 import { testStatusIcon, testStatusText } from './testUtils';
 import type { UITestStatus } from './testUtils';
+import { SettingsView } from './settingsView';
 
 export const Workbench: React.FunctionComponent<{
-  model?: MultiTraceModel,
+  model?: modelUtil.MultiTraceModel,
   showSourcesFirst?: boolean,
   rootDir?: string,
   fallbackLocation?: modelUtil.SourceLocation,
-  initialSelection?: ActionTraceEventInContext,
-  onSelectionChanged?: (action: ActionTraceEventInContext) => void,
+  initialSelection?: modelUtil.ActionTraceEventInContext,
+  onSelectionChanged?: (action: modelUtil.ActionTraceEventInContext) => void,
   isLive?: boolean,
   status?: UITestStatus,
+  annotations?: { type: string; description?: string; }[];
   inert?: boolean,
-}> = ({ model, showSourcesFirst, rootDir, fallbackLocation, initialSelection, onSelectionChanged, isLive, status, inert }) => {
-  const [selectedAction, setSelectedActionImpl] = React.useState<ActionTraceEventInContext | undefined>(undefined);
+  showRouteActionsSetting?: Setting<boolean>,
+  openPage?: (url: string, target?: string) => Window | any,
+  onOpenExternally?: (location: modelUtil.SourceLocation) => void,
+  revealSource?: boolean,
+}> = ({ showRouteActionsSetting, model, showSourcesFirst, rootDir, fallbackLocation, initialSelection, onSelectionChanged, isLive, status, annotations, inert, openPage, onOpenExternally, revealSource }) => {
+  const [selectedAction, setSelectedActionImpl] = React.useState<modelUtil.ActionTraceEventInContext | undefined>(undefined);
   const [revealedStack, setRevealedStack] = React.useState<StackFrame[] | undefined>(undefined);
-  const [highlightedAction, setHighlightedAction] = React.useState<ActionTraceEventInContext | undefined>();
+  const [highlightedAction, setHighlightedAction] = React.useState<modelUtil.ActionTraceEventInContext | undefined>();
   const [highlightedEntry, setHighlightedEntry] = React.useState<Entry | undefined>();
+  const [highlightedConsoleMessage, setHighlightedConsoleMessage] = React.useState<ConsoleEntry | undefined>();
   const [selectedNavigatorTab, setSelectedNavigatorTab] = React.useState<string>('actions');
   const [selectedPropertiesTab, setSelectedPropertiesTab] = useSetting<string>('propertiesTab', showSourcesFirst ? 'source' : 'call');
-  const [isInspecting, setIsInspecting] = React.useState(false);
+  const [isInspecting, setIsInspectingState] = React.useState(false);
   const [highlightedLocator, setHighlightedLocator] = React.useState<string>('');
   const activeAction = model ? highlightedAction || selectedAction : undefined;
   const [selectedTime, setSelectedTime] = React.useState<Boundaries | undefined>();
   const [sidebarLocation, setSidebarLocation] = useSetting<'bottom' | 'right'>('propertiesSidebarLocation', 'bottom');
+  const [, , showRouteActionsSettingInternal] = useSetting(showRouteActionsSetting ? undefined : 'show-route-actions', true, 'Show route actions');
 
-  const setSelectedAction = React.useCallback((action: ActionTraceEventInContext | undefined) => {
+  const showSettings = !showRouteActionsSetting;
+  showRouteActionsSetting ||= showRouteActionsSettingInternal;
+  const showRouteActions = showRouteActionsSetting[0];
+
+  const filteredActions = React.useMemo(() => {
+    return (model?.actions || []).filter(action => showRouteActions || !isRouteAction(action));
+  }, [model, showRouteActions]);
+
+  const setSelectedAction = React.useCallback((action: modelUtil.ActionTraceEventInContext | undefined) => {
     setSelectedActionImpl(action);
     setRevealedStack(action?.stack);
   }, [setSelectedActionImpl, setRevealedStack]);
@@ -73,6 +91,7 @@ export const Workbench: React.FunctionComponent<{
 
   React.useEffect(() => {
     setSelectedTime(undefined);
+    setRevealedStack(undefined);
   }, [model]);
 
   React.useEffect(() => {
@@ -96,7 +115,7 @@ export const Workbench: React.FunctionComponent<{
     }
   }, [model, selectedAction, setSelectedAction, initialSelection]);
 
-  const onActionSelected = React.useCallback((action: ActionTraceEventInContext) => {
+  const onActionSelected = React.useCallback((action: modelUtil.ActionTraceEventInContext) => {
     setSelectedAction(action);
     onSelectionChanged?.(action);
   }, [setSelectedAction, onSelectionChanged]);
@@ -104,13 +123,24 @@ export const Workbench: React.FunctionComponent<{
   const selectPropertiesTab = React.useCallback((tab: string) => {
     setSelectedPropertiesTab(tab);
     if (tab !== 'inspector')
-      setIsInspecting(false);
+      setIsInspectingState(false);
   }, [setSelectedPropertiesTab]);
+
+  const setIsInspecting = React.useCallback((value: boolean) => {
+    if (!isInspecting && value)
+      selectPropertiesTab('inspector');
+    setIsInspectingState(value);
+  }, [setIsInspectingState, selectPropertiesTab, isInspecting]);
 
   const locatorPicked = React.useCallback((locator: string) => {
     setHighlightedLocator(locator);
     selectPropertiesTab('inspector');
   }, [selectPropertiesTab]);
+
+  React.useEffect(() => {
+    if (revealSource)
+      selectPropertiesTab('source');
+  }, [revealSource, selectPropertiesTab]);
 
   const consoleModel = useConsoleTabModel(model, selectedTime);
   const networkModel = useNetworkTabModel(model, selectedTime);
@@ -160,13 +190,21 @@ export const Workbench: React.FunctionComponent<{
       sources={sources}
       rootDir={rootDir}
       stackFrameLocation={sidebarLocation === 'bottom' ? 'right' : 'bottom'}
-      fallbackLocation={fallbackLocation} />
+      fallbackLocation={fallbackLocation}
+      onOpenExternally={onOpenExternally}
+    />
   };
   const consoleTab: TabbedPaneTabModel = {
     id: 'console',
     title: 'Console',
     count: consoleModel.entries.length,
-    render: () => <ConsoleTab consoleModel={consoleModel} boundaries={boundaries} selectedTime={selectedTime} />
+    render: () => <ConsoleTab
+      consoleModel={consoleModel}
+      boundaries={boundaries}
+      selectedTime={selectedTime}
+      onAccepted={m => setSelectedTime({ minimum: m.timestamp, maximum: m.timestamp })}
+      onEntryHovered={setHighlightedConsoleMessage}
+    />
   };
   const networkTab: TabbedPaneTabModel = {
     id: 'network',
@@ -191,6 +229,17 @@ export const Workbench: React.FunctionComponent<{
     sourceTab,
     attachmentsTab,
   ];
+
+  if (annotations !== undefined) {
+    const annotationsTab: TabbedPaneTabModel = {
+      id: 'annotations',
+      title: 'Annotations',
+      count: annotations.length,
+      render: () => <AnnotationsTab annotations={annotations} />
+    };
+    tabs.push(annotationsTab);
+  }
+
   if (showSourcesFirst) {
     const sourceTabIndex = tabs.indexOf(sourceTab);
     tabs.splice(sourceTabIndex, 1);
@@ -214,12 +263,48 @@ export const Workbench: React.FunctionComponent<{
   else if (model && model.wallTime)
     time = Date.now() - model.wallTime;
 
+  const actionsTab: TabbedPaneTabModel = {
+    id: 'actions',
+    title: 'Actions',
+    component: <div className='vbox'>
+      {status && <div className='workbench-run-status'>
+        <span className={`codicon ${testStatusIcon(status)}`}></span>
+        <div>{testStatusText(status)}</div>
+        <div className='spacer'></div>
+        <div className='workbench-run-duration'>{time ? msToString(time) : ''}</div>
+      </div>}
+      <ActionList
+        sdkLanguage={sdkLanguage}
+        actions={filteredActions}
+        selectedAction={model ? selectedAction : undefined}
+        selectedTime={selectedTime}
+        setSelectedTime={setSelectedTime}
+        onSelected={onActionSelected}
+        onHighlighted={setHighlightedAction}
+        revealConsole={() => selectPropertiesTab('console')}
+        isLive={isLive}
+      />
+    </div>
+  };
+  const metadataTab: TabbedPaneTabModel = {
+    id: 'metadata',
+    title: 'Metadata',
+    component: <MetadataView model={model}/>
+  };
+  const settingsTab: TabbedPaneTabModel = {
+    id: 'settings',
+    title: 'Settings',
+    component: <SettingsView settings={[showRouteActionsSetting]}/>,
+  };
+
   return <div className='vbox workbench' {...(inert ? { inert: 'true' } : {})}>
     <Timeline
       model={model}
+      consoleEntries={consoleModel.entries}
       boundaries={boundaries}
       highlightedAction={highlightedAction}
       highlightedEntry={highlightedEntry}
+      highlightedConsoleEntry={highlightedConsoleMessage}
       onSelected={onActionSelected}
       sdkLanguage={sdkLanguage}
       selectedTime={selectedTime}
@@ -234,51 +319,18 @@ export const Workbench: React.FunctionComponent<{
           isInspecting={isInspecting}
           setIsInspecting={setIsInspecting}
           highlightedLocator={highlightedLocator}
-          setHighlightedLocator={locatorPicked} />
+          setHighlightedLocator={locatorPicked}
+          openPage={openPage} />
         <TabbedPane
-          tabs={[
-            {
-              id: 'actions',
-              title: 'Actions',
-              component: <div className='vbox'>
-                {status && <div className='workbench-run-status'>
-                  <span className={`codicon ${testStatusIcon(status)}`}></span>
-                  <div>{testStatusText(status)}</div>
-                  <div className='spacer'></div>
-                  <div className='workbench-run-duration'>{time ? msToString(time) : ''}</div>
-                </div>}
-                <ActionList
-                  sdkLanguage={sdkLanguage}
-                  actions={model?.actions || []}
-                  selectedAction={model ? selectedAction : undefined}
-                  selectedTime={selectedTime}
-                  setSelectedTime={setSelectedTime}
-                  onSelected={onActionSelected}
-                  onHighlighted={setHighlightedAction}
-                  revealConsole={() => selectPropertiesTab('console')}
-                  isLive={isLive}
-                />
-              </div>
-            },
-            {
-              id: 'metadata',
-              title: 'Metadata',
-              component: <MetadataView model={model}/>
-            },
-          ]}
-          selectedTab={selectedNavigatorTab} setSelectedTab={setSelectedNavigatorTab}/>
+          tabs={showSettings ? [actionsTab, metadataTab, settingsTab] : [actionsTab, metadataTab]}
+          selectedTab={selectedNavigatorTab}
+          setSelectedTab={setSelectedNavigatorTab}
+        />
       </SplitView>
       <TabbedPane
         tabs={tabs}
         selectedTab={selectedPropertiesTab}
         setSelectedTab={selectPropertiesTab}
-        leftToolbar={[
-          <ToolbarButton title='Pick locator' icon='target' toggled={isInspecting} onClick={() => {
-            if (!isInspecting)
-              selectPropertiesTab('inspector');
-            setIsInspecting(!isInspecting);
-          }} />
-        ]}
         rightToolbar={[
           sidebarLocation === 'bottom' ?
             <ToolbarButton title='Dock to right' icon='layout-sidebar-right-off' onClick={() => {

@@ -10,7 +10,7 @@ a way to find element(s) on the page at any moment.
 
 ### Quick Guide
 
-These are the recommended built in locators.
+These are the recommended built-in locators.
 
 - [`method: Page.getByRole`](#locate-by-role) to locate by explicit and implicit accessibility attributes.
 - [`method: Page.getByText`](#locate-by-text) to locate by text content.
@@ -513,7 +513,7 @@ Use this locator when your element has the `title` attribute.
 
 ### Locate by test id
 
-Testing by test ids is the most resilient way of testing as even if your text or role of the attribute changes the test will still pass. QA's and developers should define explicit test ids and query them with [`method: Page.getByTestId`]. However testing by test ids is not user facing. If the role or text value is important to you then consider using user facing locators such as [role](#locate-by-role) and [text locators](#locate-by-text).
+Testing by test ids is the most resilient way of testing as even if your text or role of the attribute changes, the test will still pass. QA's and developers should define explicit test ids and query them with [`method: Page.getByTestId`]. However testing by test ids is not user facing. If the role or text value is important to you then consider using user facing locators such as [role](#locate-by-role) and [text locators](#locate-by-text).
 
 For example, consider the following DOM structure.
 
@@ -1444,14 +1444,6 @@ page.getByText("orange").click();
 await page.GetByText("orange").ClickAsync();
 ```
 
-```html card
-<ul>
-  <li>apple</li>
-  <li>banana</li>
-  <li>orange</li>
-</ul>
-```
-
 #### Filter by text
 Use the [`method: Locator.filter`] to locate a specific item in a list.
 
@@ -1509,7 +1501,7 @@ For example, consider the following DOM structure:
 </ul>
 ```
 
-Locate an item by it's test id of "orange" and then click it.
+Locate an item by its test id of "orange" and then click it.
 
 ```js
 await page.getByTestId('orange').click();

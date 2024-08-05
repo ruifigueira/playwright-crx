@@ -29,7 +29,7 @@ import { ToolbarButton } from '@web/components/toolbarButton';
 import { Toolbar } from '@web/components/toolbar';
 import type { XtermDataSource } from '@web/components/xtermWrapper';
 import { XtermWrapper } from '@web/components/xtermWrapper';
-import { toggleTheme } from '@web/theme';
+import { useDarkModeSetting } from '@web/theme';
 import { settings, useSetting } from '@web/uiUtils';
 import { statusEx, TestTree } from '@testIsomorphic/testTree';
 import type { TreeItem  } from '@testIsomorphic/testTree';
@@ -39,6 +39,7 @@ import type { TestModel } from './uiModeModel';
 import { FiltersView } from './uiModeFiltersView';
 import { TestListView } from './uiModeTestListView';
 import { TraceView } from './uiModeTraceView';
+import { SettingsView } from './settingsView';
 
 let xtermSize = { cols: 80, rows: 24 };
 const xtermDataSource: XtermDataSource = {
@@ -61,8 +62,11 @@ const queryParams = {
   timeout: searchParams.has('timeout') ? +searchParams.get('timeout')! : undefined,
   headed: searchParams.has('headed'),
   outputDir: searchParams.get('outputDir') || undefined,
+  updateSnapshots: (searchParams.get('updateSnapshots') as 'all' | 'none' | 'missing' | undefined) || undefined,
   reporters: searchParams.has('reporter') ? searchParams.getAll('reporter') : undefined,
 };
+if (queryParams.updateSnapshots && !['all', 'none', 'missing'].includes(queryParams.updateSnapshots))
+  queryParams.updateSnapshots = undefined;
 
 const isMac = navigator.platform === 'MacIntel';
 
@@ -90,6 +94,40 @@ export const UIModeView: React.FC<{}> = ({
   const [isDisconnected, setIsDisconnected] = React.useState(false);
   const [hasBrowsers, setHasBrowsers] = React.useState(true);
   const [testServerConnection, setTestServerConnection] = React.useState<TestServerConnection>();
+  const [settingsVisible, setSettingsVisible] = React.useState(false);
+  const [testingOptionsVisible, setTestingOptionsVisible] = React.useState(false);
+  const [revealSource, setRevealSource] = React.useState(false);
+  const onRevealSource = React.useCallback(() => setRevealSource(true), [setRevealSource]);
+  const showTestingOptions = false;
+
+  const [runWorkers, setRunWorkers] = React.useState(queryParams.workers);
+  const singleWorkerSetting = React.useMemo(() => {
+    return [
+      runWorkers === '1',
+      (value: boolean) => {
+        // When started with `--workers=1`, the setting allows to undo that.
+        // Otherwise, fallback to the cli `--workers=X` argument.
+        setRunWorkers(value ? '1' : (queryParams.workers === '1' ? undefined : queryParams.workers));
+      },
+      'Single worker',
+    ] as const;
+  }, [runWorkers, setRunWorkers]);
+
+  const [runHeaded, setRunHeaded] = React.useState(queryParams.headed);
+  const showBrowserSetting = React.useMemo(() => [runHeaded, setRunHeaded, 'Show browser'] as const, [runHeaded, setRunHeaded]);
+
+  const [runUpdateSnapshots, setRunUpdateSnapshots] = React.useState(queryParams.updateSnapshots);
+  const updateSnapshotsSetting = React.useMemo(() => {
+    return [
+      runUpdateSnapshots === 'all',
+      (value: boolean) => setRunUpdateSnapshots(value ? 'all' : 'missing'),
+      'Update snapshots',
+    ] as const;
+  }, [runUpdateSnapshots, setRunUpdateSnapshots]);
+
+  const [, , showRouteActionsSetting] = useSetting('show-route-actions', true, 'Show route actions');
+
+  const darkModeSetting = useDarkModeSetting();
 
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -158,7 +196,7 @@ export const UIModeView: React.FC<{}> = ({
       commandQueue.current = commandQueue.current.then(async () => {
         setIsLoading(true);
         try {
-          const result = await testServerConnection.listTests({ projects: queryParams.projects, locations: queryParams.args });
+          const result = await testServerConnection.listTests({ projects: queryParams.projects, locations: queryParams.args, grep: queryParams.grep, grepInvert: queryParams.grepInvert });
           teleSuiteUpdater.processListReport(result.report);
         } catch (e) {
           // eslint-disable-next-line no-console
@@ -183,7 +221,7 @@ export const UIModeView: React.FC<{}> = ({
         if (status !== 'passed')
           return;
 
-        const result = await testServerConnection.listTests({ projects: queryParams.projects, locations: queryParams.args });
+        const result = await testServerConnection.listTests({ projects: queryParams.projects, locations: queryParams.args, grep: queryParams.grep, grepInvert: queryParams.grepInvert });
         teleSuiteUpdater.processListReport(result.report);
 
         testServerConnection.onListChanged(updateList);
@@ -281,10 +319,11 @@ export const UIModeView: React.FC<{}> = ({
         grepInvert: queryParams.grepInvert,
         testIds: [...testIds],
         projects: [...projectFilters].filter(([_, v]) => v).map(([p]) => p),
-        workers: queryParams.workers,
+        workers: runWorkers,
         timeout: queryParams.timeout,
-        headed: queryParams.headed,
+        headed: runHeaded,
         outputDir: queryParams.outputDir,
+        updateSnapshots: runUpdateSnapshots,
         reporters: queryParams.reporters,
         trace: 'on',
       });
@@ -296,7 +335,7 @@ export const UIModeView: React.FC<{}> = ({
       setTestModel({ ...testModel });
       setRunningState(undefined);
     });
-  }, [projectFilters, runningState, testModel, testServerConnection]);
+  }, [projectFilters, runningState, testModel, testServerConnection, runWorkers, runHeaded, runUpdateSnapshots]);
 
   // Watch implementation.
   React.useEffect(() => {
@@ -399,14 +438,19 @@ export const UIModeView: React.FC<{}> = ({
           <XtermWrapper source={xtermDataSource}></XtermWrapper>
         </div>
         <div className={'vbox' + (isShowingOutput ? ' hidden' : '')}>
-          <TraceView item={selectedItem} rootDir={testModel?.config?.rootDir} />
+          <TraceView
+            showRouteActionsSetting={showRouteActionsSetting}
+            item={selectedItem}
+            rootDir={testModel?.config?.rootDir}
+            revealSource={revealSource}
+            onOpenExternally={location => testServerConnection?.openNoReply({ location: { file: location.file, line: location.line, column: location.column } })}
+          />
         </div>
       </div>
       <div className='vbox ui-mode-sidebar'>
         <Toolbar noShadow={true} noMinHeight={true}>
           <img src='playwright-logo.svg' alt='Playwright logo' />
           <div className='section-title'>Playwright</div>
-          <ToolbarButton icon='color-mode' title='Toggle color mode' onClick={() => toggleTheme()} />
           <ToolbarButton icon='refresh' title='Reload' onClick={() => reloadTests()} disabled={isRunningTest || isLoading}></ToolbarButton>
           <ToolbarButton icon='terminal' title={'Toggle output — ' + (isMac ? '⌃`' : 'Ctrl + `')} toggled={isShowingOutput} onClick={() => { setIsShowingOutput(!isShowingOutput); }} />
           {!hasBrowsers && <ToolbarButton icon='lightbulb-autofix' style={{ color: 'var(--vscode-list-warningForeground)' }} title='Playwright browsers are missing' onClick={openInstallDialog} />}
@@ -452,7 +496,35 @@ export const UIModeView: React.FC<{}> = ({
           isLoading={isLoading}
           requestedCollapseAllCount={collapseAllCount}
           setFilterText={setFilterText}
+          onRevealSource={onRevealSource}
         />
+        {showTestingOptions && <>
+          <Toolbar noShadow={true} noMinHeight={true} className='settings-toolbar' onClick={() => setTestingOptionsVisible(!testingOptionsVisible)}>
+            <span
+              className={`codicon codicon-${testingOptionsVisible ? 'chevron-down' : 'chevron-right'}`}
+              style={{ marginLeft: 5 }}
+              title={testingOptionsVisible ? 'Hide Testing Options' : 'Show Testing Options'}
+            />
+            <div className='section-title'>Testing Options</div>
+          </Toolbar>
+          {testingOptionsVisible && <SettingsView settings={[
+            singleWorkerSetting,
+            showBrowserSetting,
+            updateSnapshotsSetting,
+          ]} />}
+        </>}
+        <Toolbar noShadow={true} noMinHeight={true} className='settings-toolbar' onClick={() => setSettingsVisible(!settingsVisible)}>
+          <span
+            className={`codicon codicon-${settingsVisible ? 'chevron-down' : 'chevron-right'}`}
+            style={{ marginLeft: 5 }}
+            title={settingsVisible ? 'Hide Settings' : 'Show Settings'}
+          />
+          <div className='section-title'>Settings</div>
+        </Toolbar>
+        {settingsVisible && <SettingsView settings={[
+          darkModeSetting,
+          showRouteActionsSetting,
+        ]} />}
       </div>
     </SplitView>
   </div>;

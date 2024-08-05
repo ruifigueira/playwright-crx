@@ -14,28 +14,26 @@
   limitations under the License.
 */
 
-export function msToString(ms: number): string {
-  if (!isFinite(ms))
-    return '-';
+.settings-view {
+  flex: none;
+  margin-top: 4px;
+}
 
-  if (ms === 0)
-    return '0ms';
+.settings-view .setting label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin: 4px 2px;
+}
 
-  if (ms < 1000)
-    return ms.toFixed(0) + 'ms';
+.settings-view .setting:first-of-type label {
+  margin-top: 2px;
+}
 
-  const seconds = ms / 1000;
-  if (seconds < 60)
-    return seconds.toFixed(1) + 's';
+.settings-view .setting:last-of-type label {
+  margin-bottom: 2px;
+}
 
-  const minutes = seconds / 60;
-  if (minutes < 60)
-    return minutes.toFixed(1) + 'm';
-
-  const hours = minutes / 60;
-  if (hours < 24)
-    return hours.toFixed(1) + 'h';
-
-  const days = hours / 24;
-  return days.toFixed(1) + 'd';
+.settings-view .setting input {
+  margin-right: 5px;
 }
