@@ -22,7 +22,7 @@ function getPermission(page, name) {
 }
 
 it.describe('permissions', () => {
-  it.skip(({ browserName }) => browserName === 'webkit', 'Permissions API is not implemented in WebKit (see https://developer.mozilla.org/en-US/docs/Web/API/Permissions_API)');
+  it.fixme(({ browserName, isWindows }) => browserName === 'webkit' && isWindows, 'Permissions API is disabled on Windows WebKit');
 
   it('should be prompt by default', async ({ page, server }) => {
     await page.goto(server.EMPTY_PAGE);

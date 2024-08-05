@@ -31,7 +31,9 @@ test.slow();
 let traceFile: string;
 
 test.beforeAll(async function recordTrace({ browser, browserName, browserType, server }, workerInfo) {
-  const context = await browser.newContext();
+  const context = await browser.newContext({
+    baseURL: 'https://example.com',
+  });
   await context.tracing.start({ name: 'test', screenshots: true, snapshots: true, sources: true });
   const page = await context.newPage();
   await page.goto(`data:text/html,<!DOCTYPE html><html>Hello world</html>`);
@@ -118,6 +120,11 @@ test('should open simple trace viewer', async ({ showTraceViewer }) => {
     /page.gotohttp:\/\/localhost:\d+\/frames\/frame.html/,
     /page.setViewportSize/,
   ]);
+});
+
+test('should complain about newer version of trace in old viewer', async ({ showTraceViewer, asset }, testInfo) => {
+  const traceViewer = await showTraceViewer([asset('trace-from-the-future.zip')]);
+  await expect(traceViewer.page.getByText('The trace was created by a newer version of Playwright and is not supported by this version of the viewer.')).toBeVisible();
 });
 
 test('should contain action info', async ({ showTraceViewer }) => {
@@ -347,14 +354,12 @@ test('should capture data-url svg iframe', async ({ page, server, runAndTrace })
 });
 
 test('should contain adopted style sheets', async ({ page, runAndTrace, browserName }) => {
-  test.skip(browserName !== 'chromium', 'Constructed stylesheets are only in Chromium.');
-
   const traceViewer = await runAndTrace(async () => {
     await page.setContent('<button>Hello</button>');
     await page.evaluate(() => {
       const sheet = new CSSStyleSheet();
       sheet.addRule('button', 'color: red');
-      (document as any).adoptedStyleSheets = [sheet];
+      document.adoptedStyleSheets = [sheet];
 
       const sheet2 = new CSSStyleSheet();
       sheet2.addRule(':host', 'color: blue');
@@ -364,7 +369,7 @@ test('should contain adopted style sheets', async ({ page, runAndTrace, browserN
           mode: 'open'
         });
         root.append('foo');
-        (root as any).adoptedStyleSheets = [sheet2];
+        root.adoptedStyleSheets = [sheet2];
         document.body.appendChild(element);
       }
     });
@@ -377,22 +382,20 @@ test('should contain adopted style sheets', async ({ page, runAndTrace, browserN
 });
 
 test('should work with adopted style sheets and replace/replaceSync', async ({ page, runAndTrace, browserName }) => {
-  test.skip(browserName !== 'chromium', 'Constructed stylesheets are only in Chromium.');
-
   const traceViewer = await runAndTrace(async () => {
     await page.setContent('<button>Hello</button>');
     await page.evaluate(() => {
       const sheet = new CSSStyleSheet();
       sheet.addRule('button', 'color: red');
-      (document as any).adoptedStyleSheets = [sheet];
+      document.adoptedStyleSheets = [sheet];
     });
     await page.evaluate(() => {
-      const [sheet] = (document as any).adoptedStyleSheets;
+      const [sheet] = document.adoptedStyleSheets;
       sheet.replaceSync(`button { color: blue }`);
     });
-    await page.evaluate(() => {
-      const [sheet] = (document as any).adoptedStyleSheets;
-      sheet.replace(`button { color: #0F0 }`);
+    await page.evaluate(async () => {
+      const [sheet] = document.adoptedStyleSheets;
+      await sheet.replace(`button { color: #0F0 }`);
     });
   });
 
@@ -410,7 +413,56 @@ test('should work with adopted style sheets and replace/replaceSync', async ({ p
   }
 });
 
-test('should restore scroll positions', async ({ page, runAndTrace, browserName }) => {
+test('should work with adopted style sheets and all: unset', async ({ page, runAndTrace, browserName }) => {
+  test.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/31500' });
+  test.fixme(browserName === 'chromium', 'https://issues.chromium.org/u/1/issues/41416124');
+
+  const traceViewer = await runAndTrace(async () => {
+    await page.setContent('<button>Hello</button>');
+    await page.evaluate(() => {
+      const stylesheet = new CSSStyleSheet();
+      // 'all: unset' is the problem here.
+      stylesheet.replaceSync('button { all: unset; border-radius: 24px; background-color: deepskyblue; color: black; padding: 5px }');
+      document.adoptedStyleSheets = [stylesheet];
+    });
+    await page.getByRole('button').click();
+  });
+  {
+    const frame = await traceViewer.snapshotFrame('page.evaluate', 0);
+    await expect(frame.locator('button')).toHaveCSS('border-radius', '24px');
+    await expect(frame.locator('button')).toHaveCSS('background-color', 'rgb(0, 191, 255)');
+    await expect(frame.locator('button')).toHaveCSS('color', 'rgb(0, 0, 0)');
+    await expect(frame.locator('button')).toHaveCSS('padding', '5px');
+  }
+});
+
+test('should work with nesting CSS selectors', async ({ page, runAndTrace }) => {
+  test.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/31607' });
+
+  const traceViewer = await runAndTrace(async () => {
+    await page.setContent(`
+      <span class="foo" data-testid="green-element">Hi</span>
+      <span class="foo bar" data-testid="red-element">Hello</span>
+      <style>
+        .foo {
+          color: green;
+
+          &.bar {
+            color: red;
+          }
+        }
+      </style>
+      `);
+    await page.evaluate(() => { });
+  });
+  {
+    const frame = await traceViewer.snapshotFrame('page.evaluate', 0);
+    await expect(frame.getByTestId('green-element')).toHaveCSS('color', /* green */'rgb(0, 128, 0)');
+    await expect(frame.getByTestId('red-element')).toHaveCSS('color', /* red */'rgb(255, 0, 0)');
+  }
+});
+
+test('should restore scroll positions', async ({ page, runAndTrace }) => {
   const traceViewer = await runAndTrace(async () => {
     await page.setContent(`
       <style>
@@ -749,10 +801,10 @@ test('should follow redirects', async ({ page, runAndTrace, server, asset }) => 
   await expect(snapshotFrame.locator('img')).toHaveJSProperty('naturalWidth', 10);
 });
 
-test('should include metainfo', async ({ showTraceViewer, browserName }) => {
+test('should include metainfo', async ({ showTraceViewer }) => {
   const traceViewer = await showTraceViewer([traceFile]);
   await traceViewer.page.locator('text=Metadata').click();
-  const callLine = traceViewer.page.locator('.metadata-view .call-line');
+  const callLine = traceViewer.metadataTab.locator('.call-line');
   await expect(callLine.getByText('start time')).toHaveText(/start time:[\d/,: ]+/);
   await expect(callLine.getByText('duration')).toHaveText(/duration:[\dms]+/);
   await expect(callLine.getByText('engine')).toHaveText(/engine:[\w]+/);
@@ -793,12 +845,12 @@ test('should open two trace files', async ({ context, page, request, server, sho
   await traceViewer.selectAction('apiRequestContext.get');
   await traceViewer.selectAction('apiRequestContext.post');
   await expect(traceViewer.actionTitles).toHaveText([
-    `apiRequestContext.get`,
+    `apiRequestContext.get/simple.json`,
     `page.gotohttp://localhost:${server.PORT}/input/button.html`,
-    `apiRequestContext.head`,
+    `apiRequestContext.head/simplezip.json`,
     `locator.clicklocator('button')`,
     `locator.clicklocator('button')`,
-    `apiRequestContext.post`,
+    `apiRequestContext.post/one-style.css`,
   ]);
 
   await traceViewer.page.locator('text=Metadata').click();
@@ -1235,4 +1287,94 @@ test('should open snapshot in new browser context', async ({ browser, page, runA
   await newPage.goto(popup.url());
   await expect(newPage.getByText('hello')).toBeVisible();
   await newPage.close();
+});
+
+test('should show similar actions from library-only trace', async ({ showTraceViewer, asset }) => {
+  const traceViewer = await showTraceViewer([asset('trace-library-1.46.zip')]);
+  await expect(traceViewer.actionTitles).toHaveText([
+    /page.setContent/,
+    /locator.getAttributelocator\('div'\)/,
+    /locator.isVisiblelocator\('div'\)/,
+    /locator.getAttributelocator\('div'\)/,
+    /locator.isVisiblelocator\('div'\)/,
+  ]);
+});
+
+function parseMillis(s: string): number {
+  const matchMs = s.match(/(\d+)ms/);
+  if (matchMs)
+    return +matchMs[1];
+  const matchSeconds = s.match(/([\d.]+)s/);
+  if (!matchSeconds)
+    throw new Error('Failed to parse to millis: ' + s);
+  return (+matchSeconds[1]) * 1000;
+}
+
+test('should show correct request start time', {
+  annotation: { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/31133' },
+}, async ({ page, runAndTrace, server }) => {
+  server.setRoute('/api', (req, res) => {
+    setTimeout(() => {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('done');
+    }, 1100);
+  });
+  const traceViewer = await runAndTrace(async () => {
+    await page.goto(server.EMPTY_PAGE);
+    await page.evaluate(() => {
+      return fetch('/api').then(r => r.text());
+    });
+  });
+  await traceViewer.selectAction('page.evaluate');
+  await traceViewer.showNetworkTab();
+  await expect(traceViewer.networkRequests).toContainText([/apiGET200text/]);
+  const line = traceViewer.networkRequests.getByText(/apiGET200text/);
+  const start = await line.locator('.grid-view-column-start').textContent();
+  const duration =  await line.locator('.grid-view-column-duration').textContent();
+  expect(parseMillis(duration)).toBeGreaterThan(1000);
+  expect(parseMillis(start)).toBeLessThan(1000);
+});
+
+test('should allow hiding route actions', {
+  annotation: { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/30970' },
+}, async ({ page, runAndTrace, server }) => {
+  const traceViewer = await runAndTrace(async () => {
+    await page.route('**/*', async route => {
+      await route.fulfill({ contentType: 'text/html', body: 'Yo, page!' });
+    });
+    await page.goto(server.EMPTY_PAGE);
+  });
+
+  // Routes are visible by default.
+  await expect(traceViewer.actionTitles).toHaveText([
+    /page.route/,
+    /page.goto.*empty.html/,
+    /route.fulfill/,
+  ]);
+
+  await traceViewer.page.getByText('Settings').click();
+  await expect(traceViewer.page.getByRole('checkbox', { name: 'Show route actions' })).toBeChecked();
+  await traceViewer.page.getByRole('checkbox', { name: 'Show route actions' }).uncheck();
+  await traceViewer.page.getByText('Actions', { exact: true }).click();
+  await expect(traceViewer.actionTitles).toHaveText([
+    /page.goto.*empty.html/,
+  ]);
+
+  await traceViewer.page.getByText('Settings').click();
+  await traceViewer.page.getByRole('checkbox', { name: 'Show route actions' }).check();
+  await traceViewer.page.getByText('Actions', { exact: true }).click();
+  await expect(traceViewer.actionTitles).toHaveText([
+    /page.route/,
+    /page.goto.*empty.html/,
+    /route.fulfill/,
+  ]);
+});
+
+test('should show baseURL in metadata pane', {
+  annotation: { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/31847' },
+}, async ({ showTraceViewer }) => {
+  const traceViewer = await showTraceViewer([traceFile]);
+  await traceViewer.selectAction('page.evaluate');
+  await traceViewer.showMetadataTab();
+  await expect(traceViewer.metadataTab).toContainText('baseURL:https://example.com');
 });

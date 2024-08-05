@@ -14,11 +14,21 @@
  * limitations under the License.
  */
 
-import { test as it, expect } from './pageTest';
+import * as React from 'react';
+import type { Setting } from '@web/uiUtils';
+import './settingsView.css';
 
-it.skip(!process.env.PW_FREEZE_TIME);
-
-it('clock should be frozen', async ({ page }) => {
-  await page.clock.setSystemTime(0);
-  expect(await page.evaluate('Date.now()')).toBe(0);
-});
+export const SettingsView: React.FunctionComponent<{
+  settings: Setting<boolean>[],
+}> = ({ settings }) => {
+  return <div className='vbox settings-view'>
+    {settings.map(([value, set, title]) => {
+      return <div key={title} className='setting'>
+        <label>
+          <input type='checkbox' checked={value} onClick={() => set(!value)}/>
+          {title}
+        </label>
+      </div>;
+    })}
+  </div>;
+};

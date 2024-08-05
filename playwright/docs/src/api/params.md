@@ -62,11 +62,18 @@ Maximum time in milliseconds. Defaults to `0` - no timeout. The default value ca
 [`method: Page.setDefaultTimeout`] methods.
 
 ## input-no-wait-after
+* deprecated: This option will default to `true` in the future.
 - `noWaitAfter` <[boolean]>
 
 Actions that initiate navigations are waiting for these navigations to happen and for pages to start loading. You can
 opt out of waiting via setting this flag. You would only need this option in the exceptional cases such as navigating
 to inaccessible pages. Defaults to `false`.
+
+## input-no-wait-after-removed
+* deprecated: This option has no effect.
+- `noWaitAfter` <[boolean]>
+
+This option has no effect.
 
 ## input-force
 - `force` <[boolean]>
@@ -458,6 +465,12 @@ Whether to ignore HTTPS errors when sending network requests. Defaults to `false
 Maximum number of request redirects that will be followed automatically. An error will be thrown if the number is exceeded.
 Defaults to `20`. Pass `0` to not follow redirects.
 
+## js-python-csharp-fetch-option-maxretries
+* langs: js, python, csharp
+- `maxRetries` <[int]>
+
+Maximum number of times network errors should be retried. Currently only `ECONNRESET` error is retried. Does not retry based on HTTP response codes. An error will be thrown if the limit is exceeded. Defaults to `0` - no retries.
+
 ## evaluate-expression
 - `expression` <[string]>
 
@@ -507,6 +520,28 @@ Sets a consistent viewport for each page. Defaults to an 1280x720 viewport. `no_
 - `noViewport` <[boolean]>
 
 Does not enforce fixed viewport, allows resizing window in the headed mode.
+
+## context-option-clientCertificates
+- `clientCertificates` <[Array]<[Object]>>
+  - `origin` <[string]> Exact origin that the certificate is valid for. Origin includes `https` protocol, a hostname and optionally a port.
+  - `certPath` ?<[path]> Path to the file with the certificate in PEM format.
+  - `keyPath` ?<[path]> Path to the file with the private key in PEM format.
+  - `pfxPath` ?<[path]> Path to the PFX or PKCS12 encoded private key and certificate chain.
+  - `passphrase` ?<[string]> Passphrase for the private key (PEM or PFX).
+
+TLS Client Authentication allows the server to request a client certificate and verify it.
+
+**Details**
+
+An array of client certificates to be used. Each certificate object must have both `certPath` and `keyPath` or a single `pfxPath` to load the client certificate. Optionally, `passphrase` property should be provided if the certficiate is encrypted. The `origin` property should be provided with an exact match to the request origin that the certificate is valid for.
+
+:::note
+Using Client Certificates in combination with Proxy Servers is not supported.
+:::
+
+:::note
+When using WebKit on macOS, accessing `localhost` will not pick up client certificates. You can make it work by replacing `localhost` with `local.playwright`.
+:::
 
 ## context-option-useragent
 - `userAgent` <[string]>

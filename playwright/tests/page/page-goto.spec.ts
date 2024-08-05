@@ -78,7 +78,7 @@ it('should work with cross-process that fails before committing', async ({ page,
   expect(error instanceof Error).toBeTruthy();
 });
 
-it('should work with Cross-Origin-Opener-Policy', async ({ page, server, browserName }) => {
+it('should work with Cross-Origin-Opener-Policy', async ({ page, server }) => {
   server.setRoute('/empty.html', (req, res) => {
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
     res.end();
@@ -109,7 +109,42 @@ it('should work with Cross-Origin-Opener-Policy', async ({ page, server, browser
   expect(response.request().failure()).toBeNull();
 });
 
-it('should work with Cross-Origin-Opener-Policy after redirect', async ({ page, server, browserName }) => {
+it('should work with Cross-Origin-Opener-Policy and interception', async ({ page, server }) => {
+  server.setRoute('/empty.html', (req, res) => {
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.end();
+  });
+  const requests = new Set();
+  const events = [];
+  page.on('request', r => {
+    events.push('request');
+    requests.add(r);
+  });
+  page.on('requestfailed', r => {
+    events.push('requestfailed');
+    requests.add(r);
+  });
+  page.on('requestfinished', r => {
+    events.push('requestfinished');
+    requests.add(r);
+  });
+  page.on('response', r => {
+    events.push('response');
+    requests.add(r.request());
+  });
+  await page.route('**/*', async route => {
+    await new Promise(f => setTimeout(f, 100));
+    await route.continue();
+  });
+  const response = await page.goto(server.EMPTY_PAGE);
+  expect(page.url()).toBe(server.EMPTY_PAGE);
+  await response.finished();
+  expect(events).toEqual(['request', 'response', 'requestfinished']);
+  expect(requests.size).toBe(1);
+  expect(response.request().failure()).toBeNull();
+});
+
+it('should work with Cross-Origin-Opener-Policy after redirect', async ({ page, server }) => {
   server.setRedirect('/redirect', '/empty.html');
   server.setRoute('/empty.html', (req, res) => {
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
@@ -142,6 +177,23 @@ it('should work with Cross-Origin-Opener-Policy after redirect', async ({ page, 
   const firstRequest = response.request().redirectedFrom();
   expect(firstRequest).toBeTruthy();
   expect(firstRequest.url()).toBe(server.PREFIX + '/redirect');
+});
+
+it('should properly cancel Cross-Origin-Opener-Policy navigation', async ({ page, server }) => {
+  server.setRoute('/empty.html', (req, res) => {
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.end();
+  });
+  const requestPromise = page.waitForRequest(server.EMPTY_PAGE);
+  page.goto(server.EMPTY_PAGE).catch(() => {});
+  await new Promise(f => setTimeout(f, 50));
+  // Non COOP response.
+  await page.goto(server.CROSS_PROCESS_PREFIX + '/error.html');
+  const req = await requestPromise;
+  const response = await Promise.race([req.response(), new Promise(f => setTimeout(() => f('timeout'), 5_000))]);
+  // First navigation request should either receive response or be canceled by the second
+  // navigation, but never hang unresolved.
+  expect(response).not.toBe('timeout');
 });
 
 it('should capture iframe navigation request', async ({ page, server }) => {
@@ -481,7 +533,7 @@ it('js redirect overrides url bar navigation ', async ({ page, server, browserNa
 
 it('should succeed on url bar navigation when there is pending navigation', async ({ page, server, browserName }) => {
   it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/21574' });
-  it.skip(!!process.env.PW_FREEZE_TIME);
+  it.skip(process.env.PW_CLOCK === 'frozen');
   server.setRoute('/a', (req, res) => {
     res.writeHead(200, { 'content-type': 'text/html' });
     res.end(`
@@ -685,8 +737,7 @@ it('should fail when canceled by another navigation', async ({ page, server }) =
   expect(error.message).toBeTruthy();
 });
 
-it('should work with lazy loading iframes', async ({ page, server, isElectron, isAndroid }) => {
-  it.fixme(isElectron);
+it('should work with lazy loading iframes', async ({ page, server, isAndroid }) => {
   it.fixme(isAndroid);
 
   await page.goto(server.PREFIX + '/frames/lazy-frame.html');
@@ -754,7 +805,7 @@ it('should properly wait for load', async ({ page, server, browserName }) => {
 
 it('should not resolve goto upon window.stop()', async ({ browserName, page, server }) => {
   it.fixme(browserName === 'firefox', 'load/domcontentloaded events are flaky');
-  it.skip(!!process.env.PW_FREEZE_TIME);
+  it.skip(process.env.PW_CLOCK === 'frozen');
 
   let response;
   server.setRoute('/module.js', (req, res) => {
@@ -797,7 +848,7 @@ it('should return when navigation is committed if commit is specified', async ({
 });
 
 it('should wait for load when iframe attaches and detaches', async ({ page, server }) => {
-  it.skip(!!process.env.PW_FREEZE_TIME);
+  it.skip(process.env.PW_CLOCK === 'frozen');
   server.setRoute('/empty.html', (req, res) => {
     res.writeHead(200, { 'content-type': 'text/html' });
     res.end(`

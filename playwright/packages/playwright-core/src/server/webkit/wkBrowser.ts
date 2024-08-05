@@ -22,7 +22,7 @@ import type { RegisteredListener } from '../../utils/eventsHelper';
 import { assert } from '../../utils';
 import { eventsHelper } from '../../utils/eventsHelper';
 import * as network from '../network';
-import type { Page, PageBinding, PageDelegate } from '../page';
+import type { InitScript, Page, PageBinding, PageDelegate } from '../page';
 import type { ConnectionTransport } from '../transport';
 import type * as types from '../types';
 import type * as channels from '@protocol/channels';
@@ -33,8 +33,8 @@ import { WKPage } from './wkPage';
 import { TargetClosedError } from '../errors';
 import type { SdkObject } from '../instrumentation';
 
-const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15';
-const BROWSER_VERSION = '17.4';
+const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15';
+const BROWSER_VERSION = '18.0';
 
 export class WKBrowser extends Browser {
   private readonly _connection: WKConnection;
@@ -315,7 +315,7 @@ export class WKBrowserContext extends BrowserContext {
       await (page._delegate as WKPage).updateHttpCredentials();
   }
 
-  async doAddInitScript(source: string) {
+  async doAddInitScript(initScript: InitScript) {
     for (const page of this.pages())
       await (page._delegate as WKPage)._updateBootstrapScript();
   }
