@@ -1,6 +1,6 @@
 {
   "name": "Playwright CRX Tests",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "manifest_version": 3,
   "background": {
     "service_worker": "background.js",

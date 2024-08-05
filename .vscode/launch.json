@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch Recorder",
+      "request": "launch",
+      "type": "chrome",
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}/examples/recorder-crx/dist",
+        "--disable-extensions-except=${workspaceFolder}/examples/recorder-crx/dist"
+      ],
+      "webRoot": "${workspaceFolder}",
+      "url": "https://cloudtesting.contosotraders.com/",
+    },
+  ]
+}
