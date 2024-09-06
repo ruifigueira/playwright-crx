@@ -17,7 +17,7 @@
 import fs from 'fs';
 import url from 'url';
 import { addToCompilationCache, currentFileDepsCollector, serializeCompilationCache, startCollectingFileDeps, stopCollectingFileDeps } from './compilationCache';
-import { transformHook, resolveHook, setTransformConfig, shouldTransform } from './transform';
+import { transformHook, resolveHook, setTransformConfig, shouldTransform, setSingleTSConfig } from './transform';
 import { PortTransport } from './portTransport';
 import { fileIsModule } from '../util';
 
@@ -26,7 +26,7 @@ import { fileIsModule } from '../util';
 async function resolve(specifier: string, context: { parentURL?: string }, defaultResolve: Function) {
   if (context.parentURL && context.parentURL.startsWith('file://')) {
     const filename = url.fileURLToPath(context.parentURL);
-    const resolved = resolveHook(filename, specifier);
+    const resolved = resolveHook(filename, specifier, true);
     if (resolved !== undefined)
       specifier = url.pathToFileURL(resolved).toString();
   }
@@ -89,6 +89,11 @@ function initialize(data: { port: MessagePort }) {
 
 function createTransport(port: MessagePort) {
   return new PortTransport(port, async (method, params) => {
+    if (method === 'setSingleTSConfig') {
+      setSingleTSConfig(params.tsconfig);
+      return;
+    }
+
     if (method === 'setTransformConfig') {
       setTransformConfig(params.config);
       return;

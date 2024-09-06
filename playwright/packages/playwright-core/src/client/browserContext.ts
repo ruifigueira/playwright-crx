@@ -28,9 +28,8 @@ import { Worker } from './worker';
 import { Events } from './events';
 import { TimeoutSettings } from '../common/timeoutSettings';
 import { Waiter } from './waiter';
-import type { URLMatch, Headers, WaitForEventOptions, BrowserContextOptions, StorageState, LaunchOptions } from './types';
-import { headersObjectToArray, isRegExp, isString, urlMatchesEqual } from '../utils';
-import { mkdirIfNeeded } from '../utils/fileUtils';
+import type { Headers, WaitForEventOptions, BrowserContextOptions, StorageState, LaunchOptions } from './types';
+import { type URLMatch, headersObjectToArray, isRegExp, isString, urlMatchesEqual, mkdirIfNeeded } from '../utils';
 import type * as api from '../../types/types';
 import type * as structs from '../../types/structs';
 import { CDPSession } from './cdpSession';
@@ -482,7 +481,6 @@ export class BrowserContext extends ChannelOwner<channels.BrowserContextChannel>
       mode?: 'recording' | 'inspecting',
       testIdAttributeName?: string,
       outputFile?: string,
-      handleSIGINT?: boolean,
   }) {
     await this._channel.recorderSupplementEnable(params);
   }
@@ -553,13 +551,19 @@ function toAcceptDownloadsProtocol(acceptDownloads?: boolean) {
 export async function toClientCertificatesProtocol(certs?: BrowserContextOptions['clientCertificates']): Promise<channels.PlaywrightNewRequestParams['clientCertificates']> {
   if (!certs)
     return undefined;
-  return await Promise.all(certs.map(async cert => {
-    return {
-      origin: cert.origin,
-      cert: cert.certPath ? await fs.promises.readFile(cert.certPath) : undefined,
-      key: cert.keyPath ? await fs.promises.readFile(cert.keyPath) : undefined,
-      pfx: cert.pfxPath ? await fs.promises.readFile(cert.pfxPath) : undefined,
-      passphrase: cert.passphrase,
-    };
-  }));
+
+  const bufferizeContent = async (value?: Buffer, path?: string): Promise<Buffer | undefined> => {
+    if (value)
+      return value;
+    if (path)
+      return await fs.promises.readFile(path);
+  };
+
+  return await Promise.all(certs.map(async cert => ({
+    origin: cert.origin,
+    cert: await bufferizeContent(cert.cert, cert.certPath),
+    key: await bufferizeContent(cert.key, cert.keyPath),
+    pfx: await bufferizeContent(cert.pfx, cert.pfxPath),
+    passphrase: cert.passphrase,
+  })));
 }

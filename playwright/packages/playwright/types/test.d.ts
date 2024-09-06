@@ -4815,9 +4815,9 @@ export type Fixtures<T extends KeyValue = {}, W extends KeyValue = {}, PT extend
 } & {
   [K in keyof PT]?: TestFixtureValue<PT[K], T & W & PT & PW> | [TestFixtureValue<PT[K], T & W & PT & PW>, { scope: 'test', timeout?: number | undefined, title?: string, box?: boolean }];
 } & {
-  [K in Exclude<keyof W, keyof PW>]?: [WorkerFixtureValue<W[K], W & PW>, { scope: 'worker', auto?: boolean, option?: boolean, timeout?: number | undefined, title?: string, box?: boolean }];
+  [K in keyof W]?: [WorkerFixtureValue<W[K], W & PW>, { scope: 'worker', auto?: boolean, option?: boolean, timeout?: number | undefined, title?: string, box?: boolean }];
 } & {
-  [K in Exclude<keyof T, keyof PT>]?: TestFixtureValue<T[K], T & W & PT & PW> | [TestFixtureValue<T[K], T & W & PT & PW>, { scope?: 'test', auto?: boolean, option?: boolean, timeout?: number | undefined, title?: string, box?: boolean }];
+  [K in keyof T]?: TestFixtureValue<T[K], T & W & PT & PW> | [TestFixtureValue<T[K], T & W & PT & PW>, { scope?: 'test', auto?: boolean, option?: boolean, timeout?: number | undefined, title?: string, box?: boolean }];
 };
 
 type BrowserName = 'chromium' | 'firefox' | 'webkit';
@@ -5206,10 +5206,10 @@ export interface PlaywrightTestOptions {
    *
    * **Details**
    *
-   * An array of client certificates to be used. Each certificate object must have both `certPath` and `keyPath` or a
-   * single `pfxPath` to load the client certificate. Optionally, `passphrase` property should be provided if the
-   * certficiate is encrypted. The `origin` property should be provided with an exact match to the request origin that
-   * the certificate is valid for.
+   * An array of client certificates to be used. Each certificate object must have either both `certPath` and `keyPath`,
+   * a single `pfxPath`, or their corresponding direct value equivalents (`cert` and `key`, or `pfx`). Optionally,
+   * `passphrase` property should be provided if the certificate is encrypted. The `origin` property should be provided
+   * with an exact match to the request origin that the certificate is valid for.
    *
    * **NOTE** Using Client Certificates in combination with Proxy Servers is not supported.
    *
@@ -6565,15 +6565,17 @@ type MakeMatchers<R, T, ExtendedMatchers> = {
   rejects: MakeMatchers<Promise<R>, any, ExtendedMatchers>;
 } & IfAny<T, AllMatchers<R, T>, SpecificMatchers<R, T> & ToUserMatcherObject<ExtendedMatchers, T>>;
 
+type PollMatchers<R, T, ExtendedMatchers> = {
+  /**
+   * If you know how to test something, `.not` lets you test its opposite.
+   */
+  not: PollMatchers<R, T, ExtendedMatchers>;
+} & BaseMatchers<R, T> & ToUserMatcherObject<ExtendedMatchers, T>;
+
 export type Expect<ExtendedMatchers = {}> = {
   <T = unknown>(actual: T, messageOrOptions?: string | { message?: string }): MakeMatchers<void, T, ExtendedMatchers>;
   soft: <T = unknown>(actual: T, messageOrOptions?: string | { message?: string }) => MakeMatchers<void, T, ExtendedMatchers>;
-  poll: <T = unknown>(actual: () => T | Promise<T>, messageOrOptions?: string | { message?: string, timeout?: number, intervals?: number[] }) => BaseMatchers<Promise<void>, T> & {
-    /**
-     * If you know how to test something, `.not` lets you test its opposite.
-     */
-     not: BaseMatchers<Promise<void>, T>;
-  };
+  poll: <T = unknown>(actual: () => T | Promise<T>, messageOrOptions?: string | { message?: string, timeout?: number, intervals?: number[] }) => PollMatchers<Promise<void>, T, ExtendedMatchers>;
   extend<MoreMatchers extends Record<string, (this: ExpectMatcherState, receiver: any, ...args: any[]) => MatcherReturnType | Promise<MatcherReturnType>>>(matchers: MoreMatchers): Expect<ExtendedMatchers & MoreMatchers>;
   configure: (configuration: {
     message?: string,

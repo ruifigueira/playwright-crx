@@ -17,7 +17,7 @@
 
 import type * as channels from '@protocol/channels';
 import type { Size } from '../common/types';
-export type { Size, Point, Rect, Quad, URLMatch, TimeoutOptions, HeadersArray } from '../common/types';
+export type { Size, Point, Rect, Quad, TimeoutOptions, HeadersArray } from '../common/types';
 
 type LoggerSeverity = 'verbose' | 'info' | 'warning' | 'error';
 export interface Logger {
@@ -33,7 +33,7 @@ export type WaitForEventOptions = Function | { predicate?: Function, timeout?: n
 export type WaitForFunctionOptions = { timeout?: number, polling?: 'raf' | number };
 
 export type SelectOption = { value?: string, label?: string, index?: number, valueOrLabel?: string };
-export type SelectOptionOptions = { force?: boolean, timeout?: number, noWaitAfter?: boolean };
+export type SelectOptionOptions = { force?: boolean, timeout?: number };
 export type FilePayload = { name: string, mimeType: string, buffer: Buffer };
 export type StorageState = {
   cookies: channels.NetworkCookie[],
@@ -49,8 +49,11 @@ export const kLifecycleEvents: Set<LifecycleEvent> = new Set(['load', 'domconten
 
 export type ClientCertificate = {
   origin: string;
+  cert?: Buffer;
   certPath?: string;
+  key?: Buffer;
   keyPath?: string;
+  pfx?: Buffer;
   pfxPath?: string;
   passphrase?: string;
 };

@@ -18,7 +18,6 @@
 import { affectedTestFiles, cacheDir } from 'playwright/lib/transform/compilationCache';
 import { buildBundle } from './vitePlugin';
 import { resolveDirs } from './viteUtils';
-import { runDevServer } from './devServer';
 import type { FullConfigInternal } from 'playwright/lib/common/config';
 import { removeFolderAndLogToConsole } from 'playwright/lib/runner/testServer';
 
@@ -32,8 +31,4 @@ export async function clearCacheCommand(config: FullConfigInternal) {
 export async function findRelatedTestFilesCommand(files: string[],  config: FullConfigInternal) {
   await buildBundle(config.config, config.configDir);
   return { testFiles: affectedTestFiles(files) };
-}
-
-export async function runDevServerCommand(config: FullConfigInternal) {
-  return await runDevServer(config);
 }
