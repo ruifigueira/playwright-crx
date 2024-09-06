@@ -18,8 +18,7 @@ import '@web/third_party/vscode/codicon.css';
 import '@web/common.css';
 import React from 'react';
 import { TeleSuite } from '@testIsomorphic/teleReceiver';
-import { TeleSuiteUpdater } from './teleSuiteUpdater';
-import type { Progress } from './uiModeModel';
+import { TeleSuiteUpdater, type TeleSuiteUpdaterProgress, type TeleSuiteUpdaterTestModel } from '@testIsomorphic/teleSuiteUpdater';
 import type { TeleTestCase } from '@testIsomorphic/teleReceiver';
 import type * as reporterTypes from 'playwright/types/testReporter';
 import { SplitView } from '@web/components/splitView';
@@ -30,16 +29,16 @@ import { Toolbar } from '@web/components/toolbar';
 import type { XtermDataSource } from '@web/components/xtermWrapper';
 import { XtermWrapper } from '@web/components/xtermWrapper';
 import { useDarkModeSetting } from '@web/theme';
-import { settings, useSetting } from '@web/uiUtils';
+import { clsx, settings, useSetting } from '@web/uiUtils';
 import { statusEx, TestTree } from '@testIsomorphic/testTree';
 import type { TreeItem  } from '@testIsomorphic/testTree';
-import { TestServerConnection } from '@testIsomorphic/testServerConnection';
-import { pathSeparator } from './uiModeModel';
-import type { TestModel } from './uiModeModel';
+import { TestServerConnection, WebSocketTestServerTransport } from '@testIsomorphic/testServerConnection';
 import { FiltersView } from './uiModeFiltersView';
 import { TestListView } from './uiModeTestListView';
 import { TraceView } from './uiModeTraceView';
 import { SettingsView } from './settingsView';
+
+const pathSeparator = navigator.userAgent.toLowerCase().includes('windows') ? '\\' : '/';
 
 let xtermSize = { cols: 80, rows: 24 };
 const xtermDataSource: XtermDataSource = {
@@ -80,12 +79,14 @@ export const UIModeView: React.FC<{}> = ({
     ['skipped', false],
   ]));
   const [projectFilters, setProjectFilters] = React.useState<Map<string, boolean>>(new Map());
-  const [testModel, setTestModel] = React.useState<TestModel>();
-  const [progress, setProgress] = React.useState<Progress & { total: number } | undefined>();
+  const [testModel, setTestModel] = React.useState<TeleSuiteUpdaterTestModel>();
+  const [progress, setProgress] = React.useState<TeleSuiteUpdaterProgress & { total: number } | undefined>();
   const [selectedItem, setSelectedItem] = React.useState<{ treeItem?: TreeItem, testFile?: SourceLocation, testCase?: reporterTypes.TestCase }>({});
   const [visibleTestIds, setVisibleTestIds] = React.useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
-  const [runningState, setRunningState] = React.useState<{ testIds: Set<string>, itemSelectedByUser?: boolean } | undefined>();
+  const [runningState, setRunningState] = React.useState<{ testIds: Set<string>, itemSelectedByUser?: boolean, completed?: boolean } | undefined>();
+  const isRunningTest = runningState && !runningState.completed;
+
   const [watchAll, setWatchAll] = useSetting<boolean>('watch-all', false);
   const [watchedTreeIds, setWatchedTreeIds] = React.useState<{ value: Set<string> }>({ value: new Set() });
   const commandQueue = React.useRef(Promise.resolve());
@@ -94,45 +95,23 @@ export const UIModeView: React.FC<{}> = ({
   const [isDisconnected, setIsDisconnected] = React.useState(false);
   const [hasBrowsers, setHasBrowsers] = React.useState(true);
   const [testServerConnection, setTestServerConnection] = React.useState<TestServerConnection>();
+  const [teleSuiteUpdater, setTeleSuiteUpdater] = React.useState<TeleSuiteUpdater>();
   const [settingsVisible, setSettingsVisible] = React.useState(false);
   const [testingOptionsVisible, setTestingOptionsVisible] = React.useState(false);
   const [revealSource, setRevealSource] = React.useState(false);
   const onRevealSource = React.useCallback(() => setRevealSource(true), [setRevealSource]);
+
   const showTestingOptions = false;
-
-  const [runWorkers, setRunWorkers] = React.useState(queryParams.workers);
-  const singleWorkerSetting = React.useMemo(() => {
-    return [
-      runWorkers === '1',
-      (value: boolean) => {
-        // When started with `--workers=1`, the setting allows to undo that.
-        // Otherwise, fallback to the cli `--workers=X` argument.
-        setRunWorkers(value ? '1' : (queryParams.workers === '1' ? undefined : queryParams.workers));
-      },
-      'Single worker',
-    ] as const;
-  }, [runWorkers, setRunWorkers]);
-
-  const [runHeaded, setRunHeaded] = React.useState(queryParams.headed);
-  const showBrowserSetting = React.useMemo(() => [runHeaded, setRunHeaded, 'Show browser'] as const, [runHeaded, setRunHeaded]);
-
-  const [runUpdateSnapshots, setRunUpdateSnapshots] = React.useState(queryParams.updateSnapshots);
-  const updateSnapshotsSetting = React.useMemo(() => {
-    return [
-      runUpdateSnapshots === 'all',
-      (value: boolean) => setRunUpdateSnapshots(value ? 'all' : 'missing'),
-      'Update snapshots',
-    ] as const;
-  }, [runUpdateSnapshots, setRunUpdateSnapshots]);
-
-  const [, , showRouteActionsSetting] = useSetting('show-route-actions', true, 'Show route actions');
-
-  const darkModeSetting = useDarkModeSetting();
+  const [singleWorker, setSingleWorker] = React.useState(queryParams.workers === '1');
+  const [showBrowser, setShowBrowser] = React.useState(queryParams.headed);
+  const [updateSnapshots, setUpdateSnapshots] = React.useState(queryParams.updateSnapshots === 'all');
+  const [showRouteActions, setShowRouteActions] = useSetting('show-route-actions', true);
+  const [darkMode, setDarkMode] = useDarkModeSetting();
 
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const reloadTests = React.useCallback(() => {
-    setTestServerConnection(new TestServerConnection(wsURL.toString()));
+    setTestServerConnection(new TestServerConnection(new WebSocketTestServerTransport(wsURL)));
   }, []);
 
   // Load tests on startup.
@@ -192,20 +171,7 @@ export const UIModeView: React.FC<{}> = ({
       pathSeparator,
     });
 
-    const updateList = async () => {
-      commandQueue.current = commandQueue.current.then(async () => {
-        setIsLoading(true);
-        try {
-          const result = await testServerConnection.listTests({ projects: queryParams.projects, locations: queryParams.args, grep: queryParams.grep, grepInvert: queryParams.grepInvert });
-          teleSuiteUpdater.processListReport(result.report);
-        } catch (e) {
-          // eslint-disable-next-line no-console
-          console.log(e);
-        } finally {
-          setIsLoading(false);
-        }
-      });
-    };
+    setTeleSuiteUpdater(teleSuiteUpdater);
 
     setTestModel(undefined);
     setIsLoading(true);
@@ -216,15 +182,16 @@ export const UIModeView: React.FC<{}> = ({
           interceptStdio: true,
           watchTestDirs: true
         });
-        const { status, report } = await testServerConnection.runGlobalSetup({});
+        const { status, report } = await testServerConnection.runGlobalSetup({
+          outputDir: queryParams.outputDir,
+        });
         teleSuiteUpdater.processGlobalReport(report);
         if (status !== 'passed')
           return;
 
-        const result = await testServerConnection.listTests({ projects: queryParams.projects, locations: queryParams.args, grep: queryParams.grep, grepInvert: queryParams.grepInvert });
+        const result = await testServerConnection.listTests({ projects: queryParams.projects, locations: queryParams.args, grep: queryParams.grep, grepInvert: queryParams.grepInvert, outputDir: queryParams.outputDir });
         teleSuiteUpdater.processListReport(result.report);
 
-        testServerConnection.onListChanged(updateList);
         testServerConnection.onReport(params => {
           teleSuiteUpdater.processTestReportEvent(params);
         });
@@ -264,29 +231,29 @@ export const UIModeView: React.FC<{}> = ({
 
   // Update progress.
   React.useEffect(() => {
-    if (runningState && testModel?.progress)
+    if (isRunningTest && testModel?.progress)
       setProgress(testModel.progress);
     else if (!testModel)
       setProgress(undefined);
-  }, [testModel, runningState]);
+  }, [testModel, isRunningTest]);
 
   // Test tree is built from the model and filters.
   const { testTree } = React.useMemo(() => {
     if (!testModel)
       return { testTree: new TestTree('', new TeleSuite('', 'root'), [], projectFilters, pathSeparator) };
     const testTree = new TestTree('', testModel.rootSuite, testModel.loadErrors, projectFilters, pathSeparator);
-    testTree.filterTree(filterText, statusFilters, runningState?.testIds);
+    testTree.filterTree(filterText, statusFilters, isRunningTest ? runningState?.testIds : undefined);
     testTree.sortAndPropagateStatus();
     testTree.shortenRoot();
     testTree.flattenForSingleProject();
     setVisibleTestIds(testTree.testIds());
     return { testTree };
-  }, [filterText, testModel, statusFilters, projectFilters, setVisibleTestIds, runningState]);
+  }, [filterText, testModel, statusFilters, projectFilters, setVisibleTestIds, runningState, isRunningTest]);
 
   const runTests = React.useCallback((mode: 'queue-if-busy' | 'bounce-if-busy', testIds: Set<string>) => {
     if (!testServerConnection || !testModel)
       return;
-    if (mode === 'bounce-if-busy' && runningState)
+    if (mode === 'bounce-if-busy' && isRunningTest)
       return;
 
     runTestBacklog.current = new Set([...runTestBacklog.current, ...testIds]);
@@ -319,11 +286,13 @@ export const UIModeView: React.FC<{}> = ({
         grepInvert: queryParams.grepInvert,
         testIds: [...testIds],
         projects: [...projectFilters].filter(([_, v]) => v).map(([p]) => p),
-        workers: runWorkers,
+        // When started with `--workers=1`, the setting allows to undo that.
+        // Otherwise, fallback to the cli `--workers=X` argument.
+        workers: singleWorker ? '1' : (queryParams.workers === '1' ? undefined : queryParams.workers),
         timeout: queryParams.timeout,
-        headed: runHeaded,
+        headed: showBrowser,
         outputDir: queryParams.outputDir,
-        updateSnapshots: runUpdateSnapshots,
+        updateSnapshots: updateSnapshots ? 'all' : queryParams.updateSnapshots,
         reporters: queryParams.reporters,
         trace: 'on',
       });
@@ -333,15 +302,36 @@ export const UIModeView: React.FC<{}> = ({
           test.results = [];
       }
       setTestModel({ ...testModel });
-      setRunningState(undefined);
+      setRunningState(oldState => oldState ? ({ ...oldState, completed: true }) : undefined);
     });
-  }, [projectFilters, runningState, testModel, testServerConnection, runWorkers, runHeaded, runUpdateSnapshots]);
+  }, [projectFilters, isRunningTest, testModel, testServerConnection, singleWorker, showBrowser, updateSnapshots]);
 
-  // Watch implementation.
   React.useEffect(() => {
-    if (!testServerConnection)
+    if (!testServerConnection || !teleSuiteUpdater)
       return;
-    const disposable = testServerConnection.onTestFilesChanged(params => {
+    const disposable = testServerConnection.onTestFilesChanged(async params => {
+      // fetch the new list of tests
+      commandQueue.current = commandQueue.current.then(async () => {
+        setIsLoading(true);
+        try {
+          const result = await testServerConnection.listTests({ projects: queryParams.projects, locations: queryParams.args, grep: queryParams.grep, grepInvert: queryParams.grepInvert, outputDir: queryParams.outputDir });
+          teleSuiteUpdater.processListReport(result.report);
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.log(e);
+        } finally {
+          setIsLoading(false);
+        }
+      });
+      await commandQueue.current;
+
+      if (params.testFiles.length === 0)
+        return;
+
+      // run affected watched tests
+      const testModel = teleSuiteUpdater.asModel();
+      const testTree = new TestTree('', testModel.rootSuite, testModel.loadErrors, projectFilters, pathSeparator);
+
       const testIds: string[] = [];
       const set = new Set(params.testFiles);
       if (watchAll) {
@@ -364,7 +354,7 @@ export const UIModeView: React.FC<{}> = ({
       runTests('queue-if-busy', new Set(testIds));
     });
     return () => disposable.dispose();
-  }, [runTests, testServerConnection, testTree, watchAll, watchedTreeIds]);
+  }, [runTests, testServerConnection, watchAll, watchedTreeIds, teleSuiteUpdater, projectFilters]);
 
   // Shortcuts.
   React.useEffect(() => {
@@ -388,7 +378,6 @@ export const UIModeView: React.FC<{}> = ({
     };
   }, [runTests, reloadTests, testServerConnection, visibleTestIds, isShowingOutput]);
 
-  const isRunningTest = !!runningState;
   const dialogRef = React.useRef<HTMLDialogElement>(null);
   const openInstallDialog = React.useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -426,9 +415,14 @@ export const UIModeView: React.FC<{}> = ({
       <div className='title'>UI Mode disconnected</div>
       <div><a href='#' onClick={() => window.location.href = '/'}>Reload the page</a> to reconnect</div>
     </div>}
-    <SplitView sidebarSize={250} minSidebarSize={150} orientation='horizontal' sidebarIsFirst={true} settingName='testListSidebar'>
-      <div className='vbox'>
-        <div className={'vbox' + (isShowingOutput ? '' : ' hidden')}>
+    <SplitView
+      sidebarSize={250}
+      minSidebarSize={150}
+      orientation='horizontal'
+      sidebarIsFirst={true}
+      settingName='testListSidebar'
+      main={<div className='vbox'>
+        <div className={clsx('vbox', !isShowingOutput && 'hidden')}>
           <Toolbar>
             <div className='section-title' style={{ flex: 'none' }}>Output</div>
             <ToolbarButton icon='circle-slash' title='Clear output' onClick={() => xtermDataSource.clear()}></ToolbarButton>
@@ -437,17 +431,16 @@ export const UIModeView: React.FC<{}> = ({
           </Toolbar>
           <XtermWrapper source={xtermDataSource}></XtermWrapper>
         </div>
-        <div className={'vbox' + (isShowingOutput ? ' hidden' : '')}>
+        <div className={clsx('vbox', isShowingOutput && 'hidden')}>
           <TraceView
-            showRouteActionsSetting={showRouteActionsSetting}
             item={selectedItem}
             rootDir={testModel?.config?.rootDir}
             revealSource={revealSource}
             onOpenExternally={location => testServerConnection?.openNoReply({ location: { file: location.file, line: location.line, column: location.column } })}
           />
         </div>
-      </div>
-      <div className='vbox ui-mode-sidebar'>
+      </div>}
+      sidebar={<div className='vbox ui-mode-sidebar'>
         <Toolbar noShadow={true} noMinHeight={true}>
           <img src='playwright-logo.svg' alt='Playwright logo' />
           <div className='section-title'>Playwright</div>
@@ -508,9 +501,9 @@ export const UIModeView: React.FC<{}> = ({
             <div className='section-title'>Testing Options</div>
           </Toolbar>
           {testingOptionsVisible && <SettingsView settings={[
-            singleWorkerSetting,
-            showBrowserSetting,
-            updateSnapshotsSetting,
+            { value: singleWorker, set: setSingleWorker, title: 'Single worker' },
+            { value: showBrowser, set: setShowBrowser, title: 'Show browser' },
+            { value: updateSnapshots, set: setUpdateSnapshots, title: 'Update snapshots' },
           ]} />}
         </>}
         <Toolbar noShadow={true} noMinHeight={true} className='settings-toolbar' onClick={() => setSettingsVisible(!settingsVisible)}>
@@ -522,10 +515,11 @@ export const UIModeView: React.FC<{}> = ({
           <div className='section-title'>Settings</div>
         </Toolbar>
         {settingsVisible && <SettingsView settings={[
-          darkModeSetting,
-          showRouteActionsSetting,
+          { value: darkMode, set: setDarkMode, title: 'Dark mode' },
+          { value: showRouteActions, set: setShowRouteActions, title: 'Show route actions' },
         ]} />}
       </div>
-    </SplitView>
+      }
+    />
   </div>;
 };

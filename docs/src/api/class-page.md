@@ -1,6 +1,5 @@
 # class: Page
 * since: v1.8
-* extends: [EventEmitter]
 
 Page provides methods to interact with a single tab in a [Browser], or an
 [extension background page](https://developer.chrome.com/extensions/background_pages) in Chromium. One [Browser]
@@ -3340,6 +3339,32 @@ Specifies the maximum number of times this handler should be called. Unlimited b
 
 By default, after calling the handler Playwright will wait until the overlay becomes hidden, and only then Playwright will continue with the action/assertion that triggered the handler. This option allows to opt-out of this behavior, so that overlay can stay visible after the handler has run.
 
+## async method: Page.removeAllListeners
+* since: v1.47
+* langs: js
+
+Removes all the listeners of the given type (or all registered listeners if no type given).
+Allows to wait for async listeners to complete or to ignore subsequent errors from these listeners.
+
+**Usage**
+
+```js
+page.on('request', async request => {
+  const response = await request.response();
+  const body = await response.body();
+  console.log(body.byteLength);
+});
+await page.goto('https://playwright.dev', { waitUntil: 'domcontentloaded' });
+// Waits for all the reported 'request' events to resolve.
+await page.removeAllListeners('request', { behavior: 'wait' });
+```
+
+### param: Page.removeAllListeners.type
+* since: v1.47
+- `type` ?<[string]>
+
+### option: Page.removeAllListeners.behavior = %%-remove-all-listeners-options-behavior-%%
+* since: v1.47
 
 ## async method: Page.removeLocatorHandler
 * since: v1.44
@@ -3594,7 +3619,7 @@ A glob pattern, regular expression or predicate to match the request URL. Only r
 * since: v1.32
 - `updateMode` <[HarMode]<"full"|"minimal">>
 
-When set to `minimal`, only record information necessary for routing from HAR. This omits sizes, timing, page, cookies, security and other types of HAR information that are not used when replaying from HAR. Defaults to `full`.
+When set to `minimal`, only record information necessary for routing from HAR. This omits sizes, timing, page, cookies, security and other types of HAR information that are not used when replaying from HAR. Defaults to `minimal`.
 
 ### option: Page.routeFromHAR.updateContent
 * since: v1.32
@@ -3701,7 +3726,7 @@ await page.SelectOptionAsync("select#colors", new[] { "red", "green", "blue" });
 ### option: Page.selectOption.force = %%-input-force-%%
 * since: v1.13
 
-### option: Page.selectOption.noWaitAfter = %%-input-no-wait-after-%%
+### option: Page.selectOption.noWaitAfter = %%-input-no-wait-after-removed-%%
 * since: v1.8
 
 ### option: Page.selectOption.strict = %%-input-strict-%%

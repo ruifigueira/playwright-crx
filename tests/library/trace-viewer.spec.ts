@@ -256,6 +256,81 @@ test('should have network requests', async ({ showTraceViewer }) => {
   await expect(traceViewer.networkRequests.filter({ hasText: '404' })).toHaveCSS('background-color', 'rgb(242, 222, 222)');
 });
 
+test('should filter network requests by resource type', async ({ page, runAndTrace, server }) => {
+  const traceViewer = await runAndTrace(async () => {
+    server.setRoute('/api/endpoint', (_, res) => res.setHeader('Content-Type', 'application/json').end());
+    await page.goto(`${server.PREFIX}/network-tab/network.html`);
+  });
+  await traceViewer.selectAction('http://localhost');
+  await traceViewer.showNetworkTab();
+
+  await traceViewer.page.getByText('JS', { exact: true }).click();
+  await expect(traceViewer.networkRequests).toHaveCount(1);
+  await expect(traceViewer.networkRequests.getByText('script.js')).toBeVisible();
+
+  await traceViewer.page.getByText('CSS', { exact: true }).click();
+  await expect(traceViewer.networkRequests).toHaveCount(1);
+  await expect(traceViewer.networkRequests.getByText('style.css')).toBeVisible();
+
+  await traceViewer.page.getByText('Image', { exact: true }).click();
+  await expect(traceViewer.networkRequests).toHaveCount(1);
+  await expect(traceViewer.networkRequests.getByText('image.png')).toBeVisible();
+
+  await traceViewer.page.getByText('Fetch', { exact: true }).click();
+  await expect(traceViewer.networkRequests).toHaveCount(1);
+  await expect(traceViewer.networkRequests.getByText('endpoint')).toBeVisible();
+
+  await traceViewer.page.getByText('HTML', { exact: true }).click();
+  await expect(traceViewer.networkRequests).toHaveCount(1);
+  await expect(traceViewer.networkRequests.getByText('network.html')).toBeVisible();
+
+  await traceViewer.page.getByText('Font', { exact: true }).click();
+  await expect(traceViewer.networkRequests).toHaveCount(1);
+  await expect(traceViewer.networkRequests.getByText('font.woff2')).toBeVisible();
+});
+
+test('should show font preview', async ({ page, runAndTrace, server }) => {
+  const traceViewer = await runAndTrace(async () => {
+    await page.goto(`${server.PREFIX}/network-tab/network.html`);
+  });
+  await traceViewer.selectAction('http://localhost');
+  await traceViewer.showNetworkTab();
+
+  await traceViewer.page.getByText('Font', { exact: true }).click();
+  await expect(traceViewer.networkRequests).toHaveCount(1);
+  await traceViewer.networkRequests.getByText('font.woff2').click();
+  await traceViewer.page.getByTestId('network-request-details').getByTitle('Body').click();
+  await expect(traceViewer.page.locator('.network-request-details-tab')).toContainText('ABCDEF');
+});
+
+test('should filter network requests by url', async ({ page, runAndTrace, server }) => {
+  const traceViewer = await runAndTrace(async () => {
+    await page.goto(`${server.PREFIX}/network-tab/network.html`);
+  });
+  await traceViewer.selectAction('http://localhost');
+  await traceViewer.showNetworkTab();
+
+  await traceViewer.page.getByPlaceholder('Filter network').fill('script.');
+  await expect(traceViewer.networkRequests).toHaveCount(1);
+  await expect(traceViewer.networkRequests.getByText('script.js')).toBeVisible();
+
+  await traceViewer.page.getByPlaceholder('Filter network').fill('png');
+  await expect(traceViewer.networkRequests).toHaveCount(1);
+  await expect(traceViewer.networkRequests.getByText('image.png')).toBeVisible();
+
+  await traceViewer.page.getByPlaceholder('Filter network').fill('api/');
+  await expect(traceViewer.networkRequests).toHaveCount(1);
+  await expect(traceViewer.networkRequests.getByText('endpoint')).toBeVisible();
+
+  await traceViewer.page.getByPlaceholder('Filter network').fill('End');
+  await expect(traceViewer.networkRequests).toHaveCount(1);
+  await expect(traceViewer.networkRequests.getByText('endpoint')).toBeVisible();
+
+  await traceViewer.page.getByPlaceholder('Filter network').fill('FON');
+  await expect(traceViewer.networkRequests).toHaveCount(1);
+  await expect(traceViewer.networkRequests.getByText('font.woff2')).toBeVisible();
+});
+
 test('should have network request overrides', async ({ page, server, runAndTrace }) => {
   const traceViewer = await runAndTrace(async () => {
     await page.route('**/style.css', route => route.abort());
@@ -291,13 +366,13 @@ test('should show snapshot URL', async ({ page, runAndTrace, server }) => {
 test('should popup snapshot', async ({ page, runAndTrace, server }) => {
   const traceViewer = await runAndTrace(async () => {
     await page.goto(server.EMPTY_PAGE);
-    await page.setContent('hello');
+    await page.setContent('hello äöü 🙂');
   });
   await traceViewer.snapshotFrame('page.setContent');
   const popupPromise = traceViewer.page.context().waitForEvent('page');
   await traceViewer.page.getByTitle('Open snapshot in a new tab').click();
   const popup = await popupPromise;
-  await expect(popup.getByText('hello')).toBeVisible();
+  await expect(popup.getByText('hello äöü 🙂')).toBeVisible();
 });
 
 test('should capture iframe with sandbox attribute', async ({ page, server, runAndTrace }) => {
@@ -1377,4 +1452,16 @@ test('should show baseURL in metadata pane', {
   await traceViewer.selectAction('page.evaluate');
   await traceViewer.showMetadataTab();
   await expect(traceViewer.metadataTab).toContainText('baseURL:https://example.com');
+});
+
+test('should serve css without content-type', async ({ page, runAndTrace, server }) => {
+  server.setRoute('/one-style.css', (req, res) => {
+    res.writeHead(200);
+    res.end(`body { background: red }`);
+  });
+  const traceViewer = await runAndTrace(async () => {
+    await page.goto(server.PREFIX + '/one-style.html');
+  });
+  const snapshotFrame = await traceViewer.snapshotFrame('page.goto');
+  await expect(snapshotFrame.locator('body')).toHaveCSS('background-color', 'rgb(255, 0, 0)', { timeout: 0 });
 });

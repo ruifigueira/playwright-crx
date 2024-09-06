@@ -21,7 +21,7 @@ import { MultiTraceModel } from './modelUtil';
 import './workbenchLoader.css';
 import { toggleTheme } from '@web/theme';
 import { Workbench } from './workbench';
-import { TestServerConnection } from '@testIsomorphic/testServerConnection';
+import { TestServerConnection, WebSocketTestServerTransport } from '@testIsomorphic/testServerConnection';
 
 export const WorkbenchLoader: React.FunctionComponent<{
 }> = () => {
@@ -102,7 +102,7 @@ export const WorkbenchLoader: React.FunctionComponent<{
       const guid = new URLSearchParams(window.location.search).get('ws');
       const wsURL = new URL(`../${guid}`, window.location.toString());
       wsURL.protocol = (window.location.protocol === 'https:' ? 'wss:' : 'ws:');
-      const testServerConnection = new TestServerConnection(wsURL.toString());
+      const testServerConnection = new TestServerConnection(new WebSocketTestServerTransport(wsURL));
       testServerConnection.onLoadTraceRequested(async params => {
         setTraceURLs(params.traceUrl ? [params.traceUrl] : []);
         setDragOver(false);
@@ -165,7 +165,7 @@ export const WorkbenchLoader: React.FunctionComponent<{
     <div className='progress'>
       <div className='inner-progress' style={{ width: progress.total ? (100 * progress.done / progress.total) + '%' : 0 }}></div>
     </div>
-    <Workbench model={model} inert={showFileUploadDropArea} />
+    <Workbench model={model} inert={showFileUploadDropArea} showSettings />
     {fileForLocalModeError && <div className='drop-target'>
       <div>Trace Viewer uses Service Workers to show traces. To view trace:</div>
       <div style={{ paddingTop: 20 }}>

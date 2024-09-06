@@ -126,12 +126,12 @@ export const AttachmentsTab: React.FunctionComponent<{
       const url = attachmentURL(a);
       return <div className='attachment-item' key={`screenshot-${i}`}>
         <div><img draggable='false' src={url} /></div>
-        <div><a target='_blank' href={url}>{a.name}</a></div>
+        <div><a target='_blank' href={url} rel='noreferrer'>{a.name}</a></div>
       </div>;
     })}
     {attachments.size ? <div className='attachments-section'>Attachments</div> : undefined}
     {[...attachments.values()].map((a, i) => {
-      return <div className='attachment-item' key={`attachment-${i}`}>
+      return <div className='attachment-item' key={attachmentKey(a, i)}>
         <ExpandableAttachment attachment={a} />
       </div>;
     })}
@@ -153,4 +153,8 @@ function downloadURL(attachment: Attachment) {
   if (attachment.contentType)
     params.dct = attachment.contentType;
   return attachmentURL(attachment, params);
+}
+
+function attachmentKey(attachment: Attachment, index: number) {
+  return index + '-' + (attachment.sha1 ? `sha1-` + attachment.sha1 : `path-` + attachment.path);
 }

@@ -6,11 +6,78 @@ toc_max_heading_level: 2
 
 import LiteYouTube from '@site/src/components/LiteYouTube';
 
+## Version 1.47
+
+### Network Tab improvements
+
+The Network tab in the UI mode and trace viewer now allows searching and filtering by asset type:
+
+![Network tab now has filters](https://github.com/user-attachments/assets/4bd1b67d-90bd-438b-a227-00b9e86872e2)
+
+And for fonts, it now shows a nice preview:
+
+![Font requests have a preview now](https://github.com/user-attachments/assets/769d64cc-cdcb-421d-9849-227d2f874d1f)
+
+
+### `--tsconfig` CLI option
+
+By default, Playwright will look up the closest tsconfig for each imported file using a heuristic. You can now specify a single tsconfig file in the command line, and Playwright will use it for all imported files, not only test files:
+
+```sh
+# Pass a specific tsconfig
+npx playwright test --tsconfig tsconfig.test.json
+```
+
+### [APIRequestContext] now accepts [`URLSearchParams`](https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams) and `string` as query parameters
+
+You can now pass [`URLSearchParams`](https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams) and `string` as query parameters to [APIRequestContext]:
+
+```ts
+test('query params', async ({ request }) => {
+  const searchParams = new URLSearchParams();
+  searchParams.set('userId', 1);
+  const response = await request.get(
+      'https://jsonplaceholder.typicode.com/posts',
+      {
+        params: searchParams // or as a string: 'userId=1'
+      }
+  );
+  // ...
+});
+``` 
+
+### Miscellaneous
+
+- The `mcr.microsoft.com/playwright:v1.47.0` now serves a Playwright image based on Ubuntu 24.04 Noble.
+  To use the 22.04 jammy-based image, please use `mcr.microsoft.com/playwright:v1.47.0-jammy` instead.
+- New option [`option: behavior`] in [`method: Page.removeAllListeners`], [`method: Browser.removeAllListeners`] and [`method: BrowserContext.removeAllListeners`] to wait for ongoing listeners to complete.
+- TLS client certificates can now be passed from memory by passing [`option: cert`] and [`option: key`] as buffers instead of file paths.
+- Attachments with a `text/html` content type can now be opened in a new tab in the HTML report. This is useful for including third-party reports or other HTML content in the Playwright test report and distributing it to your team.
+- [`option: noWaitAfter`] in [`method: Locator.selectOption`] was deprecated.
+- We've seen reports of WebGL in Webkit misbehaving on GitHub Actions `macos-13`. We recommend upgrading GitHub Actions to `macos-14`.
+
+### Browser Versions
+
+- Chromium 129.0.6668.29
+- Mozilla Firefox 130.0
+- WebKit 18.0
+
+This version was also tested against the following stable channels:
+
+- Google Chrome 128
+- Microsoft Edge 128
+
 ## Version 1.46
+
+<LiteYouTube
+  id="tQo7w-QQBsI"
+  title="Playwright 1.46"
+/>
+
 
 ### TLS Client Certificates
 
-Playwright now allows to supply client-side certificates, so that server can verify them, as specified by TLS Client Authentication.
+Playwright now allows you to supply client-side certificates, so that server can verify them, as specified by TLS Client Authentication.
 
 The following snippet sets up a client certificate for `https://example.com`:
 
@@ -35,14 +102,14 @@ You can also provide client certificates to a particular [test project](./api/cl
 
 ### `--only-changed` cli option
 
-New CLI option `--only-changed` allows to only run test files that have been changed since the last git commit or from a specific git "ref".
+New CLI option `--only-changed` will only run test files that have been changed since the last git commit or from a specific git "ref". This will also run all test files that import any changed files.
 
 ```sh
 # Only run test files with uncommitted changes
 npx playwright test --only-changed
 
 # Only run test files changed relative to the "main" branch
-npx playwrigh test --only-changed=main
+npx playwright test --only-changed=main
 ```
 
 ### Component Testing: New `router` fixture

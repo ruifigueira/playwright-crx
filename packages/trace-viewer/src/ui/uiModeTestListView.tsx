@@ -27,10 +27,10 @@ import type * as reporterTypes from 'playwright/types/testReporter';
 import React from 'react';
 import type { SourceLocation } from './modelUtil';
 import { testStatusIcon } from './testUtils';
-import type { TestModel } from './uiModeModel';
 import './uiModeTestListView.css';
 import type { TestServerConnection } from '@testIsomorphic/testServerConnection';
 import { TagView } from './tag';
+import type { TeleSuiteUpdaterTestModel } from '@testIsomorphic/teleSuiteUpdater';
 
 const TestTreeView = TreeView<TreeItem>;
 
@@ -38,9 +38,9 @@ export const TestListView: React.FC<{
   filterText: string,
   testTree: TestTree,
   testServerConnection: TestServerConnection | undefined,
-  testModel?: TestModel,
+  testModel?: TeleSuiteUpdaterTestModel,
   runTests: (mode: 'bounce-if-busy' | 'queue-if-busy', testIds: Set<string>) => void,
-  runningState?: { testIds: Set<string>, itemSelectedByUser?: boolean },
+  runningState?: { testIds: Set<string>, itemSelectedByUser?: boolean, completed?: boolean },
   watchAll: boolean,
   watchedTreeIds: { value: Set<string> },
   setWatchedTreeIds: (ids: { value: Set<string> }) => void,
@@ -154,7 +154,7 @@ export const TestListView: React.FC<{
         </div>
         {!!treeItem.duration && treeItem.status !== 'skipped' && <div className='ui-mode-list-item-time'>{msToString(treeItem.duration)}</div>}
         <Toolbar noMinHeight={true} noShadow={true}>
-          <ToolbarButton icon='play' title='Run' onClick={() => runTreeItem(treeItem)} disabled={!!runningState}></ToolbarButton>
+          <ToolbarButton icon='play' title='Run' onClick={() => runTreeItem(treeItem)} disabled={!!runningState && !runningState.completed}></ToolbarButton>
           <ToolbarButton icon='go-to-file' title='Show source' onClick={onRevealSource} style={(treeItem.kind === 'group' && treeItem.subKind === 'folder') ? { visibility: 'hidden' } : {}}></ToolbarButton>
           {!watchAll && <ToolbarButton icon='eye' title='Watch' onClick={() => {
             if (watchedTreeIds.value.has(treeItem.id))
@@ -179,7 +179,7 @@ export const TestListView: React.FC<{
     noItemsMessage={isLoading ? 'Loading\u2026' : 'No tests'} />;
 };
 
-function itemLocation(item: TreeItem | undefined, model: TestModel | undefined): SourceLocation | undefined {
+function itemLocation(item: TreeItem | undefined, model: TeleSuiteUpdaterTestModel | undefined): SourceLocation | undefined {
   if (!item || !model)
     return;
   return {

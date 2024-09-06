@@ -321,6 +321,7 @@ scheme.RootInitializeResult = tObject({
 });
 scheme.PlaywrightInitializer = tObject({
   chromium: tChannel(['BrowserType']),
+  bidi: tChannel(['BrowserType']),
   firefox: tChannel(['BrowserType']),
   webkit: tChannel(['BrowserType']),
   android: tChannel(['Android']),
@@ -961,7 +962,6 @@ scheme.BrowserContextRecorderSupplementEnableParams = tObject({
   device: tOptional(tString),
   saveStorage: tOptional(tString),
   outputFile: tOptional(tString),
-  handleSIGINT: tOptional(tBoolean),
   omitCallTracking: tOptional(tBoolean),
 });
 scheme.BrowserContextRecorderSupplementEnableResult = tOptional(tObject({}));
@@ -1637,7 +1637,6 @@ scheme.FrameSelectOptionParams = tObject({
   }))),
   force: tOptional(tBoolean),
   timeout: tOptional(tNumber),
-  noWaitAfter: tOptional(tBoolean),
 });
 scheme.FrameSelectOptionResult = tObject({
   values: tArray(tString),
@@ -2001,7 +2000,6 @@ scheme.ElementHandleSelectOptionParams = tObject({
   }))),
   force: tOptional(tBoolean),
   timeout: tOptional(tNumber),
-  noWaitAfter: tOptional(tBoolean),
 });
 scheme.ElementHandleSelectOptionResult = tObject({
   values: tArray(tString),

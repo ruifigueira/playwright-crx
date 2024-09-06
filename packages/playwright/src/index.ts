@@ -83,15 +83,15 @@ const playwrightFixtures: Fixtures<TestFixtures, WorkerFixtures> = ({
       options.channel = channel;
     options.tracesDir = tracing().tracesDir();
 
-    for (const browserType of [playwright.chromium, playwright.firefox, playwright.webkit])
+    for (const browserType of [playwright.chromium, playwright.firefox, playwright.webkit, playwright._experimentalBidi])
       (browserType as any)._defaultLaunchOptions = options;
     await use(options);
-    for (const browserType of [playwright.chromium, playwright.firefox, playwright.webkit])
+    for (const browserType of [playwright.chromium, playwright.firefox, playwright.webkit, playwright._experimentalBidi])
       (browserType as any)._defaultLaunchOptions = undefined;
   }, { scope: 'worker', auto: true, box: true }],
 
   browser: [async ({ playwright, browserName, _browserOptions, connectOptions, _reuseContext }, use, testInfo) => {
-    if (!['chromium', 'firefox', 'webkit'].includes(browserName))
+    if (!['chromium', 'firefox', 'webkit', '_experimentalBidi'].includes(browserName))
       throw new Error(`Unexpected browserName "${browserName}", must be one of "chromium", "firefox" or "webkit"`);
 
     if (connectOptions) {
@@ -229,7 +229,7 @@ const playwrightFixtures: Fixtures<TestFixtures, WorkerFixtures> = ({
       playwrightLibrary.selectors.setTestIdAttribute(testIdAttribute);
     testInfo.snapshotSuffix = process.platform;
     if (debugMode())
-      testInfo.setTimeout(0);
+      (testInfo as TestInfoImpl)._setDebugMode();
     for (const browserType of [playwright.chromium, playwright.firefox, playwright.webkit]) {
       (browserType as any)._defaultContextOptions = _combinedContextOptions;
       (browserType as any)._defaultContextTimeout = actionTimeout || 0;
@@ -248,6 +248,11 @@ const playwrightFixtures: Fixtures<TestFixtures, WorkerFixtures> = ({
   }, { auto: 'all-hooks-included',  title: 'context configuration', box: true } as any],
 
   _setupArtifacts: [async ({ playwright, screenshot }, use, testInfo) => {
+    // This fixture has a separate zero-timeout slot to ensure that artifact collection
+    // happens even after some fixtures or hooks time out.
+    // Now that default test timeout is known, we can replace zero with an actual value.
+    testInfo.setTimeout(testInfo.project.timeout);
+
     const artifactsRecorder = new ArtifactsRecorder(playwright, tracing().artifactsDir(), screenshot);
     await artifactsRecorder.willStartTest(testInfo as TestInfoImpl);
     const csiListener: ClientInstrumentationListener = {
@@ -261,7 +266,6 @@ const playwrightFixtures: Fixtures<TestFixtures, WorkerFixtures> = ({
           title: renderApiCall(apiName, params),
           apiName,
           params,
-          canNestByTime: true,
         });
         userData.userObject = step;
         out.stepId = step.stepId;
@@ -271,7 +275,7 @@ const playwrightFixtures: Fixtures<TestFixtures, WorkerFixtures> = ({
         step?.complete({ error });
       },
       onWillPause: () => {
-        currentTestInfo()?.setTimeout(0);
+        currentTestInfo()?._setDebugMode();
       },
       runAfterCreateBrowserContext: async (context: BrowserContext) => {
         await artifactsRecorder?.didCreateBrowserContext(context);
@@ -298,7 +302,7 @@ const playwrightFixtures: Fixtures<TestFixtures, WorkerFixtures> = ({
     clientInstrumentation.removeListener(csiListener);
     await artifactsRecorder.didFinishTest();
 
-  }, { auto: 'all-hooks-included',  title: 'trace recording', box: true } as any],
+  }, { auto: 'all-hooks-included',  title: 'trace recording', box: true, timeout: 0 } as any],
 
   _contextFactory: [async ({ browser, video, _reuseContext, _combinedContextOptions /** mitigate dep-via-auto lack of traceability */ }, use, testInfo) => {
     const testInfoImpl = testInfo as TestInfoImpl;

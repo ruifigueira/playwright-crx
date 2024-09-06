@@ -40,7 +40,7 @@ import { Tracing } from './trace/recorder/tracing';
 import type * as types from './types';
 import type { HeadersArray, ProxySettings } from './types';
 import { kMaxCookieExpiresDateInSeconds } from './network';
-import { clientCertificatesToTLSOptions, rewriteOpenSSLErrorIfNeeded } from './socksClientCertificatesInterceptor';
+import { getMatchingTLSOptionsForOrigin, rewriteOpenSSLErrorIfNeeded } from './socksClientCertificatesInterceptor';
 
 type FetchRequestOptions = {
   userAgent: string;
@@ -157,7 +157,7 @@ export abstract class APIRequestContext extends SdkObject {
     const requestUrl = new URL(params.url, defaults.baseURL);
     if (params.params) {
       for (const { name, value } of params.params)
-        requestUrl.searchParams.set(name, value);
+        requestUrl.searchParams.append(name, value);
     }
 
     const credentials = this._getHttpCredentials(requestUrl);
@@ -195,7 +195,7 @@ export abstract class APIRequestContext extends SdkObject {
       maxRedirects: params.maxRedirects === 0 ? -1 : params.maxRedirects === undefined ? 20 : params.maxRedirects,
       timeout,
       deadline,
-      ...clientCertificatesToTLSOptions(this._defaultOptions().clientCertificates, requestUrl.origin),
+      ...getMatchingTLSOptionsForOrigin(this._defaultOptions().clientCertificates, requestUrl.origin),
       __testHookLookup: (params as any).__testHookLookup,
     };
     // rejectUnauthorized = undefined is treated as true in Node.js 12.
@@ -211,8 +211,16 @@ export abstract class APIRequestContext extends SdkObject {
     });
     const fetchUid = this._storeResponseBody(fetchResponse.body);
     this.fetchLog.set(fetchUid, controller.metadata.log);
-    if (params.failOnStatusCode && (fetchResponse.status < 200 || fetchResponse.status >= 400))
-      throw new Error(`${fetchResponse.status} ${fetchResponse.statusText}`);
+    if (params.failOnStatusCode && (fetchResponse.status < 200 || fetchResponse.status >= 400)) {
+      let responseText = '';
+      if (fetchResponse.body.byteLength) {
+        let text = fetchResponse.body.toString('utf8');
+        if (text.length > 1000)
+          text = text.substring(0, 997) + '...';
+        responseText = `\nResponse text:\n${text}`;
+      }
+      throw new Error(`${fetchResponse.status} ${fetchResponse.statusText}${responseText}`);
+    }
     return { ...fetchResponse, fetchUid };
   }
 
@@ -357,7 +365,7 @@ export abstract class APIRequestContext extends SdkObject {
             maxRedirects: options.maxRedirects - 1,
             timeout: options.timeout,
             deadline: options.deadline,
-            ...clientCertificatesToTLSOptions(this._defaultOptions().clientCertificates, url.origin),
+            ...getMatchingTLSOptionsForOrigin(this._defaultOptions().clientCertificates, url.origin),
             __testHookLookup: options.__testHookLookup,
           };
           // rejectUnauthorized = undefined is treated as true in node 12.

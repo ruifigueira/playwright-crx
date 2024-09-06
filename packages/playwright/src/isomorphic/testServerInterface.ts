@@ -44,7 +44,7 @@ export interface TestServerInterface {
 
   installBrowsers(params: {}): Promise<void>;
 
-  runGlobalSetup(params: {}): Promise<{
+  runGlobalSetup(params: { outputDir?: string }): Promise<{
     report: ReportEntry[],
     status: reporterTypes.FullResult['status']
   }>;
@@ -81,6 +81,7 @@ export interface TestServerInterface {
     locations?: string[];
     grep?: string;
     grepInvert?: string;
+    outputDir?: string;
   }): Promise<{
     report: ReportEntry[],
     status: reporterTypes.FullResult['status']
@@ -118,7 +119,6 @@ export interface TestServerInterface {
 export interface TestServerInterfaceEvents {
   onReport: Event<any>;
   onStdio: Event<{ type: 'stdout' | 'stderr', text?: string, buffer?: string }>;
-  onListChanged: Event<void>;
   onTestFilesChanged: Event<{ testFiles: string[] }>;
   onLoadTraceRequested: Event<{ traceUrl: string }>;
 }
@@ -126,7 +126,6 @@ export interface TestServerInterfaceEvents {
 export interface TestServerInterfaceEventEmitters {
   dispatchEvent(event: 'report', params: ReportEntry): void;
   dispatchEvent(event: 'stdio', params: { type: 'stdout' | 'stderr', text?: string, buffer?: string }): void;
-  dispatchEvent(event: 'listChanged', params: {}): void;
   dispatchEvent(event: 'testFilesChanged', params: { testFiles: string[] }): void;
   dispatchEvent(event: 'loadTraceRequested', params: { traceUrl: string }): void;
 }

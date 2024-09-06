@@ -25,6 +25,7 @@ import './testCaseView.css';
 import { TestResultView } from './testResultView';
 import { linkifyText } from '@web/renderUtils';
 import { hashStringToInt, msToString } from './utils';
+import { clsx } from '@web/uiUtils';
 
 export const TestCaseView: React.FC<{
   projectNames: string[],
@@ -57,7 +58,7 @@ export const TestCaseView: React.FC<{
       {labels && <LabelsLinkView labels={labels} />}
     </div>}
     {!!visibleAnnotations.length && <AutoChip header='Annotations'>
-      {visibleAnnotations.map(annotation => <TestCaseAnnotationView annotation={annotation} />)}
+      {visibleAnnotations.map((annotation, index) => <TestCaseAnnotationView key={index} annotation={annotation} />)}
     </AutoChip>}
     {test && <TabbedPane tabs={
       test.results.map((result, index) => ({
@@ -90,7 +91,7 @@ const LabelsLinkView: React.FC<React.PropsWithChildren<{
     <>
       {labels.map(label => (
         <a key={label} style={{ textDecoration: 'none', color: 'var(--color-fg-default)' }} href={`#?q=${label}`} >
-          <span style={{ margin: '6px 0 0 6px', cursor: 'pointer' }} className={'label label-color-' + (hashStringToInt(label))}>
+          <span style={{ margin: '6px 0 0 6px', cursor: 'pointer' }} className={clsx('label', 'label-color-' + hashStringToInt(label))}>
             {label.slice(1)}
           </span>
         </a>

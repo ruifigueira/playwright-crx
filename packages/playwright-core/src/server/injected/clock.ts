@@ -216,7 +216,7 @@ export class ClockController {
         const sinceLastSync = now - this._realTime!.lastSyncTicks;
         this._realTime!.lastSyncTicks = now;
         // eslint-disable-next-line no-console
-        this._runTo(shiftTicks(this._now.ticks, sinceLastSync)).catch(e => console.error(e)).then(() => this._updateRealTimeTimer());
+        void this._runTo(shiftTicks(this._now.ticks, sinceLastSync)).catch(e => console.error(e)).then(() => this._updateRealTimeTimer());
       }, callAt - this._now.ticks),
     };
   }
@@ -239,7 +239,12 @@ export class ClockController {
 
   addTimer(options: { func: TimerHandler, type: TimerType, delay?: number | string, args?: any[] }): number {
     this._replayLogOnce();
-    if (options.func === undefined)
+
+    if (options.type === TimerType.AnimationFrame && !options.func)
+      throw new Error('Callback must be provided to requestAnimationFrame calls');
+    if (options.type === TimerType.IdleCallback && !options.func)
+      throw new Error('Callback must be provided to requestIdleCallback calls');
+    if ([TimerType.Timeout, TimerType.Interval].includes(options.type) && !options.func && options.delay === undefined)
       throw new Error('Callback must be provided to timer calls');
 
     let delay = options.delay ? +options.delay : 0;
@@ -697,6 +702,14 @@ export function install(globalObject: WindowOrWorkerGlobalScope, config: Install
       (globalObject as any).Intl = api[method]!;
     } else if (method === 'performance') {
       (globalObject as any).performance = api[method]!;
+      const kEventTimeStamp = Symbol('playwrightEventTimeStamp');
+      Object.defineProperty(Event.prototype, 'timeStamp', {
+        get() {
+          if (!this[kEventTimeStamp])
+            this[kEventTimeStamp] = api.performance?.now();
+          return this[kEventTimeStamp];
+        }
+      });
     } else {
       (globalObject as any)[method] = (...args: any[]) => {
         return (api[method] as any).apply(api, args);
