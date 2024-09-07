@@ -21,6 +21,7 @@ import { scheme, tArray, tBoolean, tChannel, tEnum, tNumber, tObject, tOptional,
 // "override" PlaywrightInitializer, adds _crx
 scheme.PlaywrightInitializer = tObject({
   chromium: tChannel(['BrowserType']),
+  bidi: tChannel(['BrowserType']),
   firefox: tChannel(['BrowserType']),
   webkit: tChannel(['BrowserType']),
   android: tChannel(['Android']),
