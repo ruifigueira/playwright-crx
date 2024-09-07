@@ -16,10 +16,6 @@ export default defineConfig({
       name: 'Chrome',
       use: { ...devices['Desktop Chrome'] },
     },
-    {
-      name: 'Chrome Tip-of-Tree',
-      use: { ...devices['Desktop Chrome'], channel: "chromium-tip-of-tree" },
-    },
   ],
   webServer: {
     command: 'npm run serve',
