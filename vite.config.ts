@@ -76,6 +76,7 @@ export default defineConfig({
       'fs': path.resolve(__dirname, './src/shims/fs'),
       'graceful-fs': path.resolve(__dirname, './src/shims/fs'),
       'http': path.resolve(__dirname, './node_modules/stream-http'),
+      'http2': path.resolve(__dirname, './node_modules/stream-http'),
       'https': path.resolve(__dirname, './node_modules/https-browserify'),
       'module': path.resolve(__dirname, './src/shims/module'),
       'net': path.resolve(__dirname, './src/shims/net'),
