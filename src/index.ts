@@ -23,9 +23,13 @@ import { CrxConnection } from './client/crxConnection';
 import type { CrxPlaywright as CrxPlaywrightAPI } from './client/crxPlaywright';
 import { CrxPlaywright } from './server/crxPlaywright';
 import { CrxPlaywrightDispatcher } from './server/dispatchers/crxPlaywrightDispatcher';
+import { PageBinding } from 'playwright-core/lib/server/page';
 
 export { debug as _debug } from 'debug';
 export { setUnderTest as _setUnderTest } from 'playwright-core/lib/utils';
+
+// avoid conflicts with playwright when testing
+PageBinding.kPlaywrightBinding = '__crx__binding__';
 
 const playwright = new CrxPlaywright();
 
