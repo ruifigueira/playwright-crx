@@ -20,10 +20,11 @@ import type { Recorder } from 'playwright-core/lib/server/recorder';
 import type { IRecorderApp } from 'playwright-core/lib/server/recorder/recorderApp';
 import { ManualPromise } from 'playwright-core/lib/utils';
 import type * as channels from '../../protocol/channels';
-import Player, { ActionWithContext } from './crxPlayer';
+import Player from './crxPlayer';
 import { Script, toSource } from './script';
-import { LanguageGeneratorOptions } from 'playwright-core/lib/server/recorder/language';
 import { Page } from 'playwright-core/lib/server/page';
+import { ActionInContext, LanguageGeneratorOptions } from 'playwright-core/lib/server/codegen/types';
+import { PerformAction } from './crxPlayer';
 
 type Port = chrome.runtime.Port;
 type TabChangeInfo = chrome.tabs.TabChangeInfo;
@@ -161,7 +162,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
           break;
         case 'resume':
         case 'step':
-          this._player.play(this._getActionsWithContext()).catch(() => {});
+          this._player.play(this._getPerformActions()).catch(() => {});
           break;
         case 'setMode':
           const { mode } = params;
@@ -188,14 +189,17 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     await this._recorder._uninstallInjectedRecorder(page);
   }
 
-  private _getActionsWithContext(): ActionWithContext[] {
+  private _getPerformActions(): PerformAction[] {
     const { header: headerJson, actions: actionsJson } = this._jsonlSource ?? {};
     const file = this._filename;
 
     if (!headerJson || !actionsJson || !file) return [];
 
     const header = JSON.parse(headerJson) as LanguageGeneratorOptions;
-    const actions = actionsJson.map(a => JSON.parse(a)) as ActionWithContext[];
+    // check jsonl.ts for actions type
+    const actions = actionsJson.map(a => JSON.parse(a)).map(
+      ({ pageAlias, locator, framePath, ...action }) => ({ action, frame: { pageAlias, framePath } }
+    ) as ActionInContext);
     const script: Script = { header, actions, filename: file };
     const source = toSource(script);
 

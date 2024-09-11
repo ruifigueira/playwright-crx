@@ -14,21 +14,22 @@
  * limitations under the License.
  */
 
+import { CallMetadata } from "@protocol/callMetadata";
 import { Source } from "@recorder/recorderTypes";
-import { ActionInContext } from "playwright-core/lib/server/recorder/codeGenerator";
-import { CSharpLanguageGenerator } from "playwright-core/lib/server/recorder/csharp";
-import { JavaLanguageGenerator } from "playwright-core/lib/server/recorder/java";
-import { JavaScriptLanguageGenerator } from "playwright-core/lib/server/recorder/javascript";
-import { Language, LanguageGeneratorOptions } from "playwright-core/lib/server/recorder/language";
-import { PythonLanguageGenerator } from "playwright-core/lib/server/recorder/python";
-import { ActionWithContext } from "./crxPlayer";
-import type { FrameDescription } from "playwright-core/lib/server/recorder/recorderActions";
+import { CSharpLanguageGenerator } from "playwright-core/lib/server/codegen/csharp";
+import { JavaLanguageGenerator } from "playwright-core/lib/server/codegen/java";
+import { JavaScriptLanguageGenerator } from "playwright-core/lib/server/codegen/javascript";
+import { PythonLanguageGenerator } from "playwright-core/lib/server/codegen/python";
+import { ActionInContext, Language, LanguageGeneratorOptions } from "playwright-core/lib/server/codegen/types";
+
+export type Location = CallMetadata['location'];
+export type ActionInContextWithLocation = ActionInContext & { location?: Location };
 
 export type Script = {
   filename: string;
   language?: Language;
   header: LanguageGeneratorOptions;
-  actions: ActionWithContext[];
+  actions: ActionInContextWithLocation[];
 }
 
 const languages = new Map([
@@ -48,12 +49,10 @@ export function toSource(script: Script): Source {
   const langGenerator = languages.get(script.language ?? script.filename) ?? languages.get('javascript')!;
   const header = langGenerator.generateHeader(script.header);
   const footer = langGenerator.generateFooter(undefined);
-  const actions = script.actions.map(({ pageAlias, frame, ...action }) => {
-    if (action.name === 'pause') return '';
-
+  const actions = script.actions.map(({ frame, action }) => {
     const actionInContext: ActionInContext = {
       action,
-      frame: { url: '', pageAlias, isMainFrame: !frame, ...frame } as FrameDescription,
+      frame,
       committed: true
     }
     return langGenerator.generateAction(actionInContext);

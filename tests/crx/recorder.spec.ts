@@ -266,11 +266,9 @@ test('should record with custom testid', async ({ page, attachRecorder, recordAc
 });
 
 test('should record oopif frames', async ({ page, attachRecorder, recordAction, server, browserMajorVersion }) => {
-  test.skip(browserMajorVersion < 126);
-
   const recorderPage = await attachRecorder(page);
   await recordAction(() => page.goto(server.PREFIX + '/dynamic-oopif.html'));
-  await recordAction(() => page.frameLocator('iframe').locator('div:nth-child(21)').click({ position: { x: 0, y: 0 }}));
+  await recordAction(() => page.locator('iframe').contentFrame().locator('div:nth-child(21)').click({ position: { x: 0, y: 0 }}));
 
   await recorderPage.getByTitle('Record').click();
 
@@ -283,7 +281,7 @@ test('should record oopif frames', async ({ page, attachRecorder, recordAction, 
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto('${server.PREFIX}/dynamic-oopif.html');
-  await page.frameLocator('iframe').locator('div:nth-child(21)').click();
+  await page.locator('iframe').contentFrame().locator('div:nth-child(21)').click();
 ​
   // ---------------------
   await context.close();

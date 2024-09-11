@@ -17,6 +17,7 @@
 import path from 'path';
 import { Page, Locator } from 'playwright-core';
 import { test as crxTest, expect } from './crxTest';
+import type { AssertCheckedAction, AssertTextAction, AssertValueAction, AssertVisibleAction } from '../../playwright/packages/playwright-core/src/server/recorder/recorderActions';
 
 export { expect } from './crxTest';
 
@@ -137,16 +138,16 @@ export const test = crxTest.extend<{
         let action;
         switch (name) {
           case 'assertText':
-            action = { ...baseAction, text: param, substring: true };
+            action = { ...baseAction, name, text: param as string, substring: true } satisfies AssertTextAction;
             break;
           case 'assertValue':
-            action = { ...baseAction, value: param };
+            action = { ...baseAction, name, value: param as string }  satisfies AssertValueAction;
             break;
           case 'assertChecked':
-            action = { ...baseAction, checked: !!param };
+            action = { ...baseAction, name, checked: !!param } satisfies AssertCheckedAction;
             break;
           case 'assertVisible':
-            action = { ...baseAction };
+            action = { ...baseAction, name } satisfies AssertVisibleAction;
             break;
         }
         await locator.page().evaluate(action => (window as any).__pw_recorderRecordAction(action), action);

@@ -89,17 +89,6 @@ export class CrxApplication extends SdkObject {
         page.hideHighlight();
       },
     }, null);
-    Recorder.setAppFactory(async recorder => {
-      if (!this._recorderApp) {
-        this._recorderApp = new CrxRecorderApp(recorder, this._context());
-        this._recorderApp.on('show', () => this.emit(CrxApplication.Events.RecorderShow));
-        this._recorderApp.on('hide', () => this.emit(CrxApplication.Events.RecorderHide));
-        this._recorderApp.on('modeChanged', (event) => {
-          this.emit(CrxApplication.Events.ModeChanged, event);
-        });
-      }
-      return this._recorderApp;
-    });
     this._browser = browser;
     this._transport = transport;
     this._context().on(BrowserContext.Events.Page, (page: Page) => {
@@ -131,11 +120,12 @@ export class CrxApplication extends SdkObject {
   async showRecorder(options?: crxchannels.CrxApplicationShowRecorderParams) {
     if (!this._recorderApp) {
       const { mode, ...otherOptions } = options ?? {};
-      await Recorder.show(this._context(), {
+      const recorderParams = {
         language: options?.language ?? 'javascript',
         mode: mode === 'none' ? undefined : mode,
         ...otherOptions
-      });
+      };
+      Recorder.show(this._context(), this._createRecorderApp.bind(this), recorderParams);
     }
 
     await this._recorderApp!.open(options);
@@ -191,6 +181,18 @@ export class CrxApplication extends SdkObject {
     await Promise.all(this._crPages().map(crPage => this._doDetach(crPage._targetId)));
     await this._transport.closeAndWait();
     await this._browser.close({});
+  }
+
+  private async _createRecorderApp(recorder: Recorder) {
+    if (!this._recorderApp) {
+      this._recorderApp = new CrxRecorderApp(recorder, this._context());
+      this._recorderApp.on('show', () => this.emit(CrxApplication.Events.RecorderShow));
+      this._recorderApp.on('hide', () => this.emit(CrxApplication.Events.RecorderHide));
+      this._recorderApp.on('modeChanged', (event) => {
+        this.emit(CrxApplication.Events.ModeChanged, event);
+      });
+    }
+    return this._recorderApp;
   }
 
   private async _doDetach(targetId?: string) {
