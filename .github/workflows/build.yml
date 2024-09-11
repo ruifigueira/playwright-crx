@@ -8,22 +8,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18.x'
+          node-version: '20.x'
       - run: npm ci
       - run: npm run build
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
       - run: npm run test:install
       - run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- npm run test
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: recorder-crx
           path: |
             examples/recorder-crx/dist/
           retention-days: 5
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-report
