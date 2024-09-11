@@ -25,6 +25,7 @@ import { BrowserContext } from './browserContext';
 import { type Language } from './codegen/types';
 import { Debugger } from './debugger';
 import type { CallMetadata, InstrumentationListener, SdkObject } from './instrumentation';
+import type { Page } from './page';
 import { ContextRecorder, generateFrameSelector } from './recorder/contextRecorder';
 import { type IRecorderApp } from './recorder/recorderApp';
 import { buildFullSelector, metadataToCallLog } from './recorder/recorderUtils';
