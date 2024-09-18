@@ -60,7 +60,7 @@ export function dumpLogHeaders(recorderPage: Page) {
           if (n.nodeType === Node.TEXT_NODE) {
             return n.textContent;
           } else if (n instanceof Element) {
-            return n.classList.contains('codicon') ? iconName(n) : n.textContent?.replace(/— \d+m?s/g, '— XXms');
+            return n.classList.contains('codicon') ? iconName(n) : n.textContent?.replace(/— \d+(\.\d+)?m?s/g, '— XXms');
           }
         }).join(' ');
       }

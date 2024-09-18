@@ -133,7 +133,7 @@ export class CrxApplication extends SdkObject {
 
   async hideRecorder() {
     if (!this._recorderApp) return;
-    await this._recorderApp.hide();
+    await this._recorderApp.close();
   }
 
   async attach(tabId: number): Promise<Page> {

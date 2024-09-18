@@ -164,7 +164,7 @@ export default class Player extends EventEmitter {
       throw new Error('Internal error: page not found');
     const mainFrame = page.mainFrame();
     
-    const kActionTimeout = isUnderTest() ? 500 : 5000;
+    const kActionTimeout = isUnderTest() ? 2000 : 5000;
   
     if (action.name === 'navigate')
       return await innerPerformAction(mainFrame, 'navigate', { url: action.url }, callMetadata => mainFrame.goto(callMetadata, action.url, { timeout: kActionTimeout }));

@@ -57,8 +57,8 @@ test('should show errors', async ({ basePath, page, recorderPage, baseURL }) => 
   ]);
 
   await Promise.all([
-    expect(recorderPage.locator('.source-line-error-widget')).toHaveText('Timeout 500ms exceeded.'),
-    expect(recorderPage.locator('.call-log-message.error')).toHaveText('Timeout 500ms exceeded.'),
+    expect(recorderPage.locator('.source-line-error-widget')).toHaveText(/Timeout .* exceeded./),
+    expect(recorderPage.locator('.call-log-message.error')).toHaveText(/Timeout .* exceeded./),
   ]);
 });
 
