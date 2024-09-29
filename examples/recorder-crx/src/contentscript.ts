@@ -37,7 +37,7 @@ window.addEventListener('load', () => {
       case 'setSources': wnd.playwrightSetSources(msg.sources); break;
       case 'updateCallLogs': wnd.playwrightUpdateLogs(msg.callLogs); break;
       case 'setSelector': wnd.playwrightSetSelector(msg.selector, msg.userGesture); break;
-      case 'setFileIfNeeded': wnd.playwrightSetFileIfNeeded(msg.file); break;
+      case 'setFile': wnd.playwrightSetFile(msg.file); break;
     }
   };
 

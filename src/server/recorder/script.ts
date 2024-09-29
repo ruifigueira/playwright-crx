@@ -15,12 +15,14 @@
  */
 
 import { CallMetadata } from "@protocol/callMetadata";
+import { ActionInContext } from "@recorder/actions";
 import { Source } from "@recorder/recorderTypes";
 import { CSharpLanguageGenerator } from "playwright-core/lib/server/codegen/csharp";
 import { JavaLanguageGenerator } from "playwright-core/lib/server/codegen/java";
 import { JavaScriptLanguageGenerator } from "playwright-core/lib/server/codegen/javascript";
 import { PythonLanguageGenerator } from "playwright-core/lib/server/codegen/python";
-import { ActionInContext, Language, LanguageGeneratorOptions } from "playwright-core/lib/server/codegen/types";
+import { Language, LanguageGeneratorOptions } from "playwright-core/lib/server/codegen/types";
+import { monotonicTime } from "playwright-core/lib/utils";
 
 export type Location = CallMetadata['location'];
 export type ActionInContextWithLocation = ActionInContext & { location?: Location };
@@ -53,7 +55,7 @@ export function toSource(script: Script): Source {
     const actionInContext: ActionInContext = {
       action,
       frame,
-      committed: true
+      startTime: monotonicTime()
     }
     return langGenerator.generateAction(actionInContext);
   });

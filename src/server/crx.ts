@@ -29,6 +29,7 @@ import type * as crxchannels from '../protocol/channels';
 import { CrxRecorderApp } from './recorder/crxRecorderApp';
 import { CrxTransport } from './transport/crxTransport';
 import { BrowserContext } from 'playwright-core/lib/server/browserContext';
+import { IRecorder } from 'playwright-core/lib/server/recorder/recorderFrontend';
 
 const kTabIdSymbol = Symbol('kTabIdSymbol');
 
@@ -131,13 +132,13 @@ export class CrxApplication extends SdkObject {
 
   async showRecorder(options?: crxchannels.CrxApplicationShowRecorderParams) {
     if (!this._recorderApp) {
-      const { mode, ...otherOptions } = options ?? {};
+      const { mode, window, ...otherOptions } = options ?? {};
       const recorderParams = {
         language: options?.language ?? 'javascript',
         mode: mode === 'none' ? undefined : mode,
         ...otherOptions
       };
-      Recorder.show(this._context(), this._createRecorderApp.bind(this), recorderParams);
+      Recorder.show('actions', this._context(), this._createRecorderApp.bind(this), recorderParams);
     }
 
     await this._recorderApp!.open(options);
@@ -195,9 +196,9 @@ export class CrxApplication extends SdkObject {
     await this._browser.close({});
   }
 
-  private async _createRecorderApp(recorder: Recorder) {
+  private async _createRecorderApp(recorder: IRecorder) {
     if (!this._recorderApp) {
-      this._recorderApp = new CrxRecorderApp(recorder, this._context());
+      this._recorderApp = new CrxRecorderApp(recorder as Recorder, this._context());
       this._recorderApp.on('show', () => this.emit(CrxApplication.Events.RecorderShow));
       this._recorderApp.on('hide', () => this.emit(CrxApplication.Events.RecorderHide));
       this._recorderApp.on('modeChanged', (event) => {

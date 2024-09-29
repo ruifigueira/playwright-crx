@@ -18,21 +18,23 @@ import { EventEmitter } from 'events';
 import { BrowserContext } from 'playwright-core/lib/server/browserContext';
 import { Page } from 'playwright-core/lib/server/page';
 import type { Recorder } from 'playwright-core/lib/server/recorder';
-import type { IRecorderApp } from 'playwright-core/lib/server/recorder/recorderApp';
 import type * as channels from '../../protocol/channels';
 import Player from './crxPlayer';
 import { Script, toSource } from './script';
-import { ActionInContext, LanguageGeneratorOptions } from 'playwright-core/lib/server/codegen/types';
+import { LanguageGeneratorOptions } from 'playwright-core/lib/server/codegen/types';
 import { PerformAction } from './crxPlayer';
 import { PopupRecorderWindow } from './popupRecorderWindow';
 import { SidepanelRecorderWindow } from './sidepanelRecorderWindow';
+import { IRecorderApp } from 'playwright-core/lib/server/recorder/recorderFrontend';
+import { ActionInContext } from '@recorder/actions';
 
 export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'updateCallLogs', callLogs: CallLog[] }
   | { method: 'setPaused', paused: boolean }
   | { method: 'setMode', mode: Mode }
   | { method: 'setSources', sources: Source[] }
-  | { method: 'setFileIfNeeded', file: string }
+  | { method: 'setActions', actions: ActionInContext[], sources: Source[] }
+  | { method: 'setFile', file: string }
   | { method: 'setSelector', selector: string, userGesture?: boolean }
 );
 
@@ -49,6 +51,7 @@ export interface RecorderWindow {
 }
 
 export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
+  readonly wsEndpointForTest: string | undefined;
   private _recorder: Recorder;
   private _context: BrowserContext;
   private _player: Player;
@@ -90,7 +93,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     }
 
     this.setMode(mode);
-    this.setFileIfNeeded(language);
+    this.setFile(language);
   }
 
   async close() {
@@ -124,8 +127,8 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     this._sendMessage({ type: 'recorder', method: 'setMode', mode });
   }
 
-  async setFileIfNeeded(file: string) {
-    this._sendMessage({ type: 'recorder', method: 'setFileIfNeeded', file });
+  async setFile(file: string) {
+    this._sendMessage({ type: 'recorder', method: 'setFile', file });
   }
 
   async setSelector(selector: string, userGesture?: boolean) {
@@ -147,6 +150,10 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   async setSources(sources: Source[]) {
     this._jsonlSource = sources.find(s => s.id === 'jsonl');
     this._sendMessage({ type: 'recorder', method: 'setSources', sources });
+  }
+
+  async setActions(actions: ActionInContext[], sources: Source[]) {
+    this._sendMessage({ type: 'recorder', method: 'setActions', actions, sources });
   }
 
   private _onMessage({ type, event, params }: EventData & { type: string }) {

@@ -21,10 +21,11 @@ import { createGuid, isUnderTest, ManualPromise, monotonicTime, serializeExpecte
 import { Frame } from 'playwright-core/lib/server/frames';
 import { CallMetadata } from '@protocol/callMetadata';
 import { serializeError } from 'playwright-core/lib/server/errors';
-import { buildFullSelector } from 'playwright-core/lib/server/recorder/recorderUtils';
-import { toClickOptions, toKeyboardModifiers } from 'playwright-core/lib/server/codegen/language';
-import { FrameDescription } from 'playwright-core/lib/server/codegen/types';
+import { buildFullSelector } from 'playwright-core/lib/utils/isomorphic/recorderUtils';
+import { toKeyboardModifiers } from 'playwright-core/lib/server/codegen/language';
 import { ActionInContextWithLocation, Location } from './script';
+import { FrameDescription } from '@recorder/actions';
+import { toClickOptions } from 'playwright-core/lib/server/recorder/recorderRunner';
 
 class Stopped extends Error {}
 
