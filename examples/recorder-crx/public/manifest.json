@@ -19,9 +19,12 @@
     },
     "default_title": "Record"
   },
+  "side_panel": {
+    "default_path": "index.html"
+  },
   "options_ui": {
     "page": "options.html",
     "open_in_tab": false
   },
-  "permissions": ["debugger", "tabs", "contextMenus", "storage"]
+  "permissions": ["debugger", "tabs", "contextMenus", "storage", "sidePanel"]
 }

@@ -28,6 +28,7 @@ let crxAppPromise: Promise<CrxApplication> | undefined;
 const attachedTabIds = new Set<number>();
 let currentMode: Mode | 'detached' | undefined;
 let language: string | undefined;
+let sidepanel = false;
 
 async function changeAction(tabId: number, mode?: Mode | 'detached') {
   if (!mode) {
@@ -95,15 +96,23 @@ async function getCrxApp() {
 async function attach(tab: chrome.tabs.Tab) {
   if (!tab?.id || attachedTabIds.has(tab.id)) return;
   const tabId = tab.id;
-
+  
+  // we need to open sidepanel before any async call
+  if (sidepanel)
+    chrome.sidePanel.open({ windowId: tab.windowId });
+  
   // ensure one attachment at a time
   chrome.action.disable();
-
+  
   const crxApp = await getCrxApp();
 
   try {
     if (crxApp.recorder.isHidden())
-      await crxApp.recorder.show({ mode: 'recording', language });
+      await crxApp.recorder.show({
+        mode: 'recording',
+        language,
+        window: { type: sidepanel ? 'sidepanel' : 'popup', url: 'index.html' },
+      });
 
     await crxApp.attach(tabId);
   } catch (e) {
@@ -130,11 +139,19 @@ chrome.contextMenus.onClicked.addListener(async (_, tab) => {
   if (tab) await attach(tab);
 });
 
-chrome.storage.sync.onChanged.addListener(async ({ testIdAttributeName, targetLanguage }) => {
+// if it's in sidepanel mode, we need to open it synchronously on action click,
+// so we need to fetch its value asap
+chrome.storage.sync.get(['sidepanel']).then(({ sidepanel: value }) => {
+  sidepanel = value;
+});
+
+chrome.storage.sync.onChanged.addListener(async ({ testIdAttributeName, targetLanguage, sidepanel: sidepanelChange }) => {
   if (testIdAttributeName)
     await setTestIdAttributeName(testIdAttributeName.newValue);
   if (targetLanguage)
     language = targetLanguage.newValue;
+  if (sidepanelChange.newValue !== undefined)
+    sidepanel = sidepanelChange.newValue;
 });
 
 // for testing
