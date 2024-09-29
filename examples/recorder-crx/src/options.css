@@ -24,6 +24,10 @@ input[type="text"], select {
   border-radius: 4px;
 }
 
+input[type="checkbox"] {
+  padding-left: 16px;
+}
+
 button[type="submit"] {
   background-color: #4CAF50;
   border: none;

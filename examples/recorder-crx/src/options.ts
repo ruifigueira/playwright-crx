@@ -4,6 +4,7 @@ async function initialize() {
   const formElem = document.getElementById('options-form') as HTMLFormElement;
   const languageElem = document.getElementById('target-language') as HTMLSelectElement;
   const testIdAttributeNameElem = document.getElementById('test-id') as HTMLInputElement;
+  const sidepanelElem = document.getElementById('sidepanel') as HTMLInputElement;
   const submitElem = document.getElementById('submit') as HTMLButtonElement;
 
   if (!testIdAttributeNameElem || !formElem || !submitElem) return;
@@ -12,6 +13,9 @@ async function initialize() {
     submitElem.disabled = false;
   });
   languageElem.addEventListener('change', () => {
+    submitElem.disabled = false;
+  });
+  sidepanelElem.addEventListener('change', () => {
     submitElem.disabled = false;
   });
 
@@ -23,15 +27,17 @@ async function initialize() {
     submitElem.disabled = true;
     const testIdAttributeName = testIdAttributeNameElem.value;
     const targetLanguage = languageElem.value;
-    chrome.storage.sync.set({ testIdAttributeName, targetLanguage }).catch(() => {});
+    const sidepanel = sidepanelElem.checked;
+    chrome.storage.sync.set({ testIdAttributeName, targetLanguage, sidepanel }).catch(() => {});
 
     return false;
   });
 
   submitElem.disabled = true;
-  const { testIdAttributeName, targetLanguage } = await chrome.storage.sync.get(['testIdAttributeName', 'targetLanguage']);
+  const { testIdAttributeName, targetLanguage, sidepanel } = await chrome.storage.sync.get(['testIdAttributeName', 'targetLanguage', 'sidepanel']);
   testIdAttributeNameElem.value = testIdAttributeName ?? 'data-testid';
   languageElem.value = targetLanguage ?? 'javascript';
+  sidepanelElem.checked = !!sidepanel;
 }
 
 initialize();
