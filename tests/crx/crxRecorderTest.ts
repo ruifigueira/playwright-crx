@@ -84,12 +84,13 @@ export const test = crxTest.extend<{
       let recorderPage = context.pages().find(p => p.url().startsWith(`chrome-extension://${extensionId}`));
       const recorderPagePromise = recorderPage ? undefined : context.waitForEvent('page');
 
-      await extensionServiceWorker.evaluate(async (url) => {
+      await page.bringToFront();
+      await extensionServiceWorker.evaluate(async () => {
         // ensure we're in test mode
         _setUnderTest();
-        const [tab] = await chrome.tabs.query({ url, active: true, currentWindow: true });
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         await attach(tab);
-      }, page.url());
+      });
 
       recorderPage = recorderPage ?? (await recorderPagePromise)!;
 
