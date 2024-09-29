@@ -455,6 +455,12 @@ export interface CrxRecorder {
     mode?: null|"none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
 
     testIdAttributeName?: null|string;
+
+    window?: {
+      type?: null|"popup"|"sidepanel";
+      
+      url?: null|string;
+    };
   }): Promise<void>;
 
   mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
