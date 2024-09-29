@@ -16,18 +16,16 @@
 import type { CallLog, EventData, Mode, Source } from '@recorder/recorderTypes';
 import { EventEmitter } from 'events';
 import { BrowserContext } from 'playwright-core/lib/server/browserContext';
+import { Page } from 'playwright-core/lib/server/page';
 import type { Recorder } from 'playwright-core/lib/server/recorder';
 import type { IRecorderApp } from 'playwright-core/lib/server/recorder/recorderApp';
 import type * as channels from '../../protocol/channels';
 import Player from './crxPlayer';
 import { Script, toSource } from './script';
-import { Page } from 'playwright-core/lib/server/page';
 import { ActionInContext, LanguageGeneratorOptions } from 'playwright-core/lib/server/codegen/types';
 import { PerformAction } from './crxPlayer';
-
-type Port = chrome.runtime.Port;
-type TabChangeInfo = chrome.tabs.TabChangeInfo;
-type ChromeWindow = chrome.windows.Window;
+import { PopupRecorderWindow } from './popupRecorderWindow';
+import { SidepanelRecorderWindow } from './sidepanelRecorderWindow';
 
 export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'updateCallLogs', callLogs: CallLog[] }
@@ -38,76 +36,16 @@ export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'setSelector', selector: string, userGesture?: boolean }
 );
 
-interface RecorderWindow {
+export type RecorderEventData =  EventData & { type: string };
+
+export interface RecorderWindow {
   isClosed(): boolean;
   postMessage: (msg: RecorderMessage) => void;
   open: () => Promise<void>;
   focus: () => Promise<void>;
   close: () => Promise<void>;
-  onMessage?: ({ type, event, params }: EventData & { type: string }) => void; 
+  onMessage?: ({ type, event, params }: RecorderEventData) => void; 
   hideApp?: () => any;
-}
-
-class PopupRecorderWindow implements RecorderWindow {
-  private _window?: chrome.windows.Window;
-  private id?: number;
-  private _port?: chrome.runtime.Port;
-  onMessage?: ({ type, event, params }: EventData & { type: string }) => void; 
-  hideApp?: () => any;
-
-  constructor() {
-    chrome.windows.onRemoved.addListener(window => {
-      if (this._window?.id === window)
-        this.close().catch(() => {});
-    });
-  }
-  
-  isClosed() {
-    return !this._window;
-  }
-
-  postMessage(msg: RecorderMessage) {
-    try {
-      return this._port?.postMessage({ ...msg });
-    } catch (e) {
-      // just ignore
-    }
-  }
-
-  async open() {
-    if (this._window)
-      return;
-    this._window = await chrome.windows.create({ type: 'popup', url: 'index.html' });
-    const tabId = await new Promise<number>(resolve => {
-      const onUpdated = (tabId: number, { status }: TabChangeInfo) => {
-        if (this._window?.tabs?.find(t => t.id === tabId) && status === 'complete') {
-          chrome.tabs.onUpdated.removeListener(onUpdated);
-          resolve(tabId);
-        }
-      };
-      chrome.tabs.onUpdated.addListener(onUpdated);
-    });
-    this._port = chrome.tabs.connect(tabId);
-    if (this.onMessage)
-      this._port.onMessage.addListener(this.onMessage);
-    this._port.onDisconnect.addListener(this.close.bind(this));
-  }
-  
-  async focus() {
-    await chrome.windows.update(this.id!, { drawAttention: true, focused: true });
-  }
-
-  async close() {
-    if (!this._port)
-      return;
-    
-    this.hideApp?.();
-    
-    if (this._window?.id) chrome.windows.remove(this._window.id).catch(() => {});
-    this._port?.disconnect();
-    this._window = undefined;
-    this._port = undefined;
-  };
 }
 
 export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
@@ -117,7 +55,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   private _filename?: string;
   private _jsonlSource?: Source;
   private _mode: Mode = 'none';
-  private _window: RecorderWindow;
+  private _window?: RecorderWindow;
 
   constructor(recorder: Recorder, context: BrowserContext) {
     super();
@@ -125,14 +63,18 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     this._context = context;
     this._player = new Player(this._context);
     this._player.on('start', () => this._recorder.clearErrors());
-    this._window = new PopupRecorderWindow();
-    this._window.onMessage = this._onMessage.bind(this);
-    this._window.hideApp  = this._hide.bind(this);
   }
 
   async open(options?: channels.CrxApplicationShowRecorderParams) {
     const mode = options?.mode ?? 'none';
     const language = options?.language ?? 'javascript';
+
+    if (this._window)
+      await this._window.close();
+
+    this._window = options?.window?.type === 'sidepanel' ? new SidepanelRecorderWindow(options.window.url) : new PopupRecorderWindow(options?.window?.url);
+    this._window.onMessage = this._onMessage.bind(this);
+    this._window.hideApp  = this._hide.bind(this);
 
     // set in recorder before, so that if it opens the recorder UI window, it will already reflect the changes
     this._onMessage({ type: 'recorderEvent', event: 'clear', params: {} });
@@ -152,17 +94,16 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   }
 
   async close() {
-    if (this._window.isClosed())
+    if (!this._window || this._window.isClosed())
       return;
-
     this._hide();
+    this._window = undefined;
   }
 
   private _hide() {
     this._recorder.setMode('none');
     this.setMode('none');
-
-    this._window.close();
+    this._window?.close();
     this.emit('hide');
   }
 
@@ -232,7 +173,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   };
 
   _sendMessage(msg: RecorderMessage) {
-    return this._window.postMessage(msg);
+    return this._window?.postMessage(msg);
   }
 
   async uninstall(page: Page) {

@@ -30,6 +30,12 @@ import { CrxRecorderApp } from './recorder/crxRecorderApp';
 import { CrxTransport } from './transport/crxTransport';
 import { BrowserContext } from 'playwright-core/lib/server/browserContext';
 
+const kTabIdSymbol = Symbol('kTabIdSymbol');
+
+export function tabIdFromPage(page: Page): number | undefined {
+  return (page as any)[kTabIdSymbol] as number;
+}
+
 export class Crx extends SdkObject {
 
   constructor(playwright: Playwright) {
@@ -92,12 +98,11 @@ export class CrxApplication extends SdkObject {
     this._browser = browser;
     this._transport = transport;
     this._context().on(BrowserContext.Events.Page, (page: Page) => {
-      const targetId = this._crPages().find(crPage => crPage._initializedPage === page)?._targetId;
-      if (!targetId) return;
-
-      const tabId = this._transport.getTabId(targetId);
+      const tabId = this.tabIdForPage(page);
       if (!tabId) return;
 
+      (page as any)[kTabIdSymbol] = tabId;
+      
       page.on(Page.Events.Close, () => {
         this.emit(CrxApplication.Events.Detached, { tabId });
       });
@@ -115,6 +120,13 @@ export class CrxApplication extends SdkObject {
 
   _crPageByTargetId(targetId: string) {
     return this._browser._crPages.get(targetId);
+  }
+
+  tabIdForPage(page: Page) {
+    const targetId = this._crPages().find(crPage => crPage._initializedPage === page)?._targetId;
+    if (!targetId) return;
+
+    return this._transport.getTabId(targetId);
   }
 
   async showRecorder(options?: crxchannels.CrxApplicationShowRecorderParams) {
