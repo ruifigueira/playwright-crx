@@ -159,11 +159,19 @@ export type CrxApplicationShowRecorderParams = {
   mode?: 'none' | 'recording' | 'inspecting',
   language?: string,
   testIdAttributeName?: string,
+  window?: {
+    type?: 'popup' | 'sidepanel',
+    url?: string,
+  },
 };
 export type CrxApplicationShowRecorderOptions = {
   mode?: 'none' | 'recording' | 'inspecting',
   language?: string,
   testIdAttributeName?: string,
+  window?: {
+    type?: 'popup' | 'sidepanel',
+    url?: string,
+  },
 };
 export type CrxApplicationShowRecorderResult = void;
 export type CrxApplicationHideRecorderParams = {};
