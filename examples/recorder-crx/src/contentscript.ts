@@ -14,16 +14,21 @@
  * limitations under the License.
  */
 
-// if not running as a chrome extension, skip this...
-if (typeof chrome !== 'undefined' && chrome.runtime) {
+window.addEventListener('load', () => {
+  // if not running as a chrome extension, skip this...
+  if (typeof chrome === 'undefined' || !chrome.runtime)
+    return;
+
   const wnd: any = window;
   const port = chrome.runtime.connect();
 
-  wnd.dispatch = async function _onDispatch(data: any) {
+  const dispatch = async (data: any) => {
     port.postMessage({ type: 'recorderEvent', ...data });
   };
 
-  port.onMessage.addListener(async msg => {
+  wnd.dispatch = dispatch;
+
+  const onMessage = (msg: any) => {
     if (!('type' in msg) || msg.type !== 'recorder') return;
 
     switch (msg.method) {
@@ -34,5 +39,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
       case 'setSelector': wnd.playwrightSetSelector(msg.selector, msg.userGesture); break;
       case 'setFileIfNeeded': wnd.playwrightSetFileIfNeeded(msg.file); break;
     }
-  });
-}
+  };
+
+  port.onMessage.addListener(onMessage);
+});
