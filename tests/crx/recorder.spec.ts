@@ -307,6 +307,9 @@ def test_example(page: Page) -> None:
     await recorderPage.close();
   }
 
+  // flaky, probably due to asynchronous nature of page detach when recorder page is closed 
+  await page.waitForTimeout(2000);
+
   {
     // change again
     await configureRecorder({ targetLanguage: 'csharp-nunit' });
