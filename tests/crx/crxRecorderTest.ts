@@ -120,6 +120,8 @@ export const test = crxTest.extend<{
 
   recordAction: async ({ recorderPage }, run) => {
     await run(async (action) => {
+      // just to make sure code is up-to-date
+      await recorderPage.waitForTimeout(100);
       const count = await recorderPage.locator('.CodeMirror-line').count();
       const result = await action();
       await expect(recorderPage.locator('.CodeMirror-line')).not.toHaveCount(count);
