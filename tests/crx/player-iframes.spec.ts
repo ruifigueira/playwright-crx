@@ -34,8 +34,8 @@ test('should resume with iframes', async ({ recorderPage, recordAction, baseURL,
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
     `► frame.navigate( ${baseURL}/root.html ) ✅ — XXms`,
-    `► frame.click( page.frameLocator('iframe').getByRole('button', { name: 'Button1' }) ) ✅ — XXms`,
-    `► frame.click( page.frameLocator('iframe').frameLocator('iframe').getByRole('button', { name: 'Button2' }) ) ✅ — XXms`
+    `► frame.click( page.locator('iframe').contentFrame().getByRole('button', { name: 'Button1' }) ) ✅ — XXms`,
+    `► frame.click( page.locator('iframe').contentFrame().locator('iframe').contentFrame().getByRole('button', { name: 'Button2' }) ) ✅ — XXms`
   ]);
 
   await expect(page.frameLocator('iframe').getByRole('button')).toHaveText('Clicked 1');

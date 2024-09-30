@@ -295,7 +295,7 @@ test('should start recording with configured language', async ({ page, attachRec
   {
     await configureRecorder({ targetLanguage: 'python-pytest' });
     const recorderPage = await attachRecorder(page);
-    await expect(recorderPage.locator('.recorder-chooser')).toHaveValue('python-pytest');
+    await expect(recorderPage.locator('.source-chooser')).toHaveValue('python-pytest');
     const code = `import re
 from playwright.sync_api import Page, expect
 
@@ -314,7 +314,7 @@ def test_example(page: Page) -> None:
     // change again
     await configureRecorder({ targetLanguage: 'csharp-nunit' });
     const recorderPage = await attachRecorder(page);
-    await expect(recorderPage.locator('.recorder-chooser')).toHaveValue('csharp-nunit');
+    await expect(recorderPage.locator('.source-chooser')).toHaveValue('csharp-nunit');
     const code = `using Microsoft.Playwright.NUnit;
 using Microsoft.Playwright;
 

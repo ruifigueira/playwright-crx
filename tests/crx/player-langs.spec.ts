@@ -39,7 +39,7 @@ for (const [lang, { linenumber, line }] of Object.entries(langs)) {
   test(`should step in ${lang}`, async ({ recorderPage, baseURL }) => {
     await recorderPage.getByTitle('Record').click();
 
-    await recorderPage.locator('.recorder-chooser').selectOption(lang);
+    await recorderPage.locator('.source-chooser').selectOption(lang);
 
     await recorderPage.getByTitle('Step Over (F10)').click();
     await recorderPage.getByTitle('Step Over (F10)').click();
@@ -69,7 +69,7 @@ test('should support target change while steping', async ({ recorderPage }) => {
     expect(recorderPage.locator('.source-line-paused .CodeMirror-linenumber')).toHaveText(`${langs.javascript.linenumber}`),
   ]);
 
-  await recorderPage.locator('.recorder-chooser').selectOption('csharp');
+  await recorderPage.locator('.source-chooser').selectOption('csharp');
 
   await expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toBeHidden();
 
