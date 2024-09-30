@@ -35,9 +35,10 @@ export class CrxPlaywrightDispatcher extends Dispatcher<Playwright, channels.Pla
   constructor(scope: RootDispatcher, playwright: CrxPlaywright) {
     super(scope, playwright, 'Playwright', {
       chromium: new BrowserTypeDispatcher(scope, playwright.chromium),
-      bidi: new BrowserTypeDispatcher(scope, playwright.bidi),
       firefox: new BrowserTypeDispatcher(scope, playwright.firefox),
       webkit: new BrowserTypeDispatcher(scope, playwright.webkit),
+      bidiChromium: new BrowserTypeDispatcher(scope, playwright.bidiChromium),
+      bidiFirefox: new BrowserTypeDispatcher(scope, playwright.bidiFirefox),
       android: new AndroidDispatcher(scope, playwright.android),
       electron: new ElectronDispatcher(scope, playwright.electron),
       utils: new LocalUtilsDispatcher(scope, playwright),
