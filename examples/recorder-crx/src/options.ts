@@ -37,7 +37,7 @@ async function initialize() {
   const { testIdAttributeName, targetLanguage, sidepanel } = await chrome.storage.sync.get(['testIdAttributeName', 'targetLanguage', 'sidepanel']);
   testIdAttributeNameElem.value = testIdAttributeName ?? 'data-testid';
   languageElem.value = targetLanguage ?? 'javascript';
-  sidepanelElem.checked = !!sidepanel;
+  sidepanelElem.checked = sidepanel === undefined || sidepanel;
 }
 
 initialize();

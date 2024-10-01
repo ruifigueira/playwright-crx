@@ -28,7 +28,7 @@ let crxAppPromise: Promise<CrxApplication> | undefined;
 const attachedTabIds = new Set<number>();
 let currentMode: Mode | 'detached' | undefined;
 let language: string | undefined;
-let sidepanel = false;
+let sidepanel = true;
 
 async function changeAction(tabId: number, mode?: Mode | 'detached') {
   if (!mode) {
@@ -142,7 +142,8 @@ chrome.contextMenus.onClicked.addListener(async (_, tab) => {
 // if it's in sidepanel mode, we need to open it synchronously on action click,
 // so we need to fetch its value asap
 chrome.storage.sync.get(['sidepanel']).then(({ sidepanel: value }) => {
-  sidepanel = value;
+  if (value !== undefined)
+    sidepanel = value;
 });
 
 chrome.storage.sync.onChanged.addListener(async ({ testIdAttributeName, targetLanguage, sidepanel: sidepanelChange }) => {
