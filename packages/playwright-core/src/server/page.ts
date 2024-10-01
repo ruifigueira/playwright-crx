@@ -54,6 +54,7 @@ export interface PageDelegate {
   reload(): Promise<void>;
   goBack(): Promise<boolean>;
   goForward(): Promise<boolean>;
+  requestGC(): Promise<void>;
   addInitScript(initScript: InitScript): Promise<void>;
   removeNonInternalInitScripts(): Promise<void>;
   closePage(runBeforeUnload: boolean): Promise<void>;
@@ -98,8 +99,6 @@ export interface PageDelegate {
   resetForReuse(): Promise<void>;
   // WebKit hack.
   shouldToggleStyleSheetToSyncAnimations(): boolean;
-  // Bidi throws on attempt to document.open() in utility context.
-  useMainWorldForSetContent?(): boolean;
 }
 
 type EmulatedSize = { screen: types.Size, viewport: types.Size };
@@ -432,6 +431,10 @@ export class Page extends SdkObject {
     }), this._timeoutSettings.navigationTimeout(options));
   }
 
+  requestGC(): Promise<void> {
+    return this._delegate.requestGC();
+  }
+
   registerLocatorHandler(selector: string, noWaitAfter: boolean | undefined) {
     const uid = ++this._lastLocatorHandlerUid;
     this._locatorHandlers.set(uid, { selector, noWaitAfter });
@@ -470,7 +473,7 @@ export class Page extends SdkObject {
           progress.throwIfAborted();
           if (!handler.noWaitAfter) {
             progress.log(`  locator handler has finished, waiting for ${asLocator(this.attribution.playwright.options.sdkLanguage, handler.selector)} to be hidden`);
-            await this.mainFrame().waitForSelectorInternal(progress, handler.selector, { state: 'hidden' });
+            await this.mainFrame().waitForSelectorInternal(progress, handler.selector, false, { state: 'hidden' });
           } else {
             progress.log(`  locator handler has finished`);
           }
@@ -848,6 +851,8 @@ export class PageBinding {
         const handle = await context.evaluateHandle(takeHandle, { name, seq }).catch(e => null);
         result = await binding.playwrightFunction({ frame: context.frame, page, context: page._browserContext }, handle);
       } else {
+        if (!Array.isArray(serializedArgs))
+          throw new Error(`serializedArgs is not an array. This can happen when Array.prototype.toJSON is defined incorrectly`);
         const args = serializedArgs!.map(a => parseEvaluationResultValue(a));
         result = await binding.playwrightFunction({ frame: context.frame, page, context: page._browserContext }, ...args);
       }

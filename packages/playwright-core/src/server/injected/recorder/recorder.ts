@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 
-import type * as actions from '../../recorder/recorderActions';
+import type * as actions from '@recorder/actions';
 import type { InjectedScript } from '../injectedScript';
 import type { Point } from '../../../common/types';
 import type { Mode, OverlayState, UIState } from '@recorder/recorderTypes';
 import type { ElementText } from '../selectorUtils';
 import type { Highlight, HighlightOptions } from '../highlight';
 import clipPaths from './clipPaths';
-import type { SimpleDomNode } from '../simpleDom';
 
-interface RecorderDelegate {
+export interface RecorderDelegate {
   performAction?(action: actions.PerformOnRecordAction): Promise<void>;
   recordAction?(action: actions.Action): Promise<void>;
   setSelector?(selector: string): Promise<void>;
@@ -36,6 +35,7 @@ interface RecorderTool {
   cursor(): string;
   cleanup?(): void;
   onClick?(event: MouseEvent): void;
+  onDblClick?(event: MouseEvent): void;
   onContextMenu?(event: MouseEvent): void;
   onDragStart?(event: DragEvent): void;
   onInput?(event: Event): void;
@@ -205,11 +205,12 @@ class InspectTool implements RecorderTool {
 
 class RecordActionTool implements RecorderTool {
   private _recorder: Recorder;
-  private _performingAction = false;
+  private _performingActions = new Set<actions.PerformOnRecordAction>();
   private _hoveredModel: HighlightModel | null = null;
   private _hoveredElement: HTMLElement | null = null;
   private _activeModel: HighlightModel | null = null;
   private _expectProgrammaticKeyUp = false;
+  private _pendingClickAction: { action: actions.ClickAction, timeout: number } | undefined;
 
   constructor(recorder: Recorder) {
     this._recorder = recorder;
@@ -252,6 +253,38 @@ class RecordActionTool implements RecorderTool {
       return;
     }
 
+    this._cancelPendingClickAction();
+
+    // Stall click in case we are observing double-click.
+    if (event.detail === 1) {
+      this._pendingClickAction = {
+        action: {
+          name: 'click',
+          selector: this._hoveredModel!.selector,
+          position: positionForEvent(event),
+          signals: [],
+          button: buttonForEvent(event),
+          modifiers: modifiersForEvent(event),
+          clickCount: event.detail
+        },
+        timeout: this._recorder.injectedScript.builtinSetTimeout(() => this._commitPendingClickAction(), 200)
+      };
+    }
+  }
+
+  onDblClick(event: MouseEvent) {
+    if (isRangeInput(this._hoveredElement))
+      return;
+    if (this._shouldIgnoreMouseEvent(event))
+      return;
+    // Only allow double click dispatch while action is in progress.
+    if (this._actionInProgress(event))
+      return;
+    if (this._consumedDueToNoModel(event, this._hoveredModel))
+      return;
+
+    this._cancelPendingClickAction();
+
     this._performAction({
       name: 'click',
       selector: this._hoveredModel!.selector,
@@ -261,6 +294,18 @@ class RecordActionTool implements RecorderTool {
       modifiers: modifiersForEvent(event),
       clickCount: event.detail
     });
+  }
+
+  private _commitPendingClickAction() {
+    if (this._pendingClickAction)
+      this._performAction(this._pendingClickAction.action);
+    this._cancelPendingClickAction();
+  }
+
+  private _cancelPendingClickAction() {
+    if (this._pendingClickAction)
+      clearTimeout(this._pendingClickAction.timeout);
+    this._pendingClickAction = undefined;
   }
 
   onContextMenu(event: MouseEvent) {
@@ -288,21 +333,21 @@ class RecordActionTool implements RecorderTool {
   onPointerDown(event: PointerEvent) {
     if (this._shouldIgnoreMouseEvent(event))
       return;
-    if (!this._performingAction)
+    if (!this._performingActions.size)
       consumeEvent(event);
   }
 
   onPointerUp(event: PointerEvent) {
     if (this._shouldIgnoreMouseEvent(event))
       return;
-    if (!this._performingAction)
+    if (!this._performingActions.size)
       consumeEvent(event);
   }
 
   onMouseDown(event: MouseEvent) {
     if (this._shouldIgnoreMouseEvent(event))
       return;
-    if (!this._performingAction)
+    if (!this._performingActions.size)
       consumeEvent(event);
     this._activeModel = this._hoveredModel;
   }
@@ -310,7 +355,7 @@ class RecordActionTool implements RecorderTool {
   onMouseUp(event: MouseEvent) {
     if (this._shouldIgnoreMouseEvent(event))
       return;
-    if (!this._performingAction)
+    if (!this._performingActions.size)
       consumeEvent(event);
   }
 
@@ -463,9 +508,16 @@ class RecordActionTool implements RecorderTool {
 
   private _actionInProgress(event: Event): boolean {
     // If Playwright is performing action for us, bail.
-    if (this._performingAction)
-      return true;
-    // Consume as the first thing.
+    const isKeyEvent = event instanceof KeyboardEvent;
+    const isMouseOrPointerEvent = event instanceof MouseEvent || event instanceof PointerEvent;
+    for (const action of this._performingActions) {
+      if (isKeyEvent && action.name === 'press' && event.key === action.key)
+        return true;
+      if (isMouseOrPointerEvent && (action.name === 'click' || action.name === 'check' || action.name === 'uncheck'))
+        return true;
+    }
+
+    // Consume event if action is not being executed.
     consumeEvent(event);
     return false;
   }
@@ -489,9 +541,9 @@ class RecordActionTool implements RecorderTool {
     this._hoveredModel = null;
     this._activeModel = null;
     this._recorder.updateHighlight(null, false);
-    this._performingAction = true;
+    this._performingActions.add(action);
     void this._recorder.performAction(action).then(() => {
-      this._performingAction = false;
+      this._performingActions.delete(action);
 
       // If that was a keyboard action, it similarly requires new selectors for active model.
       this._onFocus(false);
@@ -915,6 +967,10 @@ class Overlay {
     }
     return false;
   }
+
+  onDblClick(event: MouseEvent) {
+    return false;
+  }
 }
 
 export class Recorder {
@@ -970,6 +1026,7 @@ export class Recorder {
     this._listeners = [
       addEventListener(this.document, 'click', event => this._onClick(event as MouseEvent), true),
       addEventListener(this.document, 'auxclick', event => this._onClick(event as MouseEvent), true),
+      addEventListener(this.document, 'dblclick', event => this._onDblClick(event as MouseEvent), true),
       addEventListener(this.document, 'contextmenu', event => this._onContextMenu(event as MouseEvent), true),
       addEventListener(this.document, 'dragstart', event => this._onDragStart(event as DragEvent), true),
       addEventListener(this.document, 'input', event => this._onInput(event), true),
@@ -985,7 +1042,17 @@ export class Recorder {
       addEventListener(this.document, 'focus', event => this._onFocus(event), true),
       addEventListener(this.document, 'scroll', event => this._onScroll(event), true),
     ];
+
     this.highlight.install();
+    // some frameworks erase the DOM on hydration, this ensures it's reattached
+    let recreationInterval: number | undefined;
+    const recreate = () => {
+      this.highlight.install();
+      recreationInterval = this.injectedScript.builtinSetTimeout(recreate, 500);
+    };
+    recreationInterval = this.injectedScript.builtinSetTimeout(recreate, 500);
+    this._listeners.push(() => clearInterval(recreationInterval));
+
     this.overlay?.install();
     this.document.adoptedStyleSheets.push(this._stylesheet);
   }
@@ -1041,6 +1108,16 @@ export class Recorder {
     if (this._ignoreOverlayEvent(event))
       return;
     this._currentTool.onClick?.(event);
+  }
+
+  private _onDblClick(event: MouseEvent) {
+    if (!event.isTrusted)
+      return;
+    if (this.overlay?.onDblClick(event))
+      return;
+    if (this._ignoreOverlayEvent(event))
+      return;
+    this._currentTool.onDblClick?.(event);
   }
 
   private _onContextMenu(event: MouseEvent) {
@@ -1386,73 +1463,3 @@ function createSvgElement(doc: Document, { tagName, attrs, children }: SvgJson):
 
   return elem;
 }
-
-interface Embedder {
-  __pw_recorderPerformAction(action: actions.PerformOnRecordAction, simpleDomNode?: SimpleDomNode): Promise<void>;
-  __pw_recorderRecordAction(action: actions.Action, simpleDomNode?: SimpleDomNode): Promise<void>;
-  __pw_recorderState(): Promise<UIState>;
-  __pw_recorderSetSelector(selector: string): Promise<void>;
-  __pw_recorderSetMode(mode: Mode): Promise<void>;
-  __pw_recorderSetOverlayState(state: OverlayState): Promise<void>;
-  __pw_refreshOverlay(): void;
-}
-
-export class PollingRecorder implements RecorderDelegate {
-  private _recorder: Recorder;
-  private _embedder: Embedder;
-  private _pollRecorderModeTimer: number | undefined;
-
-  constructor(injectedScript: InjectedScript) {
-    this._recorder = new Recorder(injectedScript);
-    this._embedder = injectedScript.window as any;
-
-    injectedScript.onGlobalListenersRemoved.add(() => this._recorder.installListeners());
-
-    const refreshOverlay = () => {
-      this._pollRecorderMode().catch(e => console.log(e)); // eslint-disable-line no-console
-    };
-    this._embedder.__pw_refreshOverlay = refreshOverlay;
-    refreshOverlay();
-  }
-
-  private async _pollRecorderMode() {
-    const pollPeriod = 1000;
-    if (this._pollRecorderModeTimer)
-      clearTimeout(this._pollRecorderModeTimer);
-    const state = await this._embedder.__pw_recorderState().catch(() => {});
-    if (!state) {
-      this._pollRecorderModeTimer = this._recorder.injectedScript.builtinSetTimeout(() => this._pollRecorderMode(), pollPeriod);
-      return;
-    }
-    const win = this._recorder.document.defaultView!;
-    if (win.top !== win) {
-      // Only show action point in the main frame, since it is relative to the page's viewport.
-      // Otherwise we'll see multiple action points at different locations.
-      state.actionPoint = undefined;
-    }
-    this._recorder.setUIState(state, this);
-    this._pollRecorderModeTimer = this._recorder.injectedScript.builtinSetTimeout(() => this._pollRecorderMode(), pollPeriod);
-  }
-
-  async performAction(action: actions.PerformOnRecordAction, simpleDomNode?: SimpleDomNode) {
-    await this._embedder.__pw_recorderPerformAction(action, simpleDomNode);
-  }
-
-  async recordAction(action: actions.Action, simpleDomNode?: SimpleDomNode): Promise<void> {
-    await this._embedder.__pw_recorderRecordAction(action, simpleDomNode);
-  }
-
-  async setSelector(selector: string): Promise<void> {
-    await this._embedder.__pw_recorderSetSelector(selector);
-  }
-
-  async setMode(mode: Mode): Promise<void> {
-    await this._embedder.__pw_recorderSetMode(mode);
-  }
-
-  async setOverlayState(state: OverlayState): Promise<void> {
-    await this._embedder.__pw_recorderSetOverlayState(state);
-  }
-}
-
-export default PollingRecorder;

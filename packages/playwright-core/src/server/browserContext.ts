@@ -42,7 +42,7 @@ import * as consoleApiSource from '../generated/consoleApiSource';
 import { BrowserContextAPIRequestContext } from './fetch';
 import type { Artifact } from './artifact';
 import { Clock } from './clock';
-import { ClientCertificatesProxy } from './socksClientCertificatesInterceptor';
+import type { ClientCertificatesProxy } from './socksClientCertificatesInterceptor';
 import { RecorderApp } from './recorder/recorderApp';
 
 export abstract class BrowserContext extends SdkObject {
@@ -68,7 +68,7 @@ export abstract class BrowserContext extends SdkObject {
   readonly _timeoutSettings = new TimeoutSettings();
   readonly _pageBindings = new Map<string, PageBinding>();
   readonly _activeProgressControllers = new Set<ProgressController>();
-  readonly _options: channels.BrowserNewContextParams;
+  readonly _options: types.BrowserContextOptions;
   _requestInterceptor?: network.RouteHandler;
   private _isPersistentContext: boolean;
   private _closedStatus: 'open' | 'closing' | 'closed' = 'open';
@@ -93,7 +93,7 @@ export abstract class BrowserContext extends SdkObject {
   readonly clock: Clock;
   _clientCertificatesProxy: ClientCertificatesProxy | undefined;
 
-  constructor(browser: Browser, options: channels.BrowserNewContextParams, browserContextId: string | undefined) {
+  constructor(browser: Browser, options: types.BrowserContextOptions, browserContextId: string | undefined) {
     super(browser, 'browser-context');
     this.attribution.context = this;
     this._browser = browser;
@@ -131,15 +131,15 @@ export abstract class BrowserContext extends SdkObject {
 
     // When PWDEBUG=1, show inspector for each context.
     if (debugMode() === 'inspector')
-      await Recorder.show(this, RecorderApp.factory(this), { pauseOnNextStatement: true });
+      await Recorder.show('actions', this, RecorderApp.factory(this), { pauseOnNextStatement: true });
 
     // When paused, show inspector.
     if (this._debugger.isPaused())
-      Recorder.showInspector(this, RecorderApp.factory(this));
+      Recorder.showInspectorNoReply(this, RecorderApp.factory(this));
 
     this._debugger.on(Debugger.Events.PausedStateChanged, () => {
       if (this._debugger.isPaused())
-        Recorder.showInspector(this, RecorderApp.factory(this));
+        Recorder.showInspectorNoReply(this, RecorderApp.factory(this));
     });
 
     if (debugMode() === 'console')
@@ -525,7 +525,7 @@ export abstract class BrowserContext extends SdkObject {
       const internalMetadata = serverSideCallMetadata();
       const page = await this.newPage(internalMetadata);
       await page._setServerRequestInterceptor(handler => {
-        handler.fulfill({ body: '<html></html>', requestUrl: handler.request().url() }).catch(() => {});
+        handler.fulfill({ body: '<html></html>' }).catch(() => {});
         return true;
       });
       for (const origin of originsToSave) {
@@ -559,7 +559,7 @@ export abstract class BrowserContext extends SdkObject {
       isServerSide: false,
     });
     await page._setServerRequestInterceptor(handler => {
-      handler.fulfill({ body: '<html></html>', requestUrl: handler.request().url() }).catch(() => {});
+      handler.fulfill({ body: '<html></html>' }).catch(() => {});
       return true;
     });
 
@@ -594,7 +594,7 @@ export abstract class BrowserContext extends SdkObject {
         const internalMetadata = serverSideCallMetadata();
         const page = await this.newPage(internalMetadata);
         await page._setServerRequestInterceptor(handler => {
-          handler.fulfill({ body: '<html></html>', requestUrl: handler.request().url() }).catch(() => {});
+          handler.fulfill({ body: '<html></html>' }).catch(() => {});
           return true;
         });
         for (const originState of state.origins) {
@@ -659,19 +659,7 @@ export function assertBrowserContextIsNotOwned(context: BrowserContext) {
   }
 }
 
-export async function createClientCertificatesProxyIfNeeded(options: channels.BrowserNewContextOptions, browserOptions?: BrowserOptions) {
-  if (!options.clientCertificates?.length)
-    return;
-  if ((options.proxy?.server && options.proxy?.server !== 'per-context') || (browserOptions?.proxy?.server && browserOptions?.proxy?.server !== 'http://per-context'))
-    throw new Error('Cannot specify both proxy and clientCertificates');
-  verifyClientCertificates(options.clientCertificates);
-  const clientCertificatesProxy = new ClientCertificatesProxy(options);
-  options.proxy = { server: await clientCertificatesProxy.listen() };
-  options.ignoreHTTPSErrors = true;
-  return clientCertificatesProxy;
-}
-
-export function validateBrowserContextOptions(options: channels.BrowserNewContextParams, browserOptions: BrowserOptions) {
+export function validateBrowserContextOptions(options: types.BrowserContextOptions, browserOptions: BrowserOptions) {
   if (options.noDefaultViewport && options.deviceScaleFactor !== undefined)
     throw new Error(`"deviceScaleFactor" option is not supported with null "viewport"`);
   if (options.noDefaultViewport && !!options.isMobile)
@@ -720,7 +708,7 @@ export function verifyGeolocation(geolocation?: types.Geolocation) {
     throw new Error(`geolocation.accuracy: precondition 0 <= ACCURACY failed.`);
 }
 
-export function verifyClientCertificates(clientCertificates?: channels.BrowserNewContextParams['clientCertificates']) {
+export function verifyClientCertificates(clientCertificates?: types.BrowserContextOptions['clientCertificates']) {
   if (!clientCertificates)
     return;
   for (const cert of clientCertificates) {
