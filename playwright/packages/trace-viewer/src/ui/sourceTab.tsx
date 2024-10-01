@@ -28,7 +28,7 @@ import { ToolbarButton } from '@web/components/toolbarButton';
 import { Toolbar } from '@web/components/toolbar';
 
 export const SourceTab: React.FunctionComponent<{
-  stack: StackFrame[] | undefined,
+  stack?: StackFrame[],
   stackFrameLocation: 'bottom' | 'right',
   sources: Map<string, SourceModel>,
   rootDir?: string,
@@ -55,7 +55,7 @@ export const SourceTab: React.FunctionComponent<{
     let source = sources.get(file);
     // Fallback location can fall outside the sources model.
     if (!source) {
-      source = { errors: fallbackLocation?.source?.errors || [], content: undefined };
+      source = { errors: fallbackLocation?.source?.errors || [], content: fallbackLocation?.source?.content };
       sources.set(file, source);
     }
 
@@ -66,7 +66,9 @@ export const SourceTab: React.FunctionComponent<{
     highlight.push({ line: targetLine, type: 'running' });
 
     // After the source update, but before the test run, don't trust the cache.
-    if (source.content === undefined || shouldUseFallback) {
+    if (fallbackLocation?.source?.content !== undefined) {
+      source.content = fallbackLocation.source.content;
+    } else if (source.content === undefined || shouldUseFallback) {
       const sha1 = await calculateSha1(file);
       try {
         let response = await fetch(`sha1/src@${sha1}.txt`);

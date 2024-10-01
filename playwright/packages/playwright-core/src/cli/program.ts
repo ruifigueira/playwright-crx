@@ -348,10 +348,10 @@ type CaptureOptions = {
   fullPage: boolean;
 };
 
-async function launchContext(options: Options, headless: boolean, executablePath?: string): Promise<{ browser: Browser, browserName: string, launchOptions: LaunchOptions, contextOptions: BrowserContextOptions, context: BrowserContext }> {
+async function launchContext(options: Options, extraOptions: LaunchOptions): Promise<{ browser: Browser, browserName: string, launchOptions: LaunchOptions, contextOptions: BrowserContextOptions, context: BrowserContext }> {
   validateOptions(options);
   const browserType = lookupBrowserType(options);
-  const launchOptions: LaunchOptions = { headless, executablePath };
+  const launchOptions: LaunchOptions = extraOptions;
   if (options.channel)
     launchOptions.channel = options.channel as any;
   launchOptions.handleSIGINT = false;
@@ -363,7 +363,7 @@ async function launchContext(options: Options, headless: boolean, executablePath
   // In headful mode, use host device scale factor for things to look nice.
   // In headless, keep things the way it works in Playwright by default.
   // Assume high-dpi on MacOS. TODO: this is not perfect.
-  if (!headless)
+  if (!extraOptions.headless)
     contextOptions.deviceScaleFactor = os.platform() === 'darwin' ? 2 : 1;
 
   // Work around the WebKit GTK scrolling issue.
@@ -397,7 +397,7 @@ async function launchContext(options: Options, headless: boolean, executablePath
       process.stdout.write('\n-------------8<-------------\n');
       const autoExitCondition = process.env.PWTEST_CLI_AUTO_EXIT_WHEN;
       if (autoExitCondition && text.includes(autoExitCondition))
-        Promise.all(context.pages().map(async p => p.close()));
+        closeBrowser();
     };
     // Make sure we exit abnormally when browser crashes.
     const logs: string[] = [];
@@ -504,7 +504,7 @@ async function launchContext(options: Options, headless: boolean, executablePath
       if (hasPage)
         return;
       // Avoid the error when the last page is closed because the browser has been closed.
-      closeBrowser().catch(e => null);
+      closeBrowser().catch(() => {});
     });
   });
   process.on('SIGINT', async () => {
@@ -547,7 +547,7 @@ async function openPage(context: BrowserContext, url: string | undefined): Promi
 }
 
 async function open(options: Options, url: string | undefined, language: string) {
-  const { context, launchOptions, contextOptions } = await launchContext(options, !!process.env.PWTEST_CLI_HEADLESS, process.env.PWTEST_CLI_EXECUTABLE_PATH);
+  const { context, launchOptions, contextOptions } = await launchContext(options, { headless: !!process.env.PWTEST_CLI_HEADLESS, executablePath: process.env.PWTEST_CLI_EXECUTABLE_PATH });
   await context._enableRecorder({
     language,
     launchOptions,
@@ -560,7 +560,12 @@ async function open(options: Options, url: string | undefined, language: string)
 
 async function codegen(options: Options & { target: string, output?: string, testIdAttribute?: string }, url: string | undefined) {
   const { target: language, output: outputFile, testIdAttribute: testIdAttributeName } = options;
-  const { context, launchOptions, contextOptions } = await launchContext(options, !!process.env.PWTEST_CLI_HEADLESS, process.env.PWTEST_CLI_EXECUTABLE_PATH);
+  const tracesDir = path.join(os.tmpdir(), `playwright-recorder-trace-${Date.now()}`);
+  const { context, launchOptions, contextOptions } = await launchContext(options, {
+    headless: !!process.env.PWTEST_CLI_HEADLESS,
+    executablePath: process.env.PWTEST_CLI_EXECUTABLE_PATH,
+    tracesDir,
+  });
   dotenv.config({ path: 'playwright.env' });
   await context._enableRecorder({
     language,
@@ -569,6 +574,7 @@ async function codegen(options: Options & { target: string, output?: string, tes
     device: options.device,
     saveStorage: options.saveStorage,
     mode: 'recording',
+    codegenMode: process.env.PW_RECORDER_IS_TRACE_VIEWER ? 'trace-events' : 'actions',
     testIdAttributeName,
     outputFile: outputFile ? path.resolve(outputFile) : undefined,
   });
@@ -587,7 +593,7 @@ async function waitForPage(page: Page, captureOptions: CaptureOptions) {
 }
 
 async function screenshot(options: Options, captureOptions: CaptureOptions, url: string, path: string) {
-  const { context } = await launchContext(options, true);
+  const { context } = await launchContext(options, { headless: true });
   console.log('Navigating to ' + url);
   const page = await openPage(context, url);
   await waitForPage(page, captureOptions);
@@ -600,7 +606,7 @@ async function screenshot(options: Options, captureOptions: CaptureOptions, url:
 async function pdf(options: Options, captureOptions: CaptureOptions, url: string, path: string) {
   if (options.browser !== 'chromium')
     throw new Error('PDF creation is only working with Chromium');
-  const { context } = await launchContext({ ...options, browser: 'chromium' }, true);
+  const { context } = await launchContext({ ...options, browser: 'chromium' }, { headless: true });
   console.log('Navigating to ' + url);
   const page = await openPage(context, url);
   await waitForPage(page, captureOptions);

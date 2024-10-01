@@ -24,15 +24,19 @@ import { baseTest } from './baseTest';
 import { type RemoteServerOptions, type PlaywrightServer, RunServer, RemoteServer } from './remoteServer';
 import type { Log } from '../../packages/trace/src/har';
 import { parseHar } from '../config/utils';
+import { createSkipTestPredicate } from '../bidi/expectationUtil';
+import type { TestInfo } from '@playwright/test';
 
 export type BrowserTestWorkerFixtures = PageWorkerFixtures & {
   browserVersion: string;
   defaultSameSiteCookieValue: string;
+  sameSiteStoredValueForNone: string;
   allowsThirdParty: boolean;
   browserMajorVersion: number;
   browserType: BrowserType;
   isAndroid: boolean;
   isElectron: boolean;
+  bidiTestSkipPredicate: (info: TestInfo) => boolean;
 };
 
 interface StartRemoteServer {
@@ -46,6 +50,7 @@ type BrowserTestTestFixtures = PageTestFixtures & {
   startRemoteServer: StartRemoteServer;
   contextFactory: (options?: BrowserContextOptions) => Promise<BrowserContext>;
   pageWithHar(options?: { outputPath?: string, content?: 'embed' | 'attach' | 'omit', omitContent?: boolean }): Promise<{ context: BrowserContext, page: Page, getLog: () => Promise<Log>, getZip: () => Promise<Map<string, Buffer>> }>
+  autoSkipBidiTest: void;
 };
 
 const test = baseTest.extend<BrowserTestTestFixtures, BrowserTestWorkerFixtures>({
@@ -58,24 +63,33 @@ const test = baseTest.extend<BrowserTestTestFixtures, BrowserTestWorkerFixtures>
     await run(playwright[browserName]);
   }, { scope: 'worker' }],
 
-  allowsThirdParty: [async ({ browserName, browserMajorVersion, channel }, run) => {
+  allowsThirdParty: [async ({ browserName }, run) => {
     if (browserName === 'firefox')
       await run(true);
     else
       await run(false);
   }, { scope: 'worker' }],
 
-  defaultSameSiteCookieValue: [async ({ browserName, browserMajorVersion, channel, isLinux }, run) => {
-    if (browserName === 'chromium')
+  defaultSameSiteCookieValue: [async ({ browserName, platform, macVersion }, run) => {
+    if (browserName === 'chromium' || browserName as any === '_bidiChromium')
       await run('Lax');
-    else if (browserName === 'webkit' && isLinux)
+    else if (browserName === 'webkit' && platform === 'linux')
       await run('Lax');
-    else if (browserName === 'webkit' && !isLinux)
-      await run('None');
-    else if (browserName === 'firefox')
+    else if (browserName === 'webkit' && platform === 'darwin' && macVersion >= 15)
+      await run('Lax');
+    else if (browserName === 'webkit')
+      await run('None'); // Windows + older macOS
+    else if (browserName === 'firefox' || browserName as any === '_bidiFirefox')
       await run('None');
     else
       throw new Error('unknown browser - ' + browserName);
+  }, { scope: 'worker' }],
+
+  sameSiteStoredValueForNone: [async ({ browserName, isMac, macVersion }, run) => {
+    if (browserName === 'webkit' && isMac && macVersion >= 15)
+      await run('Lax');
+    else
+      await run('None');
   }, { scope: 'worker' }],
 
   browserMajorVersion: [async ({ browserVersion }, run) => {
@@ -165,7 +179,18 @@ const test = baseTest.extend<BrowserTestTestFixtures, BrowserTestWorkerFixtures>
       };
     };
     await use(pageWithHar);
-  }
+  },
+
+  bidiTestSkipPredicate: [async ({ }, run) => {
+    const filter = await createSkipTestPredicate(test.info().project.name);
+    await run(filter);
+  }, { scope: 'worker' }],
+
+  autoSkipBidiTest: [async ({ bidiTestSkipPredicate }, run) => {
+    if (bidiTestSkipPredicate(test.info()))
+      test.skip(true);
+    await run();
+  }, { auto: true, scope: 'test' }],
 });
 
 export const playwrightTest = test;

@@ -16,136 +16,118 @@
 
 import { EventEmitter } from 'events';
 import type { Frame } from '../frames';
-import type { Signal } from './recorderActions';
-import type { ActionInContext } from '../codegen/types';
+import type { Page } from '../page';
+import type { Signal } from '../../../../recorder/src/actions';
+import type * as actions from '@recorder/actions';
+import { monotonicTime } from '../../utils/time';
+import { callMetadataForAction, collapseActions } from './recorderUtils';
+import { serializeError } from '../errors';
+import { performAction } from './recorderRunner';
+import type { CallMetadata } from '@protocol/callMetadata';
+import { isUnderTest } from '../../utils/debug';
 
 export class RecorderCollection extends EventEmitter {
-  private _currentAction: ActionInContext | null = null;
-  private _lastAction: ActionInContext | null = null;
-  private _actions: ActionInContext[] = [];
-  private _enabled: boolean;
+  private _actions: actions.ActionInContext[] = [];
+  private _enabled = false;
+  private _pageAliases: Map<Page, string>;
 
-  constructor(enabled: boolean) {
+  constructor(pageAliases: Map<Page, string>) {
     super();
-    this._enabled = enabled;
-    this.restart();
+    this._pageAliases = pageAliases;
   }
 
   restart() {
-    this._currentAction = null;
-    this._lastAction = null;
     this._actions = [];
-    this.emit('change');
-  }
-
-  actions() {
-    return this._actions;
+    this._fireChange();
   }
 
   setEnabled(enabled: boolean) {
     this._enabled = enabled;
   }
 
-  addAction(action: ActionInContext) {
-    if (!this._enabled)
-      return;
-    this.willPerformAction(action);
-    this.didPerformAction(action);
+  async performAction(actionInContext: actions.ActionInContext) {
+    await this._addAction(actionInContext, async callMetadata => {
+      await performAction(callMetadata, this._pageAliases, actionInContext);
+    });
   }
 
-  willPerformAction(action: ActionInContext) {
-    if (!this._enabled)
+  addRecordedAction(actionInContext: actions.ActionInContext) {
+    if (['openPage', 'closePage'].includes(actionInContext.action.name)) {
+      this._actions.push(actionInContext);
+      this._fireChange();
       return;
-    this._currentAction = action;
+    }
+    this._addAction(actionInContext).catch(() => {});
   }
 
-  performedActionFailed(action: ActionInContext) {
+  private async _addAction(actionInContext: actions.ActionInContext, callback?: (callMetadata: CallMetadata) => Promise<void>) {
     if (!this._enabled)
       return;
-    if (this._currentAction === action)
-      this._currentAction = null;
-  }
-
-  didPerformAction(actionInContext: ActionInContext) {
-    if (!this._enabled)
+    if (actionInContext.action.name === 'openPage' || actionInContext.action.name === 'closePage') {
+      this._actions.push(actionInContext);
+      this._fireChange();
       return;
-    const action = actionInContext.action;
-    let eraseLastAction = false;
-    if (this._lastAction && this._lastAction.frame.pageAlias === actionInContext.frame.pageAlias) {
-      const lastAction = this._lastAction.action;
-      // We augment last action based on the type.
-      if (this._lastAction && action.name === 'fill' && lastAction.name === 'fill') {
-        if (action.selector === lastAction.selector)
-          eraseLastAction = true;
-      }
-      if (lastAction && action.name === 'click' && lastAction.name === 'click') {
-        if (action.selector === lastAction.selector && action.clickCount > lastAction.clickCount)
-          eraseLastAction = true;
-      }
-      if (lastAction && action.name === 'navigate' && lastAction.name === 'navigate') {
-        if (action.url === lastAction.url) {
-          // Already at a target URL.
-          this._currentAction = null;
-          return;
-        }
-      }
-      // Check and uncheck erase click.
-      if (lastAction && (action.name === 'check' || action.name === 'uncheck') && lastAction.name === 'click') {
-        if (action.selector === lastAction.selector)
-          eraseLastAction = true;
-      }
     }
 
-    this._lastAction = actionInContext;
-    this._currentAction = null;
-    if (eraseLastAction)
-      this._actions.pop();
+    const { callMetadata, mainFrame } = callMetadataForAction(this._pageAliases, actionInContext);
+    await mainFrame.instrumentation.onBeforeCall(mainFrame, callMetadata);
     this._actions.push(actionInContext);
-    this.emit('change');
-  }
-
-  commitLastAction() {
-    if (!this._enabled)
-      return;
-    const action = this._lastAction;
-    if (action)
-      action.committed = true;
+    this._fireChange();
+    const error = await callback?.(callMetadata).catch((e: Error) => e);
+    callMetadata.endTime = monotonicTime();
+    actionInContext.endTime = callMetadata.endTime;
+    callMetadata.error = error ? serializeError(error) : undefined;
+    // Do not wait for onAfterCall so that performAction returned immediately after the action.
+    mainFrame.instrumentation.onAfterCall(mainFrame, callMetadata).then(() => {
+      this._fireChange();
+    }).catch(() => {});
   }
 
   signal(pageAlias: string, frame: Frame, signal: Signal) {
     if (!this._enabled)
       return;
 
-    // Signal either arrives while action is being performed or shortly after.
-    if (this._currentAction) {
-      this._currentAction.action.signals.push(signal);
-      return;
-    }
-
-    if (this._lastAction && (!this._lastAction.committed || signal.name !== 'navigation')) {
-      const signals = this._lastAction.action.signals;
-      if (signal.name === 'navigation' && signals.length && signals[signals.length - 1].name === 'download')
-        return;
-      if (signal.name === 'download' && signals.length && signals[signals.length - 1].name === 'navigation')
-        signals.length = signals.length - 1;
-      this._lastAction.action.signals.push(signal);
-      this.emit('change');
-      return;
-    }
-
     if (signal.name === 'navigation' && frame._page.mainFrame() === frame) {
-      this.addAction({
-        frame: {
-          pageAlias,
-          framePath: [],
-        },
-        committed: true,
-        action: {
-          name: 'navigate',
-          url: frame.url(),
-          signals: [],
-        },
-      });
+      const timestamp = monotonicTime();
+      const lastAction = this._actions[this._actions.length - 1];
+      const signalThreshold = isUnderTest() ? 500 : 5000;
+
+      let generateGoto = false;
+      if (!lastAction)
+        generateGoto = true;
+      else if (lastAction.action.name !== 'click' && lastAction.action.name !== 'press')
+        generateGoto = true;
+      else if (timestamp - lastAction.startTime > signalThreshold)
+        generateGoto = true;
+
+      if (generateGoto) {
+        this.addRecordedAction({
+          frame: {
+            pageAlias,
+            framePath: [],
+          },
+          action: {
+            name: 'navigate',
+            url: frame.url(),
+            signals: [],
+          },
+          startTime: timestamp,
+          endTime: timestamp,
+        });
+      }
+      return;
     }
+
+    if (this._actions.length) {
+      this._actions[this._actions.length - 1].action.signals.push(signal);
+      this._fireChange();
+      return;
+    }
+  }
+
+  private _fireChange() {
+    if (!this._enabled)
+      return;
+    this.emit('change', collapseActions(this._actions));
   }
 }

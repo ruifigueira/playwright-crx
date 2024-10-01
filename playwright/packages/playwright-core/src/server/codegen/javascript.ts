@@ -15,8 +15,9 @@
  */
 
 import type { BrowserContextOptions } from '../../../types/types';
-import type { ActionInContext, Language, LanguageGenerator, LanguageGeneratorOptions } from './types';
-import { sanitizeDeviceOptions, toSignalMap, toKeyboardModifiers, toClickOptions } from './language';
+import type { Language, LanguageGenerator, LanguageGeneratorOptions } from './types';
+import type * as actions from '@recorder/actions';
+import { sanitizeDeviceOptions, toSignalMap, toKeyboardModifiers, toClickOptionsForSourceCode } from './language';
 import { deviceDescriptors } from '../deviceDescriptors';
 import { escapeWithQuotes, asLocator } from '../../utils';
 
@@ -33,7 +34,7 @@ export class JavaScriptLanguageGenerator implements LanguageGenerator {
     this._isTest = isTest;
   }
 
-  generateAction(actionInContext: ActionInContext): string {
+  generateAction(actionInContext: actions.ActionInContext): string {
     const action = actionInContext.action;
     if (this._isTest && (action.name === 'openPage' || action.name === 'closePage'))
       return '';
@@ -74,7 +75,7 @@ export class JavaScriptLanguageGenerator implements LanguageGenerator {
     return formatter.format();
   }
 
-  private _generateActionCall(subject: string, actionInContext: ActionInContext): string {
+  private _generateActionCall(subject: string, actionInContext: actions.ActionInContext): string {
     const action = actionInContext.action;
     switch (action.name) {
       case 'openPage':
@@ -85,7 +86,7 @@ export class JavaScriptLanguageGenerator implements LanguageGenerator {
         let method = 'click';
         if (action.clickCount === 2)
           method = 'dblclick';
-        const options = toClickOptions(action);
+        const options = toClickOptionsForSourceCode(action);
         const optionsString = formatOptions(options, false);
         return `await ${subject}.${this._asLocator(action.selector)}.${method}(${optionsString});`;
       }

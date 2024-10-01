@@ -15,8 +15,9 @@
  */
 
 import type { BrowserContextOptions } from '../../../types/types';
-import type { ActionInContext, Language, LanguageGenerator, LanguageGeneratorOptions } from './types';
-import { sanitizeDeviceOptions, toClickOptions, toKeyboardModifiers, toSignalMap } from './language';
+import type { Language, LanguageGenerator, LanguageGeneratorOptions } from './types';
+import type * as actions from '@recorder/actions';
+import { sanitizeDeviceOptions, toClickOptionsForSourceCode, toKeyboardModifiers, toSignalMap } from './language';
 import { escapeWithQuotes, asLocator } from '../../utils';
 import { deviceDescriptors } from '../deviceDescriptors';
 
@@ -45,14 +46,14 @@ export class CSharpLanguageGenerator implements LanguageGenerator {
     this._mode = mode;
   }
 
-  generateAction(actionInContext: ActionInContext): string {
+  generateAction(actionInContext: actions.ActionInContext): string {
     const action = this._generateActionInner(actionInContext);
     if (action)
       return action;
     return '';
   }
 
-  _generateActionInner(actionInContext: ActionInContext): string {
+  _generateActionInner(actionInContext: actions.ActionInContext): string {
     const action = actionInContext.action;
     if (this._mode !== 'library' && (action.name === 'openPage' || action.name === 'closePage'))
       return '';
@@ -68,7 +69,7 @@ export class CSharpLanguageGenerator implements LanguageGenerator {
       return formatter.format();
     }
 
-    const locators = actionInContext.frame.framePath.map(selector => `.${this._asLocator(selector)}.ContentFrame()`);
+    const locators = actionInContext.frame.framePath.map(selector => `.${this._asLocator(selector)}.ContentFrame`);
     const subject = `${pageAlias}${locators.join('')}`;
     const signals = toSignalMap(action);
 
@@ -101,7 +102,7 @@ export class CSharpLanguageGenerator implements LanguageGenerator {
     return formatter.format();
   }
 
-  private _generateActionCall(subject: string, actionInContext: ActionInContext): string {
+  private _generateActionCall(subject: string, actionInContext: actions.ActionInContext): string {
     const action = actionInContext.action;
     switch (action.name) {
       case 'openPage':
@@ -112,7 +113,7 @@ export class CSharpLanguageGenerator implements LanguageGenerator {
         let method = 'Click';
         if (action.clickCount === 2)
           method = 'DblClick';
-        const options = toClickOptions(action);
+        const options = toClickOptionsForSourceCode(action);
         if (!Object.entries(options).length)
           return `await ${subject}.${this._asLocator(action.selector)}.${method}Async();`;
         const optionsString = formatObject(options, '    ', 'Locator' + method + 'Options');

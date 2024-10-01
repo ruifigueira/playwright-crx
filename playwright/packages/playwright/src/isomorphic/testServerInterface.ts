@@ -28,6 +28,7 @@ export interface TestServerInterface {
     closeOnDisconnect?: boolean,
     interceptStdio?: boolean,
     watchTestDirs?: boolean,
+    populateDependenciesOnList?: boolean,
   }): Promise<void>;
 
   ping(params: {}): Promise<void>;
@@ -44,7 +45,7 @@ export interface TestServerInterface {
 
   installBrowsers(params: {}): Promise<void>;
 
-  runGlobalSetup(params: { outputDir?: string }): Promise<{
+  runGlobalSetup(params: {}): Promise<{
     report: ReportEntry[],
     status: reporterTypes.FullResult['status']
   }>;
@@ -81,7 +82,6 @@ export interface TestServerInterface {
     locations?: string[];
     grep?: string;
     grepInvert?: string;
-    outputDir?: string;
   }): Promise<{
     report: ReportEntry[],
     status: reporterTypes.FullResult['status']
@@ -94,8 +94,6 @@ export interface TestServerInterface {
     testIds?: string[];
     headed?: boolean;
     workers?: number | string;
-    timeout?: number,
-    outputDir?: string;
     updateSnapshots?: 'all' | 'none' | 'missing';
     reporters?: string[],
     trace?: 'on' | 'off';

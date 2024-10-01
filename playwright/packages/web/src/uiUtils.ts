@@ -139,7 +139,7 @@ export function copy(text: string) {
   textArea.remove();
 }
 
-export function useSetting<S>(name: string | undefined, defaultValue: S, title?: string): [S, React.Dispatch<React.SetStateAction<S>>] {
+export function useSetting<S>(name: string | undefined, defaultValue: S): [S, React.Dispatch<React.SetStateAction<S>>] {
   if (name)
     defaultValue = settings.getObject(name, defaultValue);
   const [value, setValue] = React.useState<S>(defaultValue);
@@ -162,7 +162,7 @@ export function useSetting<S>(name: string | undefined, defaultValue: S, title?:
 
 declare global {
   interface Window {
-    saveSettings?(): Promise<void>;
+    saveSettings?(): void;
   }
 }
 
@@ -201,6 +201,11 @@ export const settings = new Settings();
 // inspired by https://www.npmjs.com/package/clsx
 export function clsx(...classes: (string | undefined | false)[]) {
   return classes.filter(Boolean).join(' ');
+}
+
+export async function sha1(str: string): Promise<string> {
+  const buffer = new TextEncoder().encode(str);
+  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-1', buffer))).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 const kControlCodesRe = '\\u0000-\\u0020\\u007f-\\u009f';

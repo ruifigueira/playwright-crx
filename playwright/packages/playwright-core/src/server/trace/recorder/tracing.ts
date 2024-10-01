@@ -38,6 +38,8 @@ import { Snapshotter } from './snapshotter';
 import type { ConsoleMessage } from '../../console';
 import { Dispatcher } from '../../dispatchers/dispatcher';
 import { serializeError } from '../../errors';
+import type { Dialog } from '../../dialog';
+import type { Download } from '../../download';
 
 const version: trace.VERSION = 7;
 
@@ -179,7 +181,7 @@ export class Tracing extends SdkObject implements InstrumentationListener, Snaps
       wallTime: Date.now(),
       monotonicTime: monotonicTime()
     };
-    this._fs.appendFile(this._state.traceFile, JSON.stringify(event) + '\n');
+    this._appendTraceEvent(event);
 
     this._context.instrumentation.addListener(this, this._context);
     this._eventListeners.push(
@@ -447,6 +449,50 @@ export class Tracing extends SdkObject implements InstrumentationListener, Snaps
     this._appendTraceEvent(event);
   }
 
+  onDialog(dialog: Dialog) {
+    const event: trace.EventTraceEvent = {
+      type: 'event',
+      time: monotonicTime(),
+      class: 'BrowserContext',
+      method: 'dialog',
+      params: { pageId: dialog.page().guid, type: dialog.type(), message: dialog.message(), defaultValue: dialog.defaultValue() },
+    };
+    this._appendTraceEvent(event);
+  }
+
+  onDownload(page: Page, download: Download) {
+    const event: trace.EventTraceEvent = {
+      type: 'event',
+      time: monotonicTime(),
+      class: 'BrowserContext',
+      method: 'download',
+      params: { pageId: page.guid, url: download.url, suggestedFilename: download.suggestedFilename() },
+    };
+    this._appendTraceEvent(event);
+  }
+
+  onPageOpen(page: Page) {
+    const event: trace.EventTraceEvent = {
+      type: 'event',
+      time: monotonicTime(),
+      class: 'BrowserContext',
+      method: 'page',
+      params: { pageId: page.guid, openerPageId: page.opener()?.guid },
+    };
+    this._appendTraceEvent(event);
+  }
+
+  onPageClose(page: Page) {
+    const event: trace.EventTraceEvent = {
+      type: 'event',
+      time: monotonicTime(),
+      class: 'BrowserContext',
+      method: 'pageClosed',
+      params: { pageId: page.guid },
+    };
+    this._appendTraceEvent(event);
+  }
+
   private _onPageError(error: Error, page: Page) {
     const event: trace.EventTraceEvent = {
       type: 'event',
@@ -472,7 +518,8 @@ export class Tracing extends SdkObject implements InstrumentationListener, Snaps
             sha1,
             width: params.width,
             height: params.height,
-            timestamp: monotonicTime()
+            timestamp: monotonicTime(),
+            frameSwapWallTime: params.frameSwapWallTime,
           };
           // Make sure to write the screencast frame before adding a reference to it.
           this._appendResource(sha1, params.buffer);
