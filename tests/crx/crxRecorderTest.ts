@@ -17,7 +17,7 @@
 import path from 'path';
 import { Page, Locator } from 'playwright-core';
 import { test as crxTest, expect } from './crxTest';
-import type { AssertCheckedAction, AssertTextAction, AssertValueAction, AssertVisibleAction } from '../../playwright/packages/playwright-core/src/server/recorder/recorderActions';
+import type { AssertCheckedAction, AssertTextAction, AssertValueAction, AssertVisibleAction } from '../../playwright/packages/recorder/src/actions';
 
 export { expect } from './crxTest';
 
@@ -88,6 +88,8 @@ export const test = crxTest.extend<{
       await extensionServiceWorker.evaluate(async () => {
         // ensure we're in test mode
         _setUnderTest();
+        // ensure tests are performed in a popup recorder window
+        await chrome.storage.sync.set({ sidepanel: false });
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         await attach(tab);
       });
