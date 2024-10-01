@@ -251,7 +251,7 @@ export class Recorder implements InstrumentationListener, IRecorder {
   }
 
   async _uninstallInjectedRecorder(page: Page) {
-    await Promise.all(page.frames().map(f => f.evaluateExpression('window.__pw_uninstall()').catch(e => console.error(e))));
+    await Promise.all(page.frames().map(f => f.evaluateExpression('window.__pw_uninstall()').catch(() => {})));
   }
 
   async onBeforeCall(sdkObject: SdkObject, metadata: CallMetadata) {

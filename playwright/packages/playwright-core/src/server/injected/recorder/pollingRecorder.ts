@@ -28,6 +28,7 @@ interface Embedder {
   __pw_recorderSetMode(mode: Mode): Promise<void>;
   __pw_recorderSetOverlayState(state: OverlayState): Promise<void>;
   __pw_refreshOverlay(): void;
+  __pw_uninstall(): void;
 }
 
 export class PollingRecorder implements RecorderDelegate {
@@ -44,7 +45,11 @@ export class PollingRecorder implements RecorderDelegate {
     const refreshOverlay = () => {
       this._pollRecorderMode().catch(e => console.log(e)); // eslint-disable-line no-console
     };
+    const uninstall = () => {
+      this._recorder.uninstall();
+    };
     this._embedder.__pw_refreshOverlay = refreshOverlay;
+    this._embedder.__pw_uninstall = uninstall;
     refreshOverlay();
   }
 
