@@ -15,6 +15,7 @@
  */
 
 import type { BrowserContextChannel, Channel, PageChannel, PlaywrightInitializer } from '@protocol/channels';
+import { Mode } from '@recorder/recorderTypes';
 import type { CallMetadata } from 'playwright-core/lib/server/instrumentation';
 
 export type CrxPlaywrightInitializer = PlaywrightInitializer & { _crx: CrxChannel };
@@ -60,6 +61,7 @@ export interface CrxApplicationChannel extends CrxApplicationEventTarget, Channe
   newPage(params: CrxApplicationNewPageParams, metadata?: CallMetadata): Promise<CrxApplicationNewPageResult>;
   showRecorder(params: CrxApplicationShowRecorderParams, metadata?: CallMetadata): Promise<CrxApplicationShowRecorderResult>;
   hideRecorder(params?: CrxApplicationHideRecorderParams, metadata?: CallMetadata): Promise<CrxApplicationHideRecorderResult>;
+  setMode(params: CrxApplicationSetModeParams, metadata?: CallMetadata): Promise<CrxApplicationSetModeResult>;
   close(params?: CrxApplicationCloseParams, metadata?: CallMetadata): Promise<CrxApplicationCloseResult>;
 }
 export type CrxApplicationHideEvent = {};
@@ -177,6 +179,13 @@ export type CrxApplicationShowRecorderResult = void;
 export type CrxApplicationHideRecorderParams = {};
 export type CrxApplicationHideRecorderOptions = {};
 export type CrxApplicationHideRecorderResult = void;
+export type CrxApplicationSetModeParams = {
+  mode: Mode
+};
+export type CrxApplicationSetModeOptions = {
+  mode: Mode
+};
+export type CrxApplicationSetModeResult = void;
 export type CrxApplicationCloseParams = {};
 export type CrxApplicationCloseOptions = {};
 export type CrxApplicationCloseResult = void;
