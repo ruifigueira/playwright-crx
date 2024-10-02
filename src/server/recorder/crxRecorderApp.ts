@@ -52,7 +52,7 @@ export interface RecorderWindow {
 
 export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   readonly wsEndpointForTest: string | undefined;
-  private _recorder: Recorder;
+  readonly _recorder: Recorder;
   private _context: BrowserContext;
   private _player: Player;
   private _filename?: string;

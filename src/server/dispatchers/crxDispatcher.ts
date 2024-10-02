@@ -21,6 +21,7 @@ import { CrxApplication } from '../crx';
 import type { RootDispatcher } from 'playwright-core/lib/server/dispatchers/dispatcher';
 import { Dispatcher } from 'playwright-core/lib/server/dispatchers/dispatcher';
 import { BrowserContextDispatcher } from 'playwright-core/lib/server/dispatchers/browserContextDispatcher';
+import { CallMetadata } from '@protocol/callMetadata';
 
 export class CrxDispatcher extends Dispatcher<Crx, channels.CrxChannel, RootDispatcher> implements channels.CrxChannel {
   _type_Crx = true;
@@ -90,6 +91,10 @@ export class CrxApplicationDispatcher extends Dispatcher<CrxApplication, channel
 
   async hideRecorder(): Promise<void> {
     await this._object.hideRecorder();
+  }
+
+  async setMode(params: channels.CrxApplicationSetModeParams, metadata?: CallMetadata): Promise<channels.CrxApplicationSetModeResult> {
+    this._object.setMode(params.mode);
   }
 
   async close(): Promise<void> {

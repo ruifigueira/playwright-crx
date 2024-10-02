@@ -115,5 +115,9 @@ scheme.CrxApplicationShowRecorderParams = tObject({
 scheme.CrxApplicationShowRecorderResult = tOptional(tObject({}));
 scheme.CrxApplicationHideRecorderParams = tOptional(tObject({}));
 scheme.CrxApplicationHideRecorderResult = tOptional(tObject({}));
+scheme.CrxApplicationSetModeParams = tObject({
+  mode: tEnum(['none', 'recording', 'inspecting', 'assertingText', 'recording-inspecting', 'standby', 'assertingVisibility', 'assertingValue']),
+});
+scheme.CrxApplicationSetModeResult = tOptional(tObject({}));
 scheme.CrxApplicationCloseParams = tOptional(tObject({}));
 scheme.CrxApplicationCloseResult = tOptional(tObject({}));

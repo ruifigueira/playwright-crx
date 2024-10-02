@@ -30,6 +30,7 @@ import { CrxRecorderApp } from './recorder/crxRecorderApp';
 import { CrxTransport } from './transport/crxTransport';
 import { BrowserContext } from 'playwright-core/lib/server/browserContext';
 import { IRecorder } from 'playwright-core/lib/server/recorder/recorderFrontend';
+import { Mode } from '@recorder/recorderTypes';
 
 const kTabIdSymbol = Symbol('kTabIdSymbol');
 
@@ -145,8 +146,11 @@ export class CrxApplication extends SdkObject {
   }
 
   async hideRecorder() {
-    if (!this._recorderApp) return;
-    await this._recorderApp.close();
+    await this._recorderApp?.close();
+  }
+
+  setMode(mode: Mode) {
+    this._recorderApp?._recorder.setMode(mode);
   }
 
   async attach(tabId: number): Promise<Page> {

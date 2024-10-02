@@ -76,6 +76,10 @@ export class CrxRecorder extends EventEmitter {
     return this._hidden;
   }
 
+  async setMode(mode: Mode) {
+    await this._channel.setMode({ mode });
+  }
+
   async show(options?: channels.CrxApplicationShowRecorderOptions) {
     await this._channel.showRecorder(options ?? {});
   }

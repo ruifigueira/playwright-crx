@@ -464,4 +464,6 @@ export interface CrxRecorder {
   }): Promise<void>;
 
   mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
+
+  setMode(mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"): Promise<void>;
 }
