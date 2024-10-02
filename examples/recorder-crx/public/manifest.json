@@ -19,6 +19,20 @@
     },
     "default_title": "Record"
   },
+  "commands": {
+    "record": {
+      "suggested_key": {
+        "default": "Shift+Alt+R"
+      },
+      "description": "Start recording"
+    },
+    "inspect": {
+      "suggested_key": {
+        "default": "Shift+Alt+C"
+      },
+      "description": "Start inspecting"
+    }
+  },
   "side_panel": {
     "default_path": "index.html"
   },

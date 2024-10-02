@@ -93,8 +93,8 @@ async function getCrxApp() {
   return await crxAppPromise;
 }
 
-async function attach(tab: chrome.tabs.Tab) {
-  if (!tab?.id || attachedTabIds.has(tab.id)) return;
+async function attach(tab: chrome.tabs.Tab, mode?: Mode) {
+  if (!tab?.id || (attachedTabIds.has(tab.id) && !mode)) return;
   const tabId = tab.id;
   
   // we need to open sidepanel before any async call
@@ -107,14 +107,17 @@ async function attach(tab: chrome.tabs.Tab) {
   const crxApp = await getCrxApp();
 
   try {
-    if (crxApp.recorder.isHidden())
+    if (crxApp.recorder.isHidden()) {
       await crxApp.recorder.show({
-        mode: 'recording',
+        mode: mode ?? 'recording',
         language,
         window: { type: sidepanel ? 'sidepanel' : 'popup', url: 'index.html' },
       });
+    }
 
     await crxApp.attach(tabId);
+    if (mode)
+      await crxApp.recorder.setMode(mode);
   } catch (e) {
     // we just open a new page and attach it
     await crxApp.newPage();
@@ -153,6 +156,14 @@ chrome.storage.sync.onChanged.addListener(async ({ testIdAttributeName, targetLa
     language = targetLanguage.newValue;
   if (sidepanelChange.newValue !== undefined)
     sidepanel = sidepanelChange.newValue;
+});
+
+chrome.commands.onCommand.addListener(async (command, tab) => {
+  if (!tab.id) return;
+  if (command === 'inspect')
+    await attach(tab, 'inspecting');
+  else if (command === 'record')
+    await attach(tab, 'recording');
 });
 
 // for testing
