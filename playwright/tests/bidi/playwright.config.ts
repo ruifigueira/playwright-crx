@@ -26,7 +26,6 @@ const getExecutablePath = () => {
 };
 
 const headed = process.argv.includes('--headed');
-const channel = process.env.PWTEST_CHANNEL as any;
 const trace = !!process.env.PWTEST_TRACE;
 
 const outputDir = path.join(__dirname, '..', '..', 'test-results');
@@ -37,7 +36,8 @@ const reporters = () => {
     ['json', { outputFile: path.join(outputDir, 'report.json') }],
     ['blob', { fileName: `${process.env.PWTEST_BOT_NAME}.zip` }],
   ] : [
-    ['html', { open: 'on-failure' }]
+    ['html', { open: 'on-failure' }],
+    ['./expectationReporter', { rebase: false }],
   ];
   return result;
 };
@@ -48,9 +48,9 @@ const config: Config<PlaywrightWorkerOptions & PlaywrightTestOptions & TestModeW
   expect: {
     timeout: 10000,
   },
-  maxFailures: 200,
-  timeout: 30000,
-  globalTimeout: 5400000,
+  maxFailures: 0,
+  timeout: 15 * 1000,
+  globalTimeout: 60 * 60 * 1000,
   workers: process.env.CI ? 2 : undefined,
   fullyParallel: !process.env.CI,
   forbidOnly: !!process.env.CI,
@@ -59,37 +59,44 @@ const config: Config<PlaywrightWorkerOptions & PlaywrightTestOptions & TestModeW
   projects: [],
 };
 
-const browserName: any = '_experimentalBidi';
 const executablePath = getExecutablePath();
 if (executablePath && !process.env.TEST_WORKER_INDEX)
   console.error(`Using executable at ${executablePath}`);
 const testIgnore: RegExp[] = [];
-for (const folder of ['library', 'page']) {
-  config.projects.push({
-    name: `${browserName}-${folder}`,
-    testDir: path.join(testDir, folder),
-    testIgnore,
-    snapshotPathTemplate: `{testDir}/{testFileDir}/{testFileName}-snapshots/{arg}-${browserName}{ext}`,
-    use: {
-      browserName,
-      headless: !headed,
-      channel,
-      video: 'off',
-      launchOptions: {
-        channel: 'bidi-firefox-stable',
-        executablePath,
-      },
-      trace: trace ? 'on' : undefined,
-    },
-    metadata: {
-      platform: process.platform,
-      docker: !!process.env.INSIDE_DOCKER,
-      headless: !headed,
-      browserName,
-      channel,
-      trace: !!trace,
-    },
-  });
+const browserToChannels = {
+  '_bidiChromium': ['bidi-chromium', 'bidi-chrome-canary', 'bidi-chrome-stable'],
+  '_bidiFirefox': ['bidi-firefox-nightly', 'bidi-firefox-beta', 'bidi-firefox-stable'],
+};
+for (const [key, channels] of Object.entries(browserToChannels)) {
+  const browserName: any = key;
+  for (const channel of channels) {
+    for (const folder of ['library', 'page']) {
+      config.projects.push({
+        name: `${channel}-${folder}`,
+        testDir: path.join(testDir, folder),
+        testIgnore,
+        snapshotPathTemplate: `{testDir}/{testFileDir}/{testFileName}-snapshots/{arg}-${channel}{ext}`,
+        use: {
+          browserName,
+          headless: !headed,
+          channel,
+          video: 'off',
+          launchOptions: {
+            executablePath,
+          },
+          trace: trace ? 'on' : undefined,
+        },
+        metadata: {
+          platform: process.platform,
+          docker: !!process.env.INSIDE_DOCKER,
+          headless: !headed,
+          browserName,
+          channel,
+          trace: !!trace,
+        },
+      });
+    }
+  }
 }
 
 export default config;

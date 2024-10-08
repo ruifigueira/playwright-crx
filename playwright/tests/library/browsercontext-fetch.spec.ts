@@ -960,6 +960,22 @@ it('should support application/x-www-form-urlencoded', async function({ context,
   expect(params.get('file')).toBe('f.js');
 });
 
+it('should support application/x-www-form-urlencoded with param lists', async function({ context, page, server }) {
+  const form = new FormData();
+  form.append('foo', '1');
+  form.append('foo', '2');
+  const [req] = await Promise.all([
+    server.waitForRequest('/empty.html'),
+    context.request.post(server.EMPTY_PAGE, { form })
+  ]);
+  expect(req.method).toBe('POST');
+  expect(req.headers['content-type']).toBe('application/x-www-form-urlencoded');
+  const body = (await req.postBody).toString('utf8');
+  const params = new URLSearchParams(body);
+  expect(req.headers['content-length']).toBe(String(params.toString().length));
+  expect(params.getAll('foo')).toEqual(['1', '2']);
+});
+
 it('should encode to application/json by default', async function({ context, page, server }) {
   const data = {
     firstName: 'John',
@@ -1229,7 +1245,7 @@ it('should work with connectOverCDP', async ({ browserName, browserType, server 
   }
 });
 
-it('should support SameSite cookie attribute over https', async ({ contextFactory, httpsServer, browserName, isWindows }) => {
+it('should support SameSite cookie attribute over https', async ({ contextFactory, httpsServer, browserName, isWindows, sameSiteStoredValueForNone }) => {
   // Cookies with SameSite=None must also specify the Secure attribute. WebKit navigation
   // to HTTP url will fail if the response contains a cookie with Secure attribute, so
   // we do HTTPS navigation.
@@ -1245,6 +1261,8 @@ it('should support SameSite cookie attribute over https', async ({ contextFactor
       const [cookie] = await page.context().cookies();
       if (browserName === 'webkit' && isWindows)
         expect(cookie.sameSite).toBe('None');
+      else if (value === 'None')
+        expect(cookie.sameSite).toBe(sameSiteStoredValueForNone);
       else
         expect(cookie.sameSite).toBe(value);
     });
@@ -1274,7 +1292,7 @@ it('fetch should not throw on long set-cookie value', async ({ context, server }
   expect(cookies.map(c => c.name)).toContain('bar');
 });
 
-it('should support set-cookie with SameSite and without Secure attribute over HTTP', async ({ page, server, browserName, isWindows, isLinux }) => {
+it('should support set-cookie with SameSite and without Secure attribute over HTTP', async ({ page, server, browserName, isWindows, isLinux, sameSiteStoredValueForNone }) => {
   for (const value of ['None', 'Lax', 'Strict']) {
     await it.step(`SameSite=${value}`, async () => {
       server.setRoute('/empty.html', (req, res) => {
@@ -1289,6 +1307,8 @@ it('should support set-cookie with SameSite and without Secure attribute over HT
         expect(cookie).toBeFalsy();
       else if (browserName === 'webkit' && isWindows)
         expect(cookie.sameSite).toBe('None');
+      else if (value === 'None')
+        expect(cookie.sameSite).toBe(sameSiteStoredValueForNone);
       else
         expect(cookie.sameSite).toBe(value);
     });

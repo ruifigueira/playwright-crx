@@ -76,7 +76,7 @@ export class RawMouseImpl implements input.RawMouse {
   }
 
   async move(x: number, y: number, button: types.MouseButton | 'none', buttons: Set<types.MouseButton>, modifiers: Set<types.KeyboardModifier>, forClick: boolean): Promise<void> {
-    // TODO: bidi throws when x/y are not integers.
+    // Bidi throws when x/y are not integers.
     x = Math.round(x);
     y = Math.round(y);
     await this._performActions([{ type: 'pointerMove', x, y }]);
@@ -90,25 +90,20 @@ export class RawMouseImpl implements input.RawMouse {
     await this._performActions([{ type: 'pointerUp', button: toBidiButton(button) }]);
   }
 
-  async click(x: number, y: number, options: { delay?: number, button?: types.MouseButton, clickCount?: number } = {}) {
+  async wheel(x: number, y: number, buttons: Set<types.MouseButton>, modifiers: Set<types.KeyboardModifier>, deltaX: number, deltaY: number): Promise<void> {
+    // Bidi throws when x/y are not integers.
     x = Math.round(x);
     y = Math.round(y);
-    const button = toBidiButton(options.button || 'left');
-    const { delay = null, clickCount = 1 } = options;
-    const actions: bidi.Input.PointerSourceAction[] = [];
-    actions.push({ type: 'pointerMove', x, y });
-    for (let cc = 1; cc <= clickCount; ++cc) {
-      actions.push({ type: 'pointerDown', button });
-      if (delay)
-        actions.push({ type: 'pause', duration: delay });
-      actions.push({ type: 'pointerUp', button });
-      if (delay && cc < clickCount)
-        actions.push({ type: 'pause', duration: delay });
-    }
-    await this._performActions(actions);
-  }
-
-  async wheel(x: number, y: number, buttons: Set<types.MouseButton>, modifiers: Set<types.KeyboardModifier>, deltaX: number, deltaY: number): Promise<void> {
+    await this._session.send('input.performActions', {
+      context: this._session.sessionId,
+      actions: [
+        {
+          type: 'wheel',
+          id: 'pw_mouse_wheel',
+          actions: [{ type: 'scroll', x, y, deltaX, deltaY }],
+        }
+      ]
+    });
   }
 
   private async _performActions(actions: bidi.Input.PointerSourceAction[]) {

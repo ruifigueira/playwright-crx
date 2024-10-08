@@ -19,7 +19,7 @@
 import type { Command } from 'playwright-core/lib/utilsBundle';
 import fs from 'fs';
 import path from 'path';
-import { Runner, readLastRunInfo } from './runner/runner';
+import { Runner } from './runner/runner';
 import { stopProfiling, startProfiling, gracefullyProcessExitDoNotHang } from 'playwright-core/lib/utils';
 import { serializeError } from './util';
 import { showHTMLReport } from './reporters/html';
@@ -34,7 +34,6 @@ export { program } from 'playwright-core/lib/cli/program';
 import type { ReporterDescription } from '../types/test';
 import { prepareErrorStack } from './reporters/base';
 import * as testServer from './runner/testServer';
-import { clearCacheAndLogToConsole } from './runner/testServer';
 import { runWatchModeLoop } from './runner/watchMode';
 
 function addTestCommand(program: Command) {
@@ -70,14 +69,17 @@ function addListFilesCommand(program: Command) {
 }
 
 function addClearCacheCommand(program: Command) {
-  const command = program.command('clear-cache', { hidden: true });
+  const command = program.command('clear-cache');
   command.description('clears build and test caches');
   command.option('-c, --config <file>', `Configuration file, or a test directory with optional "playwright.config.{m,c}?{js,ts}"`);
   command.action(async opts => {
-    const configInternal = await loadConfigFromFileRestartIfNeeded(opts.config);
-    if (!configInternal)
+    const config = await loadConfigFromFileRestartIfNeeded(opts.config);
+    if (!config)
       return;
-    await clearCacheAndLogToConsole(configInternal);
+    const runner = new Runner(config);
+    const { status } = await runner.clearCache();
+    const exitCode = status === 'interrupted' ? 130 : (status === 'passed' ? 0 : 1);
+    gracefullyProcessExitDoNotHang(exitCode);
   });
 }
 
@@ -86,7 +88,8 @@ function addFindRelatedTestFilesCommand(program: Command) {
   command.description('Returns the list of related tests to the given files');
   command.option('-c, --config <file>', `Configuration file, or a test directory with optional "playwright.config.{m,c}?{js,ts}"`);
   command.action(async (files, options) => {
-    await withRunnerAndMutedWrite(options.config, runner => runner.findRelatedTestFiles('in-process', files));
+    const resolvedFiles = (files as string[]).map(file => path.resolve(process.cwd(), file));
+    await withRunnerAndMutedWrite(options.config, runner => runner.findRelatedTestFiles(resolvedFiles));
   });
 }
 
@@ -130,7 +133,7 @@ Examples:
 }
 
 function addMergeReportsCommand(program: Command) {
-  const command = program.command('merge-reports [dir]', { hidden: true });
+  const command = program.command('merge-reports [dir]');
   command.description('merge multiple blob reports (for sharded tests) into a single report');
   command.action(async (dir, options) => {
     try {
@@ -158,19 +161,14 @@ async function runTests(args: string[], opts: { [key: string]: any }) {
     if (opts.onlyChanged)
       throw new Error(`--only-changed is not supported in UI mode. If you'd like that to change, see https://github.com/microsoft/playwright/issues/15075 for more details.`);
 
-    const status = await testServer.runUIMode(opts.config, {
+    const status = await testServer.runUIMode(opts.config, cliOverrides, {
       host: opts.uiHost,
       port: opts.uiPort ? +opts.uiPort : undefined,
       args,
       grep: opts.grep as string | undefined,
       grepInvert: opts.grepInvert as string | undefined,
       project: opts.project || undefined,
-      headed: opts.headed,
       reporter: Array.isArray(opts.reporter) ? opts.reporter : opts.reporter ? [opts.reporter] : undefined,
-      workers: cliOverrides.workers,
-      timeout: cliOverrides.timeout,
-      outputDir: cliOverrides.outputDir,
-      updateSnapshots: cliOverrides.updateSnapshots,
     });
     await stopProfiling('runner');
     if (status === 'restarted')
@@ -204,11 +202,6 @@ async function runTests(args: string[], opts: { [key: string]: any }) {
   if (!config)
     return;
 
-  if (opts.lastFailed) {
-    const lastRunInfo = await readLastRunInfo(config);
-    config.testIdMatcher = id => lastRunInfo.failedTests.includes(id);
-  }
-
   config.cliArgs = args;
   config.cliGrep = opts.grep as string | undefined;
   config.cliOnlyChanged = opts.onlyChanged === true ? 'HEAD' : opts.onlyChanged;
@@ -217,6 +210,7 @@ async function runTests(args: string[], opts: { [key: string]: any }) {
   config.cliProjectFilter = opts.project || undefined;
   config.cliPassWithNoTests = !!opts.passWithNoTests;
   config.cliFailOnFlakyTests = !!opts.failOnFlakyTests;
+  config.cliLastFailed = !!opts.lastFailed;
 
   const runner = new Runner(config);
   const status = await runner.runAllTests();
@@ -228,7 +222,7 @@ async function runTests(args: string[], opts: { [key: string]: any }) {
 async function runTestServer(opts: { [key: string]: any }) {
   const host = opts.host || 'localhost';
   const port = opts.port ? +opts.port : 0;
-  const status = await testServer.runTestServer(opts.config, { host, port });
+  const status = await testServer.runTestServer(opts.config, { }, { host, port });
   if (status === 'restarted')
     return;
   const exitCode = status === 'interrupted' ? 130 : (status === 'passed' ? 0 : 1);

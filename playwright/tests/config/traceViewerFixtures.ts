@@ -31,7 +31,7 @@ type BaseWorkerFixtures = {
 
 export type TraceViewerFixtures = {
   showTraceViewer: (trace: string[], options?: {host?: string, port?: number}) => Promise<TraceViewerPage>;
-  runAndTrace: (body: () => Promise<void>) => Promise<TraceViewerPage>;
+  runAndTrace: (body: () => Promise<void>, optsOverrides?: Parameters<BrowserContext['tracing']['start']>[0]) => Promise<TraceViewerPage>;
 };
 
 class TraceViewerPage {
@@ -71,10 +71,12 @@ class TraceViewerPage {
     return await this.page.waitForSelector(`.list-view-entry:has-text("${action}") .action-icons`);
   }
 
+  @step
   async selectAction(title: string, ordinal: number = 0) {
     await this.page.locator(`.action-title:has-text("${title}")`).nth(ordinal).click();
   }
 
+  @step
   async selectSnapshot(name: string) {
     await this.page.click(`.snapshot-tab .tabbed-pane-tab-label:has-text("${name}")`);
   }
@@ -127,9 +129,9 @@ export const traceViewerFixtures: Fixtures<TraceViewerFixtures, {}, BaseTestFixt
   },
 
   runAndTrace: async ({ context, showTraceViewer }, use, testInfo) => {
-    await use(async (body: () => Promise<void>) => {
+    await use(async (body: () => Promise<void>, optsOverrides = {}) => {
       const traceFile = testInfo.outputPath('trace.zip');
-      await context.tracing.start({ snapshots: true, screenshots: true, sources: true });
+      await context.tracing.start({ snapshots: true, screenshots: true, sources: true, ...optsOverrides });
       await body();
       await context.tracing.stop({ path: traceFile });
       return showTraceViewer([traceFile]);

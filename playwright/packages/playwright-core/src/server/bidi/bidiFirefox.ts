@@ -16,17 +16,17 @@
 
 import os from 'os';
 import path from 'path';
-import { assert, ManualPromise, wrapInASCIIBox } from '../../utils';
+import { assert, wrapInASCIIBox } from '../../utils';
 import type { Env } from '../../utils/processLauncher';
 import type { BrowserOptions } from '../browser';
-import type { BrowserReadyState } from '../browserType';
-import { BrowserType, kNoXServerRunningError } from '../browserType';
+import { BrowserReadyState, BrowserType, kNoXServerRunningError } from '../browserType';
 import type { SdkObject } from '../instrumentation';
 import type { ProtocolError } from '../protocolError';
 import type { ConnectionTransport } from '../transport';
 import type * as types from '../types';
 import { BidiBrowser } from './bidiBrowser';
 import { kBrowserCloseMessageId } from './bidiConnection';
+import { createProfile } from './third_party/firefoxPrefs';
 
 export class BidiFirefox extends BrowserType {
   constructor(parent: SdkObject) {
@@ -52,6 +52,14 @@ export class BidiFirefox extends BrowserType {
   override amendEnvironment(env: Env, userDataDir: string, executable: string, browserArguments: string[]): Env {
     if (!path.isAbsolute(os.homedir()))
       throw new Error(`Cannot launch Firefox with relative home directory. Did you set ${os.platform() === 'win32' ? 'USERPROFILE' : 'HOME'} to a relative path?`);
+
+    env = {
+      ...env,
+      'MOZ_CRASHREPORTER': '1',
+      'MOZ_CRASHREPORTER_NO_REPORT': '1',
+      'MOZ_CRASHREPORTER_SHUTDOWN': '1',
+    };
+
     if (os.platform() === 'linux') {
       // Always remove SNAP_NAME and SNAP_INSTANCE_NAME env variables since they
       // confuse Firefox: in our case, builds never come from SNAP.
@@ -63,6 +71,13 @@ export class BidiFirefox extends BrowserType {
 
   override attemptToGracefullyCloseBrowser(transport: ConnectionTransport): void {
     transport.send({ method: 'browser.close', params: {}, id: kBrowserCloseMessageId });
+  }
+
+  override async prepareUserDataDir(options: types.LaunchOptions, userDataDir: string): Promise<void> {
+    await createProfile({
+      path: userDataDir,
+      preferences: options.firefoxUserPrefs || {},
+    });
   }
 
   override defaultArgs(options: types.LaunchOptions, isPersistent: boolean, userDataDir: string): string[] {
@@ -77,36 +92,20 @@ export class BidiFirefox extends BrowserType {
       firefoxArguments.push('--foreground');
     firefoxArguments.push(`--profile`, userDataDir);
     firefoxArguments.push(...args);
-    // TODO: make ephemeral context work without this argument.
-    firefoxArguments.push('about:blank');
-    // if (isPersistent)
-    //   firefoxArguments.push('about:blank');
-    // else
-    //   firefoxArguments.push('-silent');
     return firefoxArguments;
   }
 
   override readyState(options: types.LaunchOptions): BrowserReadyState | undefined {
     assert(options.useWebSocket);
-    return new BidiReadyState();
+    return new FirefoxReadyState();
   }
 }
 
-class BidiReadyState implements BrowserReadyState {
-  private readonly _wsEndpoint = new ManualPromise<string|undefined>();
-
-  onBrowserOutput(message: string): void {
+class FirefoxReadyState extends BrowserReadyState {
+  override onBrowserOutput(message: string): void {
     // Bidi WebSocket in Firefox.
     const match = message.match(/WebDriver BiDi listening on (ws:\/\/.*)$/);
     if (match)
       this._wsEndpoint.resolve(match[1] + '/session');
-  }
-  onBrowserExit(): void {
-    // Unblock launch when browser prematurely exits.
-    this._wsEndpoint.resolve(undefined);
-  }
-  async waitUntilReady(): Promise<{ wsEndpoint?: string }> {
-    const wsEndpoint = await this._wsEndpoint;
-    return { wsEndpoint };
   }
 }

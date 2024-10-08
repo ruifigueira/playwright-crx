@@ -15,11 +15,11 @@
  */
 
 import type { BrowserContextOptions } from '../../..';
-import type * as actions from '../recorder/recorderActions';
+import type * as actions from '@recorder/actions';
 import type * as types from '../types';
-import type { ActionInContext, LanguageGenerator, LanguageGeneratorOptions } from './types';
+import type { LanguageGenerator, LanguageGeneratorOptions } from './types';
 
-export function generateCode(actions: ActionInContext[], languageGenerator: LanguageGenerator, options: LanguageGeneratorOptions) {
+export function generateCode(actions: actions.ActionInContext[], languageGenerator: LanguageGenerator, options: LanguageGeneratorOptions) {
   const header = languageGenerator.generateHeader(options);
   const footer = languageGenerator.generateFooter(options.saveStorage);
   const actionTexts = actions.map(a => languageGenerator.generateAction(a)).filter(Boolean);
@@ -69,13 +69,31 @@ export function toKeyboardModifiers(modifiers: number): types.SmartKeyboardModif
   return result;
 }
 
-export function toClickOptions(action: actions.ClickAction): types.MouseClickOptions {
+export function fromKeyboardModifiers(modifiers?: types.SmartKeyboardModifier[]): number {
+  let result = 0;
+  if (!modifiers)
+    return result;
+  if (modifiers.includes('Alt'))
+    result |= 1;
+  if (modifiers.includes('Control'))
+    result |= 2;
+  if (modifiers.includes('ControlOrMeta'))
+    result |= 2;
+  if (modifiers.includes('Meta'))
+    result |= 4;
+  if (modifiers.includes('Shift'))
+    result |= 8;
+  return result;
+}
+
+export function toClickOptionsForSourceCode(action: actions.ClickAction): types.MouseClickOptions {
   const modifiers = toKeyboardModifiers(action.modifiers);
   const options: types.MouseClickOptions = {};
   if (action.button !== 'left')
     options.button = action.button;
   if (modifiers.length)
     options.modifiers = modifiers;
+  // Do not render clickCount === 2 for dblclick.
   if (action.clickCount > 2)
     options.clickCount = action.clickCount;
   if (action.position)

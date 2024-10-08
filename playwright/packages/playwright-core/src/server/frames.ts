@@ -782,13 +782,16 @@ export class Frame extends SdkObject {
       throw new Error(`state: expected one of (attached|detached|visible|hidden)`);
     return controller.run(async progress => {
       progress.log(`waiting for ${this._asLocator(selector)}${state === 'attached' ? '' : ' to be ' + state}`);
-      return await this.waitForSelectorInternal(progress, selector, options, scope);
+      return await this.waitForSelectorInternal(progress, selector, true, options, scope);
     }, this._page._timeoutSettings.timeout(options));
   }
 
-  async waitForSelectorInternal(progress: Progress, selector: string, options: types.WaitForElementOptions, scope?: dom.ElementHandle): Promise<dom.ElementHandle<Element> | null> {
+  async waitForSelectorInternal(progress: Progress, selector: string, performLocatorHandlersCheckpoint: boolean, options: types.WaitForElementOptions, scope?: dom.ElementHandle): Promise<dom.ElementHandle<Element> | null> {
     const { state = 'visible' } = options;
     const promise = this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async continuePolling => {
+      if (performLocatorHandlersCheckpoint)
+        await this._page.performLocatorHandlersCheckpoint(progress);
+
       const resolved = await this.selectors.resolveInjectedForSelector(selector, options, scope);
       progress.throwIfAborted();
       if (!resolved) {
@@ -900,7 +903,7 @@ export class Frame extends SdkObject {
         const waitUntil = options.waitUntil === undefined ? 'load' : options.waitUntil;
         progress.log(`setting frame content, waiting until "${waitUntil}"`);
         const tag = `--playwright--set--content--${this._id}--${++this._setContentCounter}--`;
-        const context = this._page._delegate.useMainWorldForSetContent?.() ? await this._mainContext() : await this._utilityContext();
+        const context = await this._utilityContext();
         const lifecyclePromise = new Promise((resolve, reject) => {
           this._page._frameManager._consoleMessageTags.set(tag, () => {
             // Clear lifecycle right after document.open() - see 'tag' below.
