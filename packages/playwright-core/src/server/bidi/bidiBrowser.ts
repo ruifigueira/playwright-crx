@@ -43,9 +43,6 @@ export class BidiBrowser extends Browser {
     const browser = new BidiBrowser(parent, transport, options);
     if ((options as any).__testHookOnConnectToBrowser)
       await (options as any).__testHookOnConnectToBrowser();
-    const sessionStatus = await browser._browserSession.send('session.status', {});
-    if (!sessionStatus.ready)
-      throw new Error('Bidi session is not ready. ' + sessionStatus.message);
 
     let proxy: bidi.Session.ManualProxyConfiguration | undefined;
     if (options.proxy) {
@@ -97,6 +94,14 @@ export class BidiBrowser extends Browser {
         'script',
       ],
     });
+
+    if (options.persistent) {
+      browser._defaultContext = new BidiBrowserContext(browser, undefined, options.persistent);
+      await (browser._defaultContext as BidiBrowserContext)._initialize();
+      // Create default page as we cannot get access to the existing one.
+      const pageDelegate = await browser._defaultContext.newPageDelegate();
+      await pageDelegate.pageOrError();
+    }
     return browser;
   }
 
@@ -114,7 +119,7 @@ export class BidiBrowser extends Browser {
     this._didClose();
   }
 
-  async doCreateNewContext(options: channels.BrowserNewContextParams): Promise<BrowserContext> {
+  async doCreateNewContext(options: types.BrowserContextOptions): Promise<BrowserContext> {
     const { userContext } = await this._browserSession.send('browser.createUserContext', {});
     const context = new BidiBrowserContext(this, userContext, options);
     await context._initialize();
@@ -193,13 +198,17 @@ export class BidiBrowser extends Browser {
 export class BidiBrowserContext extends BrowserContext {
   declare readonly _browser: BidiBrowser;
 
-  constructor(browser: BidiBrowser, browserContextId: string | undefined, options: channels.BrowserNewContextParams) {
+  constructor(browser: BidiBrowser, browserContextId: string | undefined, options: types.BrowserContextOptions) {
     super(browser, options, browserContextId);
     this._authenticateProxyViaHeader();
   }
 
+  private _bidiPages() {
+    return [...this._browser._bidiPages.values()].filter(bidiPage => bidiPage._browserContext === this);
+  }
+
   pages(): Page[] {
-    return [];
+    return this._bidiPages().map(bidiPage => bidiPage._initializedPage).filter(Boolean) as Page[];
   }
 
   async newPageDelegate(): Promise<PageDelegate> {
@@ -272,11 +281,13 @@ export class BidiBrowserContext extends BrowserContext {
   }
 
   async doSetHTTPCredentials(httpCredentials?: types.Credentials): Promise<void> {
+    this._options.httpCredentials = httpCredentials;
+    for (const page of this.pages())
+      await (page._delegate as BidiPage).updateHttpCredentials();
   }
 
   async doAddInitScript(initScript: InitScript) {
-    // for (const page of this.pages())
-    //   await (page._delegate as WKPage)._updateBootstrapScript();
+    await Promise.all(this.pages().map(page => (page._delegate as BidiPage).addInitScript(initScript)));
   }
 
   async doRemoveNonInternalInitScripts() {
@@ -291,10 +302,11 @@ export class BidiBrowserContext extends BrowserContext {
   }
 
   async doClose(reason: string | undefined) {
-    // TODO: implement for persistent context
-    if (!this._browserContextId)
+    if (!this._browserContextId) {
+      // Closing persistent context should close the browser.
+      await this._browser.close({ reason });
       return;
-
+    }
     await this._browser._browserSession.send('browser.removeUserContext', {
       userContext: this._browserContextId
     });

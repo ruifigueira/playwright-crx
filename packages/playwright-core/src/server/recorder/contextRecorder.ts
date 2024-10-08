@@ -17,17 +17,16 @@
 import type * as channels from '@protocol/channels';
 import type { Source } from '@recorder/recorderTypes';
 import { EventEmitter } from 'events';
-import * as recorderSource from '../../generated/recorderSource';
-import { eventsHelper, isUnderTest, monotonicTime, quoteCSSAttributeValue, type RegisteredListener } from '../../utils';
+import * as recorderSource from '../../generated/pollingRecorderSource';
+import { eventsHelper, monotonicTime, quoteCSSAttributeValue, type RegisteredListener } from '../../utils';
 import { raceAgainstDeadline } from '../../utils/timeoutRunner';
 import { BrowserContext } from '../browserContext';
-import type { ActionInContext, FrameDescription, LanguageGeneratorOptions, Language, LanguageGenerator } from '../codegen/types';
+import type { LanguageGeneratorOptions, Language, LanguageGenerator } from '../codegen/types';
 import { languageSet } from '../codegen/languages';
 import type { Dialog } from '../dialog';
 import { Frame } from '../frames';
 import { Page } from '../page';
-import type * as actions from './recorderActions';
-import { performAction } from './recorderRunner';
+import type * as actions from '@recorder/actions';
 import { ThrottledFile } from './throttledFile';
 import { RecorderCollection } from './recorderCollection';
 import { generateCode } from '../codegen/language';
@@ -35,7 +34,7 @@ import { generateCode } from '../codegen/language';
 type BindingSource = { frame: Frame, page: Page };
 
 export interface ContextRecorderDelegate {
-  rewriteActionInContext?(pageAliases: Map<Page, string>, actionInContext: ActionInContext): Promise<void>;
+  rewriteActionInContext?(pageAliases: Map<Page, string>, actionInContext: actions.ActionInContext): Promise<void>;
 }
 
 export class ContextRecorder extends EventEmitter {
@@ -48,17 +47,18 @@ export class ContextRecorder extends EventEmitter {
   private _lastPopupOrdinal = 0;
   private _lastDialogOrdinal = -1;
   private _lastDownloadOrdinal = -1;
-  private _timers = new Set<NodeJS.Timeout>();
   private _context: BrowserContext;
-  private _params: channels.BrowserContextRecorderSupplementEnableParams;
+  private _params: channels.BrowserContextEnableRecorderParams;
   private _delegate: ContextRecorderDelegate;
   private _recorderSources: Source[];
   private _throttledOutputFile: ThrottledFile | null = null;
   private _orderedLanguages: LanguageGenerator[] = [];
   private _listeners: RegisteredListener[] = [];
+  private _codegenMode: 'actions' | 'trace-events';
 
-  constructor(context: BrowserContext, params: channels.BrowserContextRecorderSupplementEnableParams, delegate: ContextRecorderDelegate) {
+  constructor(codegenMode: 'actions' | 'trace-events', context: BrowserContext, params: channels.BrowserContextEnableRecorderParams, delegate: ContextRecorderDelegate) {
     super();
+    this._codegenMode = codegenMode;
     this._context = context;
     this._params = params;
     this._delegate = delegate;
@@ -69,17 +69,17 @@ export class ContextRecorder extends EventEmitter {
     // Make a copy of options to modify them later.
     const languageGeneratorOptions: LanguageGeneratorOptions = {
       browserName: context._browser.options.name,
-      launchOptions: { headless: false, ...params.launchOptions },
+      launchOptions: { headless: false, ...params.launchOptions, tracesDir: undefined },
       contextOptions: { ...params.contextOptions },
       deviceName: params.device,
       saveStorage: params.saveStorage,
     };
 
-    const collection = new RecorderCollection(params.mode === 'recording');
-    collection.on('change', () => {
+    this._collection = new RecorderCollection(this._pageAliases);
+    this._collection.on('change', (actions: actions.ActionInContext[]) => {
       this._recorderSources = [];
       for (const languageGenerator of this._orderedLanguages) {
-        const { header, footer, actionTexts, text } = generateCode(collection.actions(), languageGenerator, languageGeneratorOptions);
+        const { header, footer, actionTexts, text } = generateCode(actions, languageGenerator, languageGeneratorOptions);
         const source: Source = {
           isRecorded: true,
           label: languageGenerator.name,
@@ -99,7 +99,7 @@ export class ContextRecorder extends EventEmitter {
       }
       this.emit(ContextRecorder.Events.Change, {
         sources: this._recorderSources,
-        primaryFileName: this._orderedLanguages[0].id
+        actions
       });
     });
     context.on(BrowserContext.Events.BeforeClose, () => {
@@ -108,7 +108,7 @@ export class ContextRecorder extends EventEmitter {
     this._listeners.push(eventsHelper.addEventListener(process, 'exit', () => {
       this._throttledOutputFile?.flush();
     }));
-    this._collection = collection;
+    this.setEnabled(true);
   }
 
   setOutput(codegenId: string, outputFile?: string) {
@@ -150,12 +150,15 @@ export class ContextRecorder extends EventEmitter {
 
   setEnabled(enabled: boolean) {
     this._collection.setEnabled(enabled);
+    if (this._codegenMode === 'trace-events') {
+      if (enabled)
+        this._context.tracing.startChunk({ name: 'trace', title: 'trace' }).catch(() => {});
+      else
+        this._context.tracing.stopChunk({ mode: 'discard' }).catch(() => {});
+    }
   }
 
   dispose() {
-    for (const timer of this._timers)
-      clearTimeout(timer);
-    this._timers.clear();
     eventsHelper.removeEventListeners(this._listeners);
   }
 
@@ -163,13 +166,13 @@ export class ContextRecorder extends EventEmitter {
     // First page is called page, others are called popup1, popup2, etc.
     const frame = page.mainFrame();
     page.on('close', () => {
-      this._collection.addAction({
+      this._collection.addRecordedAction({
         frame: this._describeMainFrame(page),
-        committed: true,
         action: {
           name: 'closePage',
           signals: [],
-        }
+        },
+        startTime: monotonicTime()
       });
       this._pageAliases.delete(page);
     });
@@ -185,14 +188,14 @@ export class ContextRecorder extends EventEmitter {
     if (page.opener()) {
       this._onPopup(page.opener()!, page);
     } else {
-      this._collection.addAction({
+      this._collection.addRecordedAction({
         frame: this._describeMainFrame(page),
-        committed: true,
         action: {
           name: 'openPage',
           url: page.mainFrame().url(),
           signals: [],
-        }
+        },
+        startTime: monotonicTime()
       });
     }
   }
@@ -205,14 +208,14 @@ export class ContextRecorder extends EventEmitter {
     }
   }
 
-  private _describeMainFrame(page: Page): FrameDescription {
+  private _describeMainFrame(page: Page): actions.FrameDescription {
     return {
       pageAlias: this._pageAliases.get(page)!,
       framePath: [],
     };
   }
 
-  private async _describeFrame(frame: Frame): Promise<FrameDescription> {
+  private async _describeFrame(frame: Frame): Promise<actions.FrameDescription> {
     return {
       pageAlias: this._pageAliases.get(frame._page)!,
       framePath: await generateFrameSelector(frame),
@@ -223,53 +226,24 @@ export class ContextRecorder extends EventEmitter {
     return this._params.testIdAttributeName || this._context.selectors().testIdAttributeName() || 'data-testid';
   }
 
-  private async _performAction(frame: Frame, action: actions.PerformOnRecordAction) {
-    // Commit last action so that no further signals are added to it.
-    this._collection.commitLastAction();
-
+  private async _createActionInContext(frame: Frame, action: actions.Action): Promise<actions.ActionInContext> {
     const frameDescription = await this._describeFrame(frame);
-    const actionInContext: ActionInContext = {
+    const actionInContext: actions.ActionInContext = {
       frame: frameDescription,
       action,
       description: undefined,
+      startTime: monotonicTime()
     };
-
     await this._delegate.rewriteActionInContext?.(this._pageAliases, actionInContext);
+    return actionInContext;
+  }
 
-    this._collection.willPerformAction(actionInContext);
-    const success = await performAction(this._pageAliases, actionInContext);
-    if (success) {
-      this._collection.didPerformAction(actionInContext);
-      this._setCommittedAfterTimeout(actionInContext);
-    } else {
-      this._collection.performedActionFailed(actionInContext);
-    }
+  private async _performAction(frame: Frame, action: actions.PerformOnRecordAction) {
+    await this._collection.performAction(await this._createActionInContext(frame, action));
   }
 
   private async _recordAction(frame: Frame, action: actions.Action) {
-    // Commit last action so that no further signals are added to it.
-    this._collection.commitLastAction();
-
-    const frameDescription = await this._describeFrame(frame);
-    const actionInContext: ActionInContext = {
-      frame: frameDescription,
-      action,
-      description: undefined,
-    };
-
-    await this._delegate.rewriteActionInContext?.(this._pageAliases, actionInContext);
-
-    this._setCommittedAfterTimeout(actionInContext);
-    this._collection.addAction(actionInContext);
-  }
-
-  private _setCommittedAfterTimeout(actionInContext: ActionInContext) {
-    const timer = setTimeout(() => {
-      // Commit the action after 5 seconds so that no further signals are added to it.
-      actionInContext.committed = true;
-      this._timers.delete(timer);
-    }, isUnderTest() ? 500 : 5000);
-    this._timers.add(timer);
+    this._collection.addRecordedAction(await this._createActionInContext(frame, action));
   }
 
   private _onFrameNavigated(frame: Frame, page: Page) {

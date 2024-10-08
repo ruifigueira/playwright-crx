@@ -40,14 +40,9 @@ export type TraceViewerRedirectOptions = {
   grep?: string;
   grepInvert?: string;
   project?: string[];
-  workers?: number | string;
-  headed?: boolean;
-  timeout?: number;
   reporter?: string[];
   webApp?: string;
   isServer?: boolean;
-  outputDir?: string;
-  updateSnapshots?: 'all' | 'none' | 'missing';
 };
 
 export type TraceViewerAppOptions = {
@@ -109,6 +104,8 @@ export async function startTraceViewerServer(options?: TraceViewerServerOptions)
 
 export async function installRootRedirect(server: HttpServer, traceUrls: string[], options: TraceViewerRedirectOptions) {
   const params = new URLSearchParams();
+  if (path.sep !== path.posix.sep)
+    params.set('pathSeparator', path.sep);
   for (const traceUrl of traceUrls)
     params.append('trace', traceUrl);
   if (server.wsGuid())
@@ -125,16 +122,6 @@ export async function installRootRedirect(server: HttpServer, traceUrls: string[
     params.append('grepInvert', options.grepInvert);
   for (const project of options.project || [])
     params.append('project', project);
-  if (options.workers)
-    params.append('workers', String(options.workers));
-  if (options.timeout)
-    params.append('timeout', String(options.timeout));
-  if (options.headed)
-    params.append('headed', '');
-  if (options.outputDir)
-    params.append('outputDir', options.outputDir);
-  if (options.updateSnapshots)
-    params.append('updateSnapshots', options.updateSnapshots);
   for (const reporter of options.reporter || [])
     params.append('reporter', reporter);
 
@@ -219,6 +206,9 @@ class StdinServer implements Transport {
         this._loadTrace(url);
     });
     process.stdin.on('close', () => gracefullyProcessExitDoNotHang(0));
+  }
+
+  onconnect() {
   }
 
   async dispatch(method: string, params: any) {
