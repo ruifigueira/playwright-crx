@@ -10,7 +10,7 @@ For that, it relies on [`chrome.debugger`](https://developer.chrome.com/docs/ext
 
 **Note:** This extension is available in [Chrome Web Store](https://chrome.google.com/webstore/detail/playwright-crx/jambeljnbnfbkcpnoiaedcabbgmnnlcd).
 
-A small demo of recorder and player in action:
+A small demo of Playwright CRX recorder and player in action:
 
 ![Playwright CRX Recorder / Player](./docs/assets/recorder-player.gif)
 
@@ -21,6 +21,14 @@ In terms of chrome extension functionality, it provides:
 
 - [action button](https://developer.chrome.com/docs/extensions/reference/action/) for attaching current tab into recorder (it opens the recorder if it's closed)
 - [context menu](https://developer.chrome.com/docs/extensions/reference/contextMenus/) for the same purpose
+- [side panel](https://developer.chrome.com/docs/extensions/reference/api/sidePanel) to display the recorder by default (it can be disabled in the options, falling back to a popup window)
+- [command shortcuts](https://developer.chrome.com/docs/extensions/reference/api/commands):
+  - `Alt + Shift + R` starts recording
+  - `Alt + Shift + C` starts inspecting
+- [options page](https://developer.chrome.com/docs/extensions/develop/ui/options-page) to configure:
+  - **Default language** (defaults to **Node Library**)
+  - **TestID Attribute Name** (defaults to `data-testid`)
+  - **Open in Side Panel** (defaults to `true`, and falls back to a popup window if set to `false`) 
 - pages must be explicitly attached to be recordable, except if they are opened from already attached pages
 - closing the recorder window will detach all pages and uninstall injected scripts (highlights and event listeners)
 - a player that will run the recorded instructions, in any supported language*
@@ -76,8 +84,8 @@ npm run build
 
 Playwright is nested as a git subtree.
 
-To update it, just run the following command (replace `v1.40.0` with the desired release tag):
+To update it, just run the following command (replace `v1.48.0` with the desired release tag):
 
 ```bash
-git subtree pull --prefix=playwright git@github.com:microsoft/playwright.git v1.40.0 --squash
+git subtree pull --prefix=playwright git@github.com:microsoft/playwright.git v1.48.0 --squash
 ```
