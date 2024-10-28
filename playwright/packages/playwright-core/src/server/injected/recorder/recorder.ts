@@ -1104,11 +1104,13 @@ export class Recorder {
     this.document.adoptedStyleSheets.push(this._stylesheet);
   }
 
-  uninstall(){
+  uninstall() {
     this._currentTool.cleanup?.();
     this.highlight.uninstall();
     removeEventListeners(this._listeners);
-    this.injectedScript.document.head.removeChild(this._styleElement);
+    const index = this.document.adoptedStyleSheets.indexOf(this._stylesheet);
+    if (index !== -1)
+      this.document.adoptedStyleSheets.splice(index, 1);
   }
 
   private _switchCurrentTool() {
