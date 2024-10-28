@@ -213,6 +213,7 @@ class RecordActionTool implements RecorderTool {
   private _activeModel: HighlightModelWithSelector | null = null;
   private _expectProgrammaticKeyUp = false;
   private _pendingClickAction: { action: actions.ClickAction, timeout: number } | undefined;
+  private _shouldHighlight = false;
 
   constructor(recorder: Recorder) {
     this._recorder = recorder;
@@ -482,7 +483,8 @@ class RecordActionTool implements RecorderTool {
   onScroll(event: Event) {
     this._hoveredModel = null;
     this._hoveredElement = null;
-    this._recorder.updateHighlight(null, false);
+    if (this._shouldHighlight)
+      this._recorder.updateHighlight(null, false);
   }
 
   private _onFocus(userGesture: boolean) {
@@ -535,7 +537,7 @@ class RecordActionTool implements RecorderTool {
   private _consumedDueWrongTarget(event: Event): boolean {
     if (this._activeModel && this._activeModel.elements[0] === this._recorder.deepEventTarget(event))
       return false;
-    consumeEvent(event);
+      consumeEvent(event);
     return true;
   }
 
@@ -543,7 +545,8 @@ class RecordActionTool implements RecorderTool {
     this._hoveredElement = null;
     this._hoveredModel = null;
     this._activeModel = null;
-    this._recorder.updateHighlight(null, false);
+    if (this._shouldHighlight)
+      this._recorder.updateHighlight(null, false);
     this._performingActions.add(action);
     void this._recorder.performAction(action).then(() => {
       this._performingActions.delete(action);
@@ -596,14 +599,16 @@ class RecordActionTool implements RecorderTool {
     if (!this._hoveredElement || !this._hoveredElement.isConnected) {
       this._hoveredModel = null;
       this._hoveredElement = null;
-      this._recorder.updateHighlight(null, true);
+      if (this._shouldHighlight)
+        this._recorder.updateHighlight(null, true);
       return;
     }
     const { selector, elements } = this._recorder.injectedScript.generateSelector(this._hoveredElement, { testIdAttributeName: this._recorder.state.testIdAttributeName });
     if (this._hoveredModel && this._hoveredModel.selector === selector)
       return;
     this._hoveredModel = selector ? { selector, elements, color: '#dc6f6f7f' } : null;
-    this._recorder.updateHighlight(this._hoveredModel, true);
+    if (this._shouldHighlight)
+      this._recorder.updateHighlight(this._hoveredModel, true);
   }
 }
 
