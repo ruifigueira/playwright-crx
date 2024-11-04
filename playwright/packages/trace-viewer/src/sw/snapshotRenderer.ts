@@ -73,7 +73,7 @@ export class SnapshotRenderer {
     return closestFrame?.sha1;
   }
 
-  render(): RenderedFrameSnapshot {
+  render(scriptPath?: string): RenderedFrameSnapshot {
     const result: string[] = [];
     const visit = (n: NodeSnapshot, snapshotIndex: number, parentTag: string | undefined, parentAttrs: [string, string][] | undefined) => {
       // Text node.
@@ -152,12 +152,16 @@ export class SnapshotRenderer {
       const html = prefix + [
         // Hide the document in order to prevent flickering. We will unhide once script has processed shadow.
         '<style>*,*::before,*::after { visibility: hidden }</style>',
-        `<script>${snapshotScript(this._callId, this.snapshotName)}</script>`
+        scriptPath ? `<script src="${scriptPath}"></script>` : ''
       ].join('') + result.join('');
       return { value: html, size: html.length };
     });
 
     return { html, pageId: snapshot.pageId, frameId: snapshot.frameId, index: this._index };
+  }
+
+  renderScript() {
+    return snapshotScript(this._callId, this.snapshotName);
   }
 
   resourceByUrl(url: string, method: string): ResourceSnapshot | undefined {
