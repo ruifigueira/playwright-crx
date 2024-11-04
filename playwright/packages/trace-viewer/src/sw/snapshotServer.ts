@@ -32,13 +32,21 @@ export class SnapshotServer {
   }
 
   serveSnapshot(pathname: string, searchParams: URLSearchParams, snapshotUrl: string): Response {
-    const snapshot = this._snapshot(pathname.substring('/snapshot'.length), searchParams);
+    let snapshotName = pathname.substring('/snapshot'.length);
+    const isScript = snapshotName.endsWith('.js');
+    snapshotName = snapshotName.replace(/\.js$/, '');
+    const snapshot = this._snapshot(snapshotName, searchParams);
     if (!snapshot)
       return new Response(null, { status: 404 });
-
-    const renderedSnapshot = snapshot.render();
-    this._snapshotIds.set(snapshotUrl, snapshot);
-    return new Response(renderedSnapshot.html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    if (isScript) {
+      const renderedSnapshotScript = snapshot.renderScript();
+      return new Response(renderedSnapshotScript, { status: 200, headers: { 'Content-Type': 'application/javascript' } });
+    } else {
+  
+    const renderedSnapshot = snapshot.render(`${pathname}.js?${searchParams}`);
+      this._snapshotIds.set(snapshotUrl, snapshot);
+      return new Response(renderedSnapshot.html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    }
   }
 
   async serveClosestScreenshot(pathname: string, searchParams: URLSearchParams): Promise<Response> {
