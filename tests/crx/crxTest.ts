@@ -43,7 +43,7 @@ type Debug = {
   disable(): Promise<void>;
 }
 
-type CrxTest = (fixtures: CrxFixtures) => Promise<void>;
+type CrxTest<T> = (fixtures: CrxFixtures) => Promise<T>;
 
 declare const serviceWorker: ServiceWorker;
 
@@ -57,7 +57,7 @@ export const test = base.extend<{
   extensionServiceWorker: Worker;
   extensionId: string;
   server: CrxServer;
-  runCrxTest: (testFn: CrxTest) => Promise<void>;
+  runCrxTest: <T>(testFn: CrxTest<T>) => Promise<T>;
   mockPaths: (paths: Record<string, string | { body: string, contentType?: string }>) => Promise<void>;
   _extensionServiceWorkerDevtools: void;
   _debug: Debug;
