@@ -29,7 +29,7 @@
     "clean:crx": "rimraf ./lib",
     "build": "npm run ci:pw:bundles && npm run build:crx && npm run build:examples && npm run build:tests",
     "clean": "npm run clean:pw && npm run clean:examples && npm run clean:tests && npm run clean:crx",
-    "test:install": "cd ./tests && npx playwright install --with-deps chromium chromium-tip-of-tree",
+    "test:install": "cd ./tests && npx playwright install --with-deps chromium",
     "test": "cd ./tests && npx playwright test",
     "test-ui": "cd ./tests && npx playwright test --ui --timeout 0"
   },
