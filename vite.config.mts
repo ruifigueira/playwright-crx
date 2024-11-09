@@ -17,32 +17,9 @@
 import path from 'path';
 import sourcemaps from 'rollup-plugin-sourcemaps';
 import { defineConfig } from 'vite';
-import requireTransform from 'vite-plugin-require-transform';
-
-// we exclude some files with require, otherwise we can get out-of-order dependencies
-const requireTransformFiles = [
-  'playwright/packages/playwright-core/bundles/utils/src/utilsBundleImpl.ts',
-  'playwright/packages/playwright-core/src/server/dispatchers/localUtilsDispatcher.ts',
-  'playwright/packages/playwright-core/src/server/registry/dependencies.ts',
-  'playwright/packages/playwright-core/src/server/registry/index.ts',
-  'playwright/packages/playwright-core/src/utils/comparators.ts',
-  'playwright/packages/playwright-core/src/utils/userAgent.ts',
-  'playwright/packages/playwright-core/src/utilsBundle.ts',
-  'playwright/packages/playwright-core/src/zipBundle.ts',
-  // tests
-  'playwright/packages/playwright/src/common/config.ts',
-  'playwright/packages/playwright/src/common/expectBundle.ts',
-  'playwright/packages/playwright/src/index.ts',
-  'playwright/packages/playwright/src/transform/babelBundle.ts',
-  'playwright/packages/playwright/src/transform/transform.ts',
-  'playwright/packages/playwright/src/utilsBundle.ts',
-];
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [
-    requireTransform({ fileRegex: new RegExp('(' + requireTransformFiles.map(s => s.replace(/\//g, '\\/').replace(/\./g, '\.')).join('|') + ')$') }),
-  ],
   resolve: {
     alias: {
       'playwright-core/lib': path.resolve(__dirname, './playwright/packages/playwright-core/src'),
@@ -87,6 +64,7 @@ export default defineConfig({
       'zlib': path.resolve(__dirname, './node_modules/browserify-zlib'),
 
       'node:events': path.resolve(__dirname, './node_modules/events'),
+      'node:module': path.resolve(__dirname, './src/shims/module'),
       'node:stream': path.resolve(__dirname, './node_modules/readable-stream'),
       'node:string_decoder': path.resolve(__dirname, './node_modules/string_decoder'),
     },
@@ -113,9 +91,21 @@ export default defineConfig({
       }
     },
     commonjsOptions: {
+      transformMixedEsModules: true,
+      extensions: ['.ts', '.js'],
+      exclude: [
+        path.resolve(__dirname, './playwright/packages/playwright/src/index.ts'),
+        path.resolve(__dirname, './playwright/packages/playwright-core/src/cli/**/*.ts'),
+        // prevent from resolving require('../playwright')
+        path.resolve(__dirname, './playwright/packages/playwright-core/src/server/recorder/recorderApp.ts'),
+        // prevent from resolving require('./bidiOverCdp')
+        path.resolve(__dirname, './playwright/packages/playwright-core/src/server/bidi/bidiChromium.ts'),
+      ],
       include: [
-        path.resolve(__dirname, './playwright/packages/playwright-core/src/**/*.js'),
-        path.resolve(__dirname, './playwright/packages/playwright-core/bundles/utils/src/third_party/**/*.js'),
+        path.resolve(__dirname, './playwright/packages/playwright/src/**/*'),
+        path.resolve(__dirname, './playwright/packages/playwright/bundles/*/src/**/*'),
+        path.resolve(__dirname, './playwright/packages/playwright-core/src/**/*'),
+        path.resolve(__dirname, './playwright/packages/playwright-core/bundles/*/src/**/*'),
         /node_modules/,
       ],
     }
