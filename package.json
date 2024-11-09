@@ -86,7 +86,6 @@
     "util": "^0.12.5",
     "utils-bundle": "file:./playwright/packages/playwright-core/bundles/utils",
     "vite": "^5.0.13",
-    "vite-plugin-require-transform": "1.0.21",
     "web-package": "file:./playwright/packages/web",
     "zip-bundle": "file:./playwright/packages/playwright-core/bundles/zip"
   }
