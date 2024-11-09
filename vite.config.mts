@@ -23,10 +23,6 @@ import requireTransform from 'vite-plugin-require-transform';
 const requireTransformFiles = [
   'playwright/packages/playwright-core/bundles/utils/src/utilsBundleImpl.ts',
   'playwright/packages/playwright-core/src/server/dispatchers/localUtilsDispatcher.ts',
-  'playwright/packages/playwright-core/src/server/recorder/csharp.ts',
-  'playwright/packages/playwright-core/src/server/recorder/java.ts',
-  'playwright/packages/playwright-core/src/server/recorder/javascript.ts',
-  'playwright/packages/playwright-core/src/server/recorder/python.ts',
   'playwright/packages/playwright-core/src/server/registry/dependencies.ts',
   'playwright/packages/playwright-core/src/server/registry/index.ts',
   'playwright/packages/playwright-core/src/utils/comparators.ts',
@@ -34,7 +30,6 @@ const requireTransformFiles = [
   'playwright/packages/playwright-core/src/utilsBundle.ts',
   'playwright/packages/playwright-core/src/zipBundle.ts',
   // tests
-  'playwright/packages/playwright/bundles/babel/src/babelBundleImpl.ts',
   'playwright/packages/playwright/src/common/config.ts',
   'playwright/packages/playwright/src/common/expectBundle.ts',
   'playwright/packages/playwright/src/index.ts',
@@ -113,6 +108,9 @@ export default defineConfig({
     rollupOptions: {
       // @ts-ignore
       plugins: [sourcemaps()],
+      output: {
+        exports: 'named',
+      }
     },
     commonjsOptions: {
       include: [
