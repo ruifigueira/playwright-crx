@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 
-import type { Crx } from './src/types/types';
-import type { IUnionFs } from 'unionfs';
+import { test, expect } from './crxTest';
 
-export * from './src/types/types';
-
-export const crx: Crx;
-export function _setUnderTest(): void;
-export const _debug: {
-  enable(namespaces: string): void;
-  enabled(namespaces: string): boolean;
-  disable(): void;
-};
+test('should work with memfs @smoke', async ({ runCrxTest }) => {
+  const base64 = await runCrxTest(async ({ fs, page, server }) => {
+    fs.mkdirSync('/screenshots');
+    await page.setViewportSize({ width: 500, height: 500 });
+    await page.goto(server.PREFIX + '/grid.html');
+    await page.screenshot({ path: '/screenshots/grid.png' });
+    const data = await fs.promises.readFile('/screenshots/grid.png');
+    return data.toString('base64');
+  });
+  expect(Buffer.from(base64, 'base64')).toMatchSnapshot('screenshot-grid.png');
+});

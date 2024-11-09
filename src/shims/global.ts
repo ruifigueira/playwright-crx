@@ -17,10 +17,7 @@
 import './process';
 import './setImmediate';
 import './buffer';
-import { fs } from 'memfs';
-
-fs.mkdirSync('/tmp');
-fs.mkdirSync('/crx');
+import './fs';
 
 self.global = self;
-self.__dirname = '/crx';
+self.__dirname = '/';
