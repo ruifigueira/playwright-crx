@@ -14,10 +14,91 @@
  * limitations under the License.
  */
 
+import { IUnionFs } from 'unionfs';
 import { Page, BrowserContext } from '../../playwright/packages/playwright-core/types/types';
 export * from '../../playwright/packages/playwright-core/types/types';
 
+export type CrxFs = Pick<IUnionFs,
+  | 'appendFile'
+  | 'appendFileSync'
+  | 'access'
+  | 'accessSync'
+  | 'chown'
+  | 'chownSync'
+  | 'chmod'
+  | 'chmodSync'
+  | 'close'
+  | 'closeSync'
+  | 'createReadStream'
+  | 'createWriteStream'
+  | 'exists'
+  | 'existsSync'
+  | 'fchown'
+  | 'fchownSync'
+  | 'fchmod'
+  | 'fchmodSync'
+  | 'fstat'
+  | 'fstatSync'
+  | 'fsync'
+  | 'fsyncSync'
+  | 'ftruncate'
+  | 'ftruncateSync'
+  | 'futimes'
+  | 'futimesSync'
+  | 'lchown'
+  | 'lchownSync'
+  | 'lchmod'
+  | 'lchmodSync'
+  | 'link'
+  | 'linkSync'
+  | 'lstat'
+  | 'lstatSync'
+  | 'mkdir'
+  | 'mkdirSync'
+  | 'open'
+  | 'openSync'
+  | 'readdir'
+  | 'readdirSync'
+  | 'read'
+  | 'readSync'
+  | 'readFile'
+  | 'readFileSync'
+  | 'readlink'
+  | 'readlinkSync'
+  | 'realpath'
+  | 'realpathSync'
+  | 'rename'
+  | 'renameSync'
+  | 'rmdir'
+  | 'rmdirSync'
+  | 'stat'
+  | 'statSync'
+  | 'symlink'
+  | 'symlinkSync'
+  | 'truncate'
+  | 'truncateSync'
+  | 'unwatchFile'
+  | 'unlink'
+  | 'unlinkSync'
+  | 'utimes'
+  | 'utimesSync'
+  | 'watch'
+  | 'watchFile'
+  | 'writeFile'
+  | 'writeFileSync'
+  | 'write'
+  | 'writeSync'
+  | 'ReadStream'
+  | 'WriteStream'
+  | 'promises'> & { use: (dir: FileSystemDirectoryHandle) => CrxFs };
+
 export interface Crx {
+  
+  /**
+   * unionfs filesystem
+   */
+  readonly fs: CrxFs;
+
   /**
    * @param options
    */

@@ -66,9 +66,9 @@ export class Crx extends SdkObject {
       protocolLogger: helper.debugProtocolLogger(),
       browserLogsCollector,
       originalLaunchOptions: {},
-      artifactsDir: '/crx/artifacts',
-      downloadsPath: '/crx/downloads',
-      tracesDir: '/crx/traces',
+      artifactsDir: '/tmp/artifacts',
+      downloadsPath: '/tmp/downloads',
+      tracesDir: '/tmp/traces',
       ...options
     };
     const browser = await CRBrowser.connect(this.attribution.playwright, transport, browserOptions);

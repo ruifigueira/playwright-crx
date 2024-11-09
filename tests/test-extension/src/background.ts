@@ -19,12 +19,14 @@ import { crx, expect, _debug } from 'playwright-crx/test';
 const _crxAppPromise = crx.start();
 
 async function _runTest(fn: (params: any) => Promise<void>, params: any) {
+  const fs = crx.fs;
   const [crxApp, [ tab ]] = await Promise.all([_crxAppPromise, chrome.tabs.query({ active: true })]);
   const context = crxApp.context();
   expect(tab?.id).toBeTruthy();
   const page = await crxApp.attach(tab?.id!);
+
   try {
-    return await fn({ expect, page, context, crxApp, _debug, ...params });
+    return await fn({ expect, page, context, crx, fs, crxApp, _debug, ...params });
   } catch (e: any) {
     debugger;
     throw e instanceof Error ? e : new Error(e?.message);

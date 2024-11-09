@@ -30,9 +30,15 @@ export interface CrxChannel extends CrxEventTarget, Channel {
 }
 export type CrxStartParams = {
   slowMo?: number,
+  artifactsDir?: string,
+  downloadsPath?: string,
+  tracesDir?: string,
 };
 export type CrxStartOptions = {
   slowMo?: number,
+  artifactsDir?: string,
+  downloadsPath?: string,
+  tracesDir?: string,
 };
 export type CrxStartResult = {
   crxApplication: CrxApplicationChannel,

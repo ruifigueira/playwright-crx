@@ -19,7 +19,7 @@ import { test as base, chromium } from '@playwright/test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { CrxApplication, BrowserContext as CrxBrowserContext, Page as CrxPage } from 'playwright-crx';
+import type { CrxFs, Crx, CrxApplication, BrowserContext as CrxBrowserContext, Page as CrxPage } from 'playwright-crx';
 import type * as CrxTests from 'playwright-crx/test';
 import { rimraf } from 'rimraf';
 
@@ -33,8 +33,10 @@ type CrxFixtures = {
   expect: typeof CrxTests.expect;
   page: CrxPage;
   context: CrxBrowserContext;
+  crx: Crx;
   crxApp: CrxApplication;
   server: CrxServer;
+  fs: CrxFs;
   _debug: Debug;
 }
 

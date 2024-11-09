@@ -21,6 +21,7 @@ import type * as channels from '../protocol/channels';
 import { Page } from 'playwright-core/lib/client/page';
 import type { BrowserContext } from 'playwright-core/lib/client/browserContext';
 import { Mode } from '@recorder/recorderTypes';
+import fs from '../shims/fs';
 
 function from<T>(obj: any): T {
   return obj._object as T;
@@ -28,8 +29,10 @@ function from<T>(obj: any): T {
 
 export class Crx extends ChannelOwner<channels.CrxChannel> implements api.Crx {
 
-  private _crxApplication?: CrxApplication;
+  readonly fs: api.CrxFs = fs;
 
+  private _crxApplication?: CrxApplication;
+  
   static from(crx: channels.CrxChannel): Crx {
     return (crx as any)._object;
   }
