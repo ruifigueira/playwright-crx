@@ -41,8 +41,8 @@ export default defineConfig({
       plugins: [sourcemaps()],
       input: {
         'index': path.resolve(__dirname, 'index.html'),
+        'preferences': path.resolve(__dirname, 'preferences.html'),
         'background': path.resolve(__dirname, 'src/background.ts'),
-        'options': path.resolve(__dirname, 'options.html'),
       },
       output: {
         entryFileNames: '[name].js',

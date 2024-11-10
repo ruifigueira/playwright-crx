@@ -18,7 +18,7 @@ import '@web/common.css';
 import { applyTheme } from '@web/theme';
 import '@web/third_party/vscode/codicon.css';
 import * as ReactDOM from 'react-dom/client';
-import { Main } from '@recorder/main';
+import { CrxRecorder } from './crxRecorder';
 
 window.addEventListener('load', () => {
   // if not running as a chrome extension, skip this...
@@ -52,5 +52,5 @@ window.addEventListener('load', () => {
 
 (async () => {
   applyTheme();
-  ReactDOM.createRoot(document.querySelector('#root')!).render(<Main/>);
+  ReactDOM.createRoot(document.querySelector('#root')!).render(<CrxRecorder />);
 })();

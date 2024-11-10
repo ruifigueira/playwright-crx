@@ -37,7 +37,7 @@
     "default_path": "index.html"
   },
   "options_ui": {
-    "page": "options.html",
+    "page": "preferences.html",
     "open_in_tab": false
   },
   "permissions": ["debugger", "tabs", "contextMenus", "storage", "sidePanel"]
