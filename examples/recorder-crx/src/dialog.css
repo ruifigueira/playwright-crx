@@ -13,7 +13,7 @@
 
 .dialog-box {
   background: white;
-  padding: 20px;
+  padding: 16px;
   max-width: 500px;
   width: 90%;
   border-radius: 8px;
@@ -27,7 +27,7 @@
 }
 
 .dialog-header h2 {
-  margin-top: 0;
+  margin: 8px 0 8px 0;
 }
 
 .dialog-close {

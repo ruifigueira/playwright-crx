@@ -166,5 +166,55 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
     await attach(tab, 'recording');
 });
 
+async function doSave(params: { code: string, suggestedName: string, mode: Mode }) {
+  const crxApp = await getCrxApp();
+  const currMode = crxApp.recorder.mode;
+  await crxApp.recorder.setMode('none');
+
+  // to avoid playwright from interfering too much, we use chrome tabs api to open and wait for the tab to close
+  // and only attach playwright to click the link (showSaveFilePicker requires a user gesture)
+  const saveTab = await chrome.tabs.create({ url: 'main.html' });
+  const closePromise = new Promise<void>(async resolve => {
+    const tabClosed = (tabId: number) => {
+      if (tabId === saveTab.id) {
+        chrome.tabs.onRemoved.removeListener(tabClosed);
+        resolve();
+      }
+    };
+    chrome.tabs.onRemoved.addListener(tabClosed);
+  });
+
+  const page = await crxApp.attach(saveTab.id!);
+  const elem = page.getByRole('link');
+  await elem.evaluateHandle(async (elem, { code, suggestedName }) => {
+    const handler = async () => {
+      elem.removeEventListener('click', handler);
+      try {
+        const fileHandle = await showSaveFilePicker({ suggestedName });
+        const writable = await fileHandle.createWritable({ keepExistingData: false });
+        await writable.write(code);
+        await writable.close();
+      } catch (e) {
+        // not much we can do here
+      }
+
+      window.close();
+    };
+    elem.addEventListener('click', handler);
+  }, params as { code: string, suggestedName: string });
+
+  await elem.click();
+  await crxApp.detach(page);
+  await closePromise;
+
+  await crxApp.recorder.setMode(currMode);
+}
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.event === 'saveRequested') {
+    doSave(message.params).catch(e => {});
+  }
+});
+
 // for testing
 Object.assign(self, { attach, setTestIdAttributeName, _debug, _setUnderTest });

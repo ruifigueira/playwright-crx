@@ -32,16 +32,14 @@ export const PreferencesForm: React.FC = ({}) => {
       initialPreferences.testIdAttributeName !== preferences.testIdAttributeName;
   }, [preferences, initialPreferences]);
 
-  const savePreferences = (e: React.FormEvent<HTMLFormElement>) => {
+  const savePreferences = React.useCallback((e: React.FormEvent<HTMLFormElement>) => {
     if (!e.currentTarget.reportValidity()) return;
 
     e.preventDefault();
     chrome.storage.sync.set(preferences)
-      .then(() => {
-        setInitialPreferences({ ...preferences });
-      })
+      .then(() => setInitialPreferences(preferences))
       .catch(() => {});
-  };
+  }, [preferences]);
 
   return <form id="preferences-form" onSubmit={savePreferences}>
     <label htmlFor="target-language">Default language:</label>
