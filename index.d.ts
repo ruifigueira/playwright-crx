@@ -15,7 +15,6 @@
  */
 
 import type { Crx } from './src/types/types';
-import type { IUnionFs } from 'unionfs';
 
 export * from './src/types/types';
 
