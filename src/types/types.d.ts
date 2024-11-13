@@ -348,7 +348,7 @@ export interface CrxRecorder {
     /**
      * mode
      */
-    mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
+    mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"|"assertingSnapshot";
   }) => void): this;
 
   /**
@@ -368,7 +368,7 @@ export interface CrxRecorder {
     /**
      * mode
      */
-    mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
+    mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"|"assertingSnapshot";
   }) => void): this;
 
   /**
@@ -388,7 +388,7 @@ export interface CrxRecorder {
       /**
        * mode
        */
-      mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
+      mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"|"assertingSnapshot";
     }) => void): this;
 
   /**
@@ -408,7 +408,7 @@ export interface CrxRecorder {
     /**
      * mode
      */
-    mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
+    mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"|"assertingSnapshot";
   }) => void): this;
 
   /**
@@ -428,7 +428,7 @@ export interface CrxRecorder {
     /**
      * mode
      */
-    mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
+    mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"|"assertingSnapshot";
   }) => void): this;
 
   /**
@@ -448,7 +448,7 @@ export interface CrxRecorder {
     /**
      * mode
      */
-    mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
+    mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"|"assertingSnapshot";
   }) => void): this;
 
   hide(): Promise<void>;
@@ -461,7 +461,7 @@ export interface CrxRecorder {
   show(options?: {
     language?: null|string;
 
-    mode?: null|"none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
+    mode?: null|"none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"|"assertingSnapshot";
 
     testIdAttributeName?: null|string;
 
@@ -472,7 +472,7 @@ export interface CrxRecorder {
     };
   }): Promise<void>;
 
-  mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue";
+  mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"|"assertingSnapshot";
 
-  setMode(mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"): Promise<void>;
+  setMode(mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"|"assertingSnapshot"): Promise<void>;
 }

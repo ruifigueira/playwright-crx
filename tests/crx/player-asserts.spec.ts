@@ -34,11 +34,11 @@ test('should pass assertions', async ({ page, recorderPage, baseURL, recordActio
   await recordAction(() => page.goto(`${baseURL}/root.html`));
 
   // record assertions
-  await recordAssertion(page.getByRole('checkbox').first(), 'assertChecked', false);
-  await recordAssertion(page.getByRole('checkbox').nth(1), 'assertChecked', true);
-  await recordAssertion(page.getByRole('textbox'), 'assertValue', 'input with value');
-  await recordAssertion(page.locator('select'), 'assertValue', 'B');
-  await recordAssertion(page.getByTestId('text'), 'assertText', 'long text');
+  await recordAssertion(page.getByRole('checkbox').first(), 'assertValue');
+  await recordAssertion(page.getByRole('checkbox').nth(1), 'assertValue');
+  await recordAssertion(page.getByRole('textbox'), 'assertValue');
+  await recordAssertion(page.locator('select'), 'assertValue');
+  await recordAssertion(page.getByTestId('text'), 'assertText');
   await recordAssertion(page.getByTestId('text'), 'assertVisible');
 
   // stop record and play
@@ -61,8 +61,9 @@ test('should fail assertChecked=true', async ({ page, recorderPage, baseURL, rec
   // navigate
   await recordAction(() => page.goto(`${baseURL}/root.html`));
 
-  // record assertions
-  await recordAssertion(page.getByRole('checkbox').first(), 'assertChecked', true);
+  // record assertion with wrong value
+  await page.getByRole('checkbox').first().evaluate(e => (e as HTMLInputElement).checked = true);
+  await recordAssertion(page.getByRole('checkbox').first(), 'assertValue');
 
   // stop record and play
   await recorderPage.getByTitle('Record').click();
@@ -79,8 +80,9 @@ test('should fail assertChecked=false', async ({ page, recorderPage, baseURL, re
   // navigate
   await recordAction(() => page.goto(`${baseURL}/root.html`));
 
-  // record assertions
-  await recordAssertion(page.getByRole('checkbox').nth(1), 'assertChecked', false);
+  // record assertion with wrong value
+  await page.getByRole('checkbox').nth(1).evaluate(e => (e as HTMLInputElement).checked = false);
+  await recordAssertion(page.getByRole('checkbox').nth(1), 'assertValue');
 
   // stop record and play
   await recorderPage.getByTitle('Record').click();
@@ -98,7 +100,8 @@ test('should fail assertValue in textbox', async ({ page, recorderPage, baseURL,
   await recordAction(() => page.goto(`${baseURL}/root.html`));
 
   // record assertions
-  await recordAssertion(page.getByRole('textbox'), 'assertValue', 'input with wrong value');
+  await page.getByRole('textbox').evaluate(e => (e as HTMLInputElement).value = 'input with wrong value');
+  await recordAssertion(page.getByRole('textbox'), 'assertValue');
 
   // stop record and play
   await recorderPage.getByTitle('Record').click();
@@ -115,8 +118,9 @@ test('should fail assertValue in select', async ({ page, recorderPage, baseURL, 
   // navigate
   await recordAction(() => page.goto(`${baseURL}/root.html`));
 
-  // record assertions
-  await recordAssertion(page.locator('select'), 'assertValue', 'A');
+  // record assertion with wrong value
+  await page.locator('select').evaluate(e => (e as HTMLSelectElement).value = 'A');
+  await recordAssertion(page.locator('select'), 'assertValue');
 
   // stop record and play
   await recorderPage.getByTitle('Record').click();
@@ -134,7 +138,8 @@ test('should fail assertText', async ({ page, recorderPage, baseURL, recordActio
   await recordAction(() => page.goto(`${baseURL}/root.html`));
 
   // record assertions
-  await recordAssertion(page.getByTestId('text'), 'assertText', 'Some wrong text');
+  await page.getByTestId('text').evaluate(e => e.textContent = 'Some wrong text');
+  await recordAssertion(page.getByTestId('text'), 'assertText');
 
   // stop record and play
   await recorderPage.getByTitle('Record').click();

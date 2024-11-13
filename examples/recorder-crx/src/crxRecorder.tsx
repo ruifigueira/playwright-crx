@@ -19,8 +19,12 @@ import { Toolbar } from '@web/components/toolbar';
 import { ToolbarButton } from '@web/components/toolbarButton';
 import { Dialog } from './dialog';
 import { PreferencesForm } from './preferencesForm';
-import { CallLog, Mode, Source } from '@recorder/recorderTypes';
+import { CallLog, ElementInfo, Mode, Source } from '@recorder/recorderTypes';
 import { Recorder } from '@recorder/recorder';
+
+function setElementPicked(elementInfo: ElementInfo, userGesture?: boolean) {
+  window.playwrightElementPicked(elementInfo, userGesture);
+};
 
 export const CrxRecorder: React.FC = ({
 }) => {
@@ -30,6 +34,7 @@ export const CrxRecorder: React.FC = ({
   const [log, setLog] = React.useState(new Map<string, CallLog>());
   const [mode, setMode] = React.useState<Mode>('none');
   const [fileId, setFileId] = React.useState();
+  const [runningFileId, setRunningFileId] = React.useState<string | undefined>();
 
   React.useEffect(() => {
     const port = chrome.runtime.connect({ name: 'recorder' });
@@ -48,8 +53,8 @@ export const CrxRecorder: React.FC = ({
           }
           return newLog;
         }); break;
-        case 'setFile': setFileId(msg.file); break;
-        case 'setSelector': window.playwrightSetSelector(msg.selector, msg.userGesture); break;
+        case 'setRunningFile': setRunningFileId(msg.file); break;
+        case 'elementPicked': setElementPicked(msg.elementInfo, msg.userGesture); break;
       }
     };
     port.onMessage.addListener(onMessage);
@@ -65,6 +70,10 @@ export const CrxRecorder: React.FC = ({
       port.disconnect();
     };
   }, []);
+
+  React.useEffect(() => {
+    window.playwrightSetRunningFile(runningFileId);
+  }, [runningFileId]);
 
   const requestSave = React.useCallback(() => {
     if (!sources.length || !fileId)

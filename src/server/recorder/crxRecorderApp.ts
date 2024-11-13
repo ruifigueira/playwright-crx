@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import type { CallLog, EventData, Mode, Source } from '@recorder/recorderTypes';
+import type { CallLog, ElementInfo, EventData, Mode, Source } from '@recorder/recorderTypes';
 import { EventEmitter } from 'events';
 import { BrowserContext } from 'playwright-core/lib/server/browserContext';
 import { Page } from 'playwright-core/lib/server/page';
@@ -34,8 +34,8 @@ export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'setMode', mode: Mode }
   | { method: 'setSources', sources: Source[] }
   | { method: 'setActions', actions: ActionInContext[], sources: Source[] }
-  | { method: 'setFile', file: string }
-  | { method: 'setSelector', selector: string, userGesture?: boolean }
+  | { method: 'setRunningFile', file?: string }
+  | { method: 'elementPicked', elementInfo: ElementInfo, userGesture?: boolean }
 );
 
 export type RecorderEventData =  EventData & { type: string };
@@ -93,7 +93,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     }
 
     this.setMode(mode);
-    this.setFile(language);
+    this.setRunningFile(language);
   }
 
   async close() {
@@ -127,11 +127,11 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     this._sendMessage({ type: 'recorder', method: 'setMode', mode });
   }
 
-  async setFile(file: string) {
-    this._sendMessage({ type: 'recorder', method: 'setFile', file });
+  async setRunningFile(file?: string) {
+    this._sendMessage({ type: 'recorder', method: 'setRunningFile', file });
   }
 
-  async setSelector(selector: string, userGesture?: boolean) {
+  async elementPicked(elementInfo: ElementInfo, userGesture?: boolean) {
     if (userGesture) {
       if (this._recorder.mode() === 'inspecting') {
         this._recorder.setMode('standby');
@@ -140,7 +140,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
         this._recorder.setMode('recording');
       }
     }
-    this._sendMessage({ type: 'recorder', method: 'setSelector', selector, userGesture });
+    this._sendMessage({ type: 'recorder', method: 'elementPicked', elementInfo, userGesture });
   }
 
   async updateCallLogs(callLogs: CallLog[]) {

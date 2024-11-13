@@ -80,7 +80,7 @@ export type CrxApplicationDetachedEvent = {
   tabId: number,
 };
 export type CrxApplicationModeChangedEvent = {
-  mode: 'none' | 'recording' | 'inspecting' | 'assertingText' | 'recording-inspecting' | 'standby' | 'assertingVisibility' | 'assertingValue',
+  mode: 'none' | 'recording' | 'inspecting' | 'assertingText' | 'recording-inspecting' | 'standby' | 'assertingVisibility' | 'assertingValue' | 'assertingSnapshot',
 };
 export type CrxApplicationAttachParams = {
   tabId: number,

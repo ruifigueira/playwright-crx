@@ -17,7 +17,7 @@
 import path from 'path';
 import { Page, Locator } from 'playwright-core';
 import { test as crxTest, expect } from './crxTest';
-import type { AssertCheckedAction, AssertTextAction, AssertValueAction, AssertVisibleAction } from '../../playwright/packages/recorder/src/actions';
+import type { AssertAction, AssertCheckedAction, AssertSnapshotAction, AssertTextAction, AssertValueAction, AssertVisibleAction } from '../../playwright/packages/recorder/src/actions';
 
 export { expect } from './crxTest';
 
@@ -74,7 +74,7 @@ export const test = crxTest.extend<{
   attachRecorder: (page: Page) => Promise<Page>;
   recorderPage: Page;
   recordAction<T = void>(action: () => Promise<T>): Promise<T>;
-  recordAssertion(locator: Locator, type: 'assertText'|'assertValue'|'assertChecked'|'assertVisible', param?: string|boolean): Promise<void>;
+  recordAssertion(locator: Locator, type: AssertAction['name']): Promise<void>;
   configureRecorder: (config: { testIdAttributeName?: string, targetLanguage?: string }) => Promise<void>;
 }>({
   extensionPath: path.join(__dirname, '../../examples/recorder-crx/dist'),
@@ -131,31 +131,31 @@ export const test = crxTest.extend<{
     });
   },
 
-  recordAssertion: async ({ recordAction }, run) => {
-    await run(async (locator: Locator, name: 'assertText'|'assertValue'|'assertChecked'|'assertVisible', param: string|boolean) => {
+  recordAssertion: async ({ page, recorderPage, recordAction }, run) => {
+    await run(async (locator: Locator, name: AssertAction['name']) => {
       await recordAction(async () => {
-        const selector = await locator.evaluate(elem => (window as any).playwright.selector(elem) as string);
-        const baseAction = {
-          name,
-          signals: [],
-          selector,
-        };
-        let action;
         switch (name) {
           case 'assertText':
-            action = { ...baseAction, name, text: param as string, substring: true } satisfies AssertTextAction;
+            await recorderPage.getByTitle('Assert text').click();
+            await locator.click();
+            await page.locator('x-pw-glass').getByTitle('Accept').click();
             break;
           case 'assertValue':
-            action = { ...baseAction, name, value: param as string }  satisfies AssertValueAction;
-            break;
-          case 'assertChecked':
-            action = { ...baseAction, name, checked: !!param } satisfies AssertCheckedAction;
+            await recorderPage.getByTitle('Assert value').click();
+            await locator.click();
             break;
           case 'assertVisible':
-            action = { ...baseAction, name } satisfies AssertVisibleAction;
+            await recorderPage.getByTitle('Assert visibility').click();
+            await locator.click();
+            break;
+          case 'assertSnapshot':
+            // ensure snapshot is toggled (for some reason, it may take more than one click)
+            const assertBtn = recorderPage.getByTitle('Assert snapshot');
+            while (await assertBtn.evaluate(e => !e.classList.contains('toggled')))
+              await assertBtn.click();
+            await locator.click();
             break;
         }
-        await locator.page().evaluate(action => (window as any).__pw_recorderRecordAction(action), action);
       });
     });
   },

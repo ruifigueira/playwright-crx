@@ -233,6 +233,15 @@ export default class Player extends EventEmitter {
         timeout: kActionTimeout,
       }));
     }
+    if (action.name === 'assertSnapshot') {
+      return await innerPerformAction(mainFrame, 'assertSnapshot', { selector }, callMetadata => mainFrame.expect(callMetadata, selector, {
+        selector,
+        expression: 'to.match.snapshot',
+        expectedText: serializeExpectedTextValues([action.snapshot], { matchSubstring: false, normalizeWhiteSpace: false }),
+        isNot: false,
+        timeout: kActionTimeout,
+      }));
+    }
     throw new Error('Internal error: unexpected action ' + (action as any).name);
   }
 
