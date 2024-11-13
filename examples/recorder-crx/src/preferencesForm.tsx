@@ -1,49 +1,37 @@
 import './preferencesForm.css';
 import React from "react";
-
-type Preferences = {
-  testIdAttributeName: string;
-  targetLanguage: string;
-  sidepanel?: boolean;
-};
-
-const defaultPreferences = {
-  testIdAttributeName: 'data-testid',
-  targetLanguage: 'javascript',
-  sidepanel: true,
-};
+import { CrxSettings, defaultSettings, loadSettings, storeSettings } from './settings';
 
 export const PreferencesForm: React.FC = ({}) => {
-  const [initialPreferences, setInitialPreferences] = React.useState<Preferences>(defaultPreferences);
-  const [preferences, setPreferences] = React.useState<Preferences>(defaultPreferences);
+  const [initialSettings, setInitialSettings] = React.useState<CrxSettings>(defaultSettings);
+  const [settings, setSettings] = React.useState<CrxSettings>(defaultSettings);
 
   React.useEffect(() => {
-    chrome.storage.sync.get(['testIdAttributeName', 'targetLanguage', 'sidepanel'])
-      .then(loadedPreferences => {
-        const preferences = { ...defaultPreferences, ...loadedPreferences };
-        setInitialPreferences(preferences);
-        setPreferences(preferences);
+    loadSettings()
+      .then(settings => {
+        setInitialSettings(settings);
+        setSettings(settings);
       });
   }, []);
 
   const canSave = React.useMemo(() => {
-    return initialPreferences.sidepanel !== preferences.sidepanel ||
-      initialPreferences.targetLanguage !== preferences.targetLanguage ||
-      initialPreferences.testIdAttributeName !== preferences.testIdAttributeName;
-  }, [preferences, initialPreferences]);
+    return initialSettings.sidepanel !== settings.sidepanel ||
+      initialSettings.targetLanguage !== settings.targetLanguage ||
+      initialSettings.testIdAttributeName !== settings.testIdAttributeName;
+  }, [settings, initialSettings]);
 
-  const savePreferences = React.useCallback((e: React.FormEvent<HTMLFormElement>) => {
+  const saveSettings = React.useCallback((e: React.FormEvent<HTMLFormElement>) => {
     if (!e.currentTarget.reportValidity()) return;
 
     e.preventDefault();
-    chrome.storage.sync.set(preferences)
-      .then(() => setInitialPreferences(preferences))
+    storeSettings(settings)
+      .then(() => setInitialSettings(settings))
       .catch(() => {});
-  }, [preferences]);
+  }, [settings]);
 
-  return <form id="preferences-form" onSubmit={savePreferences}>
+  return <form id="preferences-form" onSubmit={saveSettings}>
     <label htmlFor="target-language">Default language:</label>
-    <select id="target-language" name="target-language" value={preferences.targetLanguage} onChange={e => setPreferences({ ...preferences, targetLanguage: e.target.selectedOptions[0].value })}>
+    <select id="target-language" name="target-language" value={settings.targetLanguage} onChange={e => setSettings({ ...settings, targetLanguage: e.target.selectedOptions[0].value })}>
       <optgroup label="Node.js">
         <option value="javascript">Library</option>
         <option value="playwright-test">Test Runner</option>
@@ -71,8 +59,8 @@ export const PreferencesForm: React.FC = ({}) => {
       placeholder="Enter Attribute Name"
       pattern="[a-zA-Z][\w\-]*"
       title="Must be a valid attribute name"
-      value={preferences.testIdAttributeName}
-      onChange={e => setPreferences({ ...preferences, testIdAttributeName: e.target.value })}
+      value={settings.testIdAttributeName}
+      onChange={e => setSettings({ ...settings, testIdAttributeName: e.target.value })}
     />
     <div>
       <label htmlFor="sidepanel" className="row">Open in Side Panel:</label>
@@ -80,8 +68,8 @@ export const PreferencesForm: React.FC = ({}) => {
         type="checkbox"
         id="sidepanel"
         name="sidepanel"
-        checked={preferences.sidepanel}
-        onChange={e => setPreferences({ ...preferences, sidepanel: e.target.checked })}
+        checked={settings.sidepanel}
+        onChange={e => setSettings({ ...settings, sidepanel: e.target.checked })}
       />
     </div>
     <button id="submit" type="submit" disabled={!canSave}>{canSave ? 'Save' : 'Saved'}</button>

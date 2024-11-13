@@ -21,10 +21,15 @@ import { Dialog } from './dialog';
 import { PreferencesForm } from './preferencesForm';
 import { CallLog, ElementInfo, Mode, Source } from '@recorder/recorderTypes';
 import { Recorder } from '@recorder/recorder';
+import { loadSettings } from './settings';
 
 function setElementPicked(elementInfo: ElementInfo, userGesture?: boolean) {
   window.playwrightElementPicked(elementInfo, userGesture);
 };
+
+function setRunningFileId(fileId: string) {
+  window.playwrightSetRunningFile(fileId);
+}
 
 export const CrxRecorder: React.FC = ({
 }) => {
@@ -33,8 +38,7 @@ export const CrxRecorder: React.FC = ({
   const [paused, setPaused] = React.useState(false);
   const [log, setLog] = React.useState(new Map<string, CallLog>());
   const [mode, setMode] = React.useState<Mode>('none');
-  const [fileId, setFileId] = React.useState();
-  const [runningFileId, setRunningFileId] = React.useState<string | undefined>();
+  const [selectedFileId, setSelectedFileId] = React.useState<string | undefined>();
 
   React.useEffect(() => {
     const port = chrome.runtime.connect({ name: 'recorder' });
@@ -62,24 +66,21 @@ export const CrxRecorder: React.FC = ({
     const dispatch = async (data: any) => {
       port.postMessage({ type: 'recorderEvent', ...data });
       if (data.event === 'fileChanged')
-        setFileId(data.params.file);
+        setSelectedFileId(data.params.file);
     };
     window.dispatch = dispatch;
+    loadSettings().then(settings => setSelectedFileId(settings.targetLanguage)).catch(() => {});
     
     return () => {
       port.disconnect();
     };
   }, []);
 
-  React.useEffect(() => {
-    window.playwrightSetRunningFile(runningFileId);
-  }, [runningFileId]);
-
   const requestSave = React.useCallback(() => {
-    if (!sources.length || !fileId)
+    if (!sources.length || !selectedFileId)
       return;
 
-    const source = sources.find(s => s.id === fileId);
+    const source = sources.find(s => s.id === selectedFileId);
     if (!source)
       return;
 
@@ -90,7 +91,7 @@ export const CrxRecorder: React.FC = ({
     ].filter(Boolean).join('\n');
 
     let suggestedName: string | undefined;
-    switch (fileId) {
+    switch (selectedFileId) {
       case 'javascript': suggestedName = 'example.js'; break;
       case 'playwright-test': suggestedName = 'example.spec.ts'; break;
       case 'java-junit': suggestedName = 'TestExample.java'; break;
@@ -109,7 +110,7 @@ export const CrxRecorder: React.FC = ({
     // send message to background script because we can't save files directly from the extension
     // see: https://issues.chromium.org/issues/337540332
     chrome.runtime.sendMessage({ event: 'saveRequested', params: { code, suggestedName } });
-  }, [sources, fileId]);
+  }, [sources, selectedFileId]);
 
   React.useEffect(() => {
     const keydownHandler = (e: KeyboardEvent) => {

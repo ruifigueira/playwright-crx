@@ -378,7 +378,9 @@ for (const [lang, [suggestedName, filename]] of Object.entries(langs)) {
     }, filename);
     const recorderPage = await attachRecorder(page);
 
-    await recorderPage.locator('.source-chooser').selectOption(lang);
+    // this ensures that default language can also be saved
+    if ((await recorderPage.locator('.source-chooser').inputValue()) !== lang)
+      await recorderPage.locator('.source-chooser').selectOption(lang);
 
     await recordAction(() => page.goto(`${baseURL}/input/textarea.html`));
     await recordAction(() => page.locator('textarea').click());
