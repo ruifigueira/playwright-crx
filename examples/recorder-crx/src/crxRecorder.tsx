@@ -49,6 +49,7 @@ export const CrxRecorder: React.FC = ({
           return newLog;
         }); break;
         case 'setFile': setFileId(msg.file); break;
+        case 'setSelector': window.playwrightSetSelector(msg.selector, msg.userGesture); break;
       }
     };
     port.onMessage.addListener(onMessage);
