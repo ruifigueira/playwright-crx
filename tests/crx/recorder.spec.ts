@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import fs from 'fs';
+import path from 'path';
 import { test, expect } from './crxRecorderTest';
 
 test('should record @smoke', async ({ page, attachRecorder, recordAction, baseURL }) => {
@@ -332,3 +334,51 @@ public class Tests : PageTest
     await recorderPage.close();
   }
 });
+
+const langs = {
+  'javascript': ['example.js', 'javascript.js'],
+  'playwright-test': ['example.spec.ts', 'playwright-test.ts'],
+  'java-junit': ['TestExample.java', 'java-junit.java'],
+  'java': ['Example.java', 'java.java'],
+  'python-pytest': ['test_example.py', 'python-pytest.py'],
+  'python': ['example.py', 'python.py'],
+  'python-async': ['example.py', 'python-async.py'],
+  'csharp-mstest': ['Tests.cs', 'csharp-mstest.cs'],
+  'csharp-nunit': ['Tests.cs', 'csharp-nunit.cs'],
+  'csharp': ['Example.cs', 'csharp.cs'],
+};
+
+for (const [lang, [suggestedName, filename]] of Object.entries(langs)) {
+  test(`should save ${lang} as ${suggestedName}`, async ({ page, attachRecorder, recordAction, baseURL, context }) => {
+    await context.addInitScript((filename) => {
+      // mock showSaveFilePicker
+      (window as any).showSaveFilePicker = ({ suggestedName }: { suggestedName: string }) => {
+        return {
+          createWritable: () => Promise.resolve({
+            write: async (code: string) => {
+              localStorage.setItem('savedCode', JSON.stringify({ suggestedName, filename, code }));
+            },
+            close: () => Promise.resolve()
+          })
+        };
+      }
+    }, filename);
+    const recorderPage = await attachRecorder(page);
+
+    await recorderPage.locator('.source-chooser').selectOption(lang);
+
+    await recordAction(() => page.goto(`${baseURL}/input/textarea.html`));
+    await recordAction(() => page.locator('textarea').click());
+    await recordAction(() => page.locator('textarea').fill('test'));
+  
+    await recorderPage.getByTitle('Record').click();
+    await recorderPage.getByTitle('Save').click();
+
+    const code = fs.readFileSync(path.join(__dirname, 'code', filename), 'utf8');
+    await expect.poll(() => recorderPage.evaluate(() => JSON.parse(localStorage.getItem('savedCode') ?? '{}'))).toEqual({
+      suggestedName,
+      filename,
+      code,
+    });
+  });
+}
