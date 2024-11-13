@@ -164,7 +164,7 @@ export const test = crxTest.extend<{
     await run(async ({ testIdAttributeName, targetLanguage }: { testIdAttributeName?: string, targetLanguage?: string }) => {
       const configPage = await context.newPage();
       try {
-        await configPage.goto(`chrome-extension://${extensionId}/options.html`);
+        await configPage.goto(`chrome-extension://${extensionId}/preferences.html`);
         if (targetLanguage)
           await configPage.locator('#target-language').selectOption(targetLanguage);
         if (testIdAttributeName)
