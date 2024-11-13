@@ -49,7 +49,7 @@ test('should show errors', async ({ basePath, page, recorderPage, baseURL }) => 
 
   await recorderPage.getByTitle('Resume (F8)').click();
 
-  await expect(recorderPage.locator('.source-line-error-underline')).toHaveCount(1);
+  await expect(recorderPage.locator('.CodeMirror-line:has(.source-line-error-underline)')).toHaveCount(1);
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
     `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
@@ -69,7 +69,7 @@ test('should clear errors when resuming after errors', async ({ basePath, page, 
 
   await recorderPage.getByTitle('Resume (F8)').click();
 
-  await expect(recorderPage.locator('.source-line-error-underline')).toHaveCount(1);
+  await expect(recorderPage.locator('.CodeMirror-line:has(.source-line-error-underline)')).toHaveCount(1);
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
     `► frame.navigate( ${baseURL}/input/textarea.html ) ✅ — XXms`,
@@ -88,7 +88,7 @@ test('should clear errors when resuming after errors', async ({ basePath, page, 
     `► frame.fill( page.locator('textarea') ) ✅ — XXms`,
   ]);
 
-  await expect(recorderPage.locator('.source-line-error-underline')).toHaveCount(0);
+  await expect(recorderPage.locator('.CodeMirror-line:has(.source-line-error-underline)')).toHaveCount(0);
 });
 
 test('should step', async ({ recorderPage, baseURL }) => {

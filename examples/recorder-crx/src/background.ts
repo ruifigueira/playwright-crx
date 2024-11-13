@@ -14,23 +14,24 @@
  * limitations under the License.
  */
 
+import { Mode } from '@recorder/recorderTypes';
 import type { CrxApplication } from 'playwright-crx';
 import playwright, { crx, _debug, _setUnderTest } from 'playwright-crx';
 
-type Mode = 'none' | 'recording' | 'inspecting' | 'assertingText' | 'recording-inspecting' | 'standby' | 'assertingVisibility' | 'assertingValue';
+type CrxMode = Mode | 'detached';
 
-const stoppedModes = ['none', 'standby', 'detached'];
-const recordingModes = ['recording', 'assertingText', 'assertingVisibility', 'assertingValue'];
+const stoppedModes: CrxMode[] = ['none', 'standby', 'detached'];
+const recordingModes: CrxMode[] = ['recording', 'assertingText', 'assertingVisibility', 'assertingValue', 'assertingSnapshot'];
 
 // we must lazy initialize it
 let crxAppPromise: Promise<CrxApplication> | undefined;
 
 const attachedTabIds = new Set<number>();
-let currentMode: Mode | 'detached' | undefined;
+let currentMode: CrxMode | 'detached' | undefined;
 let language: string | undefined;
 let sidepanel = true;
 
-async function changeAction(tabId: number, mode?: Mode | 'detached') {
+async function changeAction(tabId: number, mode?: CrxMode | 'detached') {
   if (!mode) {
     mode = attachedTabIds.has(tabId) ? currentMode : 'detached';
   } else if (mode !== 'detached') {

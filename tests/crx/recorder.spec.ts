@@ -149,12 +149,14 @@ test('should record popups', async ({ page, attachRecorder, baseURL, mockPaths, 
 test('should record with all supported actions and assertions', async ({ context, page, recorderPage, baseURL, mockPaths, recordAction, recordAssertion, attachRecorder, basePath }) => {
   await mockPaths({
     'root.html': `<html>
+      <body>
       <input type="checkbox">
       <button onclick="this.innerText = 'button clicked'">button</button>
       <input type="text">
       <select><option>A</option><option>B</option></select>
       <input type="file">
       <div>Some long text</div>
+      </body>
     </html>`,
   });
 
@@ -190,11 +192,12 @@ test('should record with all supported actions and assertions', async ({ context
   await recordAction(() => page1.close());
 
   // record assertions
-  await recordAssertion(page.getByRole('checkbox'), 'assertChecked', false);
-  await recordAssertion(page.locator('[type=text]'), 'assertValue', 'input with value');
-  await recordAssertion(page.locator('select'), 'assertValue', 'B');
-  await recordAssertion(page.locator('div'), 'assertText', 'long text');
-  await recordAssertion(page.locator('div'), 'assertVisible', 'long text');
+  await recordAssertion(page.getByRole('checkbox'), 'assertValue');
+  await recordAssertion(page.locator('[type=text]'), 'assertValue');
+  await recordAssertion(page.locator('select'), 'assertValue');
+  await recordAssertion(page.locator('div'), 'assertText');
+  await recordAssertion(page.locator('div'), 'assertVisible');
+  await recordAssertion(page.locator('body'), 'assertSnapshot');
 
   await recorderPage.getByTitle('Record').click();
 
@@ -217,10 +220,20 @@ test('should record with all supported actions and assertions', async ({ context
   const page1 = await context.newPage();
   await page1.close();
   // await expect(page.getByRole('checkbox')).not.toBeChecked();
-  // await expect(page.locator('input[type=\"text\"]')).toHaveValue('input with value');
+  // await expect(page.locator('input[type="text"]')).toHaveValue('Hello world');
   // await expect(page.getByRole('combobox')).toHaveValue('B');
-  // await expect(page.getByText('Some long text')).toContainText('long text');
+  // await expect(page.locator('div')).toContainText('Some long text');
   // await expect(page.getByText('Some long text')).toBeVisible();
+  // await expect(page.locator('body')).toMatchAriaSnapshot(\`
+    - checkbox: on
+    - button "button clicked"
+    - textbox: Hello world
+    - combobox:
+      - option "A"
+      - option "B" [selected]
+    - textbox: C:\\\\fakepath\\\\file-to-upload.txt
+    - text: Some long text
+    \`);
 ​
   // ---------------------
   await context.close();

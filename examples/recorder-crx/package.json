@@ -13,7 +13,8 @@
     "playwright-crx": "0.10.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "web": "file:../../playwright/packages/web"
+    "web": "file:../../playwright/packages/web",
+    "yaml": "^2.6.0"
   },
   "devDependencies": {
     "@types/codemirror": "^5.60.15",
