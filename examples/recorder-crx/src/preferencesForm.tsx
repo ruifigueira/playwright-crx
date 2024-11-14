@@ -72,6 +72,16 @@ export const PreferencesForm: React.FC = ({}) => {
         onChange={e => setSettings({ ...settings, sidepanel: e.target.checked })}
       />
     </div>
+    <div>
+      <label htmlFor="experimental" className="row">Allow experimental features:</label>
+      <input
+        type="checkbox"
+        id="experimental"
+        name="experimental"
+        checked={settings.experimental}
+        onChange={e => setSettings({ ...settings, experimental: e.target.checked })}
+      />
+    </div>
     <button id="submit" type="submit" disabled={!canSave}>{canSave ? 'Save' : 'Saved'}</button>
   </form>;
 };
