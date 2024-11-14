@@ -21,7 +21,7 @@ import { Dialog } from './dialog';
 import { PreferencesForm } from './preferencesForm';
 import { CallLog, ElementInfo, Mode, Source } from '@recorder/recorderTypes';
 import { Recorder } from '@recorder/recorder';
-import { CrxSettings, defaultSettings, loadSettings } from './settings';
+import { addSettingsChangedListener, CrxSettings, defaultSettings, loadSettings, removeSettingsChangedListener } from './settings';
 import './crxRecorder.css';
 
 function setElementPicked(elementInfo: ElementInfo, userGesture?: boolean) {
@@ -75,8 +75,11 @@ export const CrxRecorder: React.FC = ({
       setSettings(settings);
       setSelectedFileId(settings.targetLanguage);
     }).catch(() => {});
-    
+
+    addSettingsChangedListener(setSettings);
+
     return () => {
+      removeSettingsChangedListener(setSettings)
       port.disconnect();
     };
   }, []);

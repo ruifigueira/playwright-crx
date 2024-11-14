@@ -20,3 +20,30 @@ export async function loadSettings(): Promise<CrxSettings> {
 export async function storeSettings(settings: CrxSettings) {
   await chrome.storage.sync.set(settings);
 }
+
+const listeners = new Map<(settings: CrxSettings) => void, any>();
+
+export function addSettingsChangedListener(listener: (settings: CrxSettings) => void) {
+  const wrappedListener = ({ testIdAttributeName, targetLanguage, sidepanel, experimental }: Record<string, chrome.storage.StorageChange>) => {
+    if (testIdAttributeName || targetLanguage || sidepanel || experimental) {
+      listener({
+        ...defaultSettings,
+        ...{
+          testIdAttributeName: testIdAttributeName?.newValue,
+          targetLanguage: targetLanguage?.newValue,
+          sidepanel: sidepanel?.newValue,
+          experimental: experimental?.newValue,
+        },
+      });
+    }
+  };
+  listeners.set(listener, wrappedListener);
+  chrome.storage.sync.onChanged.addListener(wrappedListener);
+}
+
+export function removeSettingsChangedListener(listener: (settings: CrxSettings) => void) {
+  const wrappedListener = listeners.get(listener);
+  if (!wrappedListener)
+    return;
+  chrome.storage.sync.onChanged.removeListener(wrappedListener);
+}
