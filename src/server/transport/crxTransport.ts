@@ -71,7 +71,7 @@ export class CrxTransport implements ConnectionTransport {
       // chrome extensions doesn't support all CDP commands so we need to handle them
       if (message.method === 'Target.setAutoAttach' && !debuggee.tabId) {
         // no tab to attach, just skip for now...
-        result = await Promise.resolve().then();
+        result = await Promise.resolve();
       } else if (message.method === 'Target.setAutoAttach') {
         const [, versionStr] = navigator.userAgent.match(/Chrome\/([0-9]+)./) ?? [];
 
@@ -91,7 +91,7 @@ export class CrxTransport implements ConnectionTransport {
       } else if (message.method === 'Target.getTargetInfo' && !debuggee.tabId) {
         // most likely related with https://chromium-review.googlesource.com/c/chromium/src/+/2885888
         // See CRBrowser.connect
-        result = await Promise.resolve().then();
+        result = await Promise.resolve();
       } else if (message.method === 'Target.createTarget') {
         const { id: tabId } = await chrome.tabs.create({ url: 'about:blank' });
         if (!tabId) throw new Error(`New tab has no id`);
@@ -103,7 +103,7 @@ export class CrxTransport implements ConnectionTransport {
         result = true;
       } else if (message.method === 'Target.disposeBrowserContext') {
         // do nothing...
-        result = await Promise.resolve().then();
+        result = await Promise.resolve();
       } else if (message.method === 'Browser.getVersion') {
         const userAgent = navigator.userAgent;
         const [, product] = userAgent.match(/(Chrome\/[0-9\.]+)\b/) ?? [];
@@ -113,11 +113,16 @@ export class CrxTransport implements ConnectionTransport {
         result = await Promise.resolve({}).then();
       } else if (message.method === 'Browser.setDownloadBehavior') {
         // do nothing...
-        result = await Promise.resolve().then();
+        result = await Promise.resolve();
       } else if (message.method === 'Emulation.setEmulatedMedia') {
         // avoids crashing on chrome.debugger.detach
         // see: https://github.com/ruifigueira/playwright-crx/issues/2
-        result = await Promise.resolve().then();
+        result = await Promise.resolve();
+      } else if (message.method === 'Storage.getCookies') {
+        const tabIds = [...this._tabToTarget.keys()];
+        const tabId = debuggee.tabId ?? tabIds[0];
+        
+        result = await chrome.debugger.sendCommand({ tabId }, 'Storage.getCookies', { ...message.params });
       } else {
         result = await this._send(debuggee, message.method as keyof Protocol.CommandParameters, { ...message.params });
       }
