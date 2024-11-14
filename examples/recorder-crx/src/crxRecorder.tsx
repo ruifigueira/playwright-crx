@@ -16,12 +16,13 @@
 
 import * as React from 'react';
 import { Toolbar } from '@web/components/toolbar';
-import { ToolbarButton } from '@web/components/toolbarButton';
+import { ToolbarButton, ToolbarSeparator } from '@web/components/toolbarButton';
 import { Dialog } from './dialog';
 import { PreferencesForm } from './preferencesForm';
 import { CallLog, ElementInfo, Mode, Source } from '@recorder/recorderTypes';
 import { Recorder } from '@recorder/recorder';
-import { loadSettings } from './settings';
+import { CrxSettings, defaultSettings, loadSettings } from './settings';
+import './crxRecorder.css';
 
 function setElementPicked(elementInfo: ElementInfo, userGesture?: boolean) {
   window.playwrightElementPicked(elementInfo, userGesture);
@@ -33,6 +34,7 @@ function setRunningFileId(fileId: string) {
 
 export const CrxRecorder: React.FC = ({
 }) => {
+  const [settings, setSettings] = React.useState<CrxSettings>(defaultSettings);
   const [showPreferences, setShowPreferences] = React.useState(false);
   const [sources, setSources] = React.useState<Source[]>([]);
   const [paused, setPaused] = React.useState(false);
@@ -69,7 +71,10 @@ export const CrxRecorder: React.FC = ({
         setSelectedFileId(data.params.file);
     };
     window.dispatch = dispatch;
-    loadSettings().then(settings => setSelectedFileId(settings.targetLanguage)).catch(() => {});
+    loadSettings().then(settings => {
+      setSettings(settings);
+      setSelectedFileId(settings.targetLanguage);
+    }).catch(() => {});
     
     return () => {
       port.disconnect();
@@ -112,6 +117,10 @@ export const CrxRecorder: React.FC = ({
     chrome.runtime.sendMessage({ event: 'saveRequested', params: { code, suggestedName } });
   }, [sources, selectedFileId]);
 
+  const requestSaveStorageState = React.useCallback(() => {
+    chrome.runtime.sendMessage({ event: 'saveStorageStateRequested' });
+  }, []);
+
   React.useEffect(() => {
     const keydownHandler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 's') {
@@ -137,6 +146,15 @@ export const CrxRecorder: React.FC = ({
       <Toolbar>
         <ToolbarButton icon='save' title='Save' disabled={false} onClick={requestSave}>Save</ToolbarButton>
         <div style={{ flex: 'auto' }}></div>
+        {settings.experimental && <>
+          <div className="dropdown">
+            <ToolbarButton icon="beaker" title='Experimental Tools' disabled={false} onClick={() => {}}></ToolbarButton>
+            <div className="dropdown-content right-align">
+              <a href="#" onClick={requestSaveStorageState}>Save storage state</a>
+            </div>
+          </div>
+          <ToolbarSeparator />
+        </>}
         <ToolbarButton icon='settings-gear' title='Preferences' onClick={() => setShowPreferences(true)}></ToolbarButton>
       </Toolbar>
       <Recorder sources={sources} paused={paused} log={log} mode={mode} />

@@ -1,0 +1,37 @@
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.right-align {
+  right: 0;
+}
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  background-color: var(--vscode-panel-background);
+  min-width: 80px;
+  box-shadow: var(--vscode-scrollbar-shadow) 0 6px 6px -6px;
+  z-index: 200;
+  text-wrap: nowrap;
+}
+
+.dropdown-content a {
+  color: var(--vscode-sideBarTitle-foreground);
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+}
+
+.dropdown-content a:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.dropdown:hover .dropdown-content {
+  display: block;
+}
+
+.dropdown:hover .dropbtn {
+  background-color: #3e8e41;
+}
