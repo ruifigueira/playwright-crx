@@ -17,7 +17,8 @@ export const PreferencesForm: React.FC = ({}) => {
   const canSave = React.useMemo(() => {
     return initialSettings.sidepanel !== settings.sidepanel ||
       initialSettings.targetLanguage !== settings.targetLanguage ||
-      initialSettings.testIdAttributeName !== settings.testIdAttributeName;
+      initialSettings.testIdAttributeName !== settings.testIdAttributeName ||
+      initialSettings.experimental !== settings.experimental;
   }, [settings, initialSettings]);
 
   const saveSettings = React.useCallback((e: React.FormEvent<HTMLFormElement>) => {
