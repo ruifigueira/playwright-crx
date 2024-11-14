@@ -173,7 +173,7 @@ async function doSave(params: { code: string, suggestedName: string, mode: Mode 
 
   // to avoid playwright from interfering too much, we use chrome tabs api to open and wait for the tab to close
   // and only attach playwright to click the link (showSaveFilePicker requires a user gesture)
-  const saveTab = await chrome.tabs.create({ url: chrome.runtime.getURL('main.html') });
+  const saveTab = await chrome.tabs.create({ url: chrome.runtime.getURL('saving.html') });
   const closePromise = new Promise<void>(async resolve => {
     const tabClosed = (tabId: number) => {
       if (tabId === saveTab.id) {
