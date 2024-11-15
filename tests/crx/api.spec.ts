@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { expect } from '@playwright/test';
 import { test } from './crxTest';
 
 type Tab = chrome.tabs.Tab;
@@ -181,4 +182,41 @@ test('should report oopif frames', async ({ runCrxTest, browserMajorVersion }) =
     expect(page.frames().length).toBe(2);
     expect(await page.frames()[1].evaluate(() => '' + location.href)).toBe(server.CROSS_PROCESS_PREFIX + '/grid.html');
   });
+});
+
+test('should trace', async ({ page, runCrxTest }) => {
+  const base64Trace = await runCrxTest(async ({ page, context, fs }) => {
+
+    await context.tracing.start({ screenshots: true, snapshots: true });
+    await page.goto('https://demo.playwright.dev/todomvc/#/');
+    await page.getByPlaceholder('What needs to be done?').fill('Playwright CRX rocks!');
+    await page.getByPlaceholder('What needs to be done?').press('Enter');
+    await page.getByLabel('Toggle Todo').click();
+    await page.getByRole('button', { name: 'Clear completed' }).click();
+    await context.tracing.stop({ path: '/trace.zip' });
+
+    const traceFile = await fs.promises.readFile('/trace.zip');
+    return traceFile.toString('base64');
+  });
+
+  const traceFile = Buffer.from(base64Trace, 'base64');
+
+  await page.goto('https://trace.playwright.dev/');
+  const [fileChooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.getByRole('button', { name: 'Select file(s)' }).click(),
+  ]);
+  await fileChooser.setFiles({
+    buffer: traceFile,
+    mimeType: 'application/zip',
+    name: 'trace.zip',
+  });
+  
+  await expect(page.getByTestId('actions-tree').locator('.action-title > span')).toHaveText([
+    'page.goto',
+    'locator.fill',
+    'locator.press',
+    'locator.click',
+    'locator.click',
+  ]);
 });

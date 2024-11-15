@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-import { crx, expect, _debug } from 'playwright-crx/test';
+import { crx, expect, _debug, registerSourceMap } from 'playwright-crx/test';
+
+registerSourceMap().catch(() => {});
 
 const _crxAppPromise = crx.start();
 
