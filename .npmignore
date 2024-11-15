@@ -1,9 +1,10 @@
 # This ignores everything by default, except for package.json and LICENSE and README.md.
 # See https://docs.npmjs.com/misc/developers
 **/*
-# Include sources from lib, but not map files.
+# Include sources from lib and map files.
 !lib/**/*.js
 !lib/**/*.mjs
+!lib/**/*.map
 # Include generated types and entrypoint.
 !index.d.ts
 !test.d.ts
