@@ -38,6 +38,8 @@ export default defineConfig({
       // shims
       '_url': path.resolve(__dirname, './node_modules/url'),
       '_util': path.resolve(__dirname, './node_modules/util'),
+      '_stack-utils': path.resolve(__dirname, './node_modules/stack-utils'),
+
       'async_hooks': path.resolve(__dirname, './src/shims/async_hooks'),
       'assert': path.resolve(__dirname, './node_modules/assert'),
       'buffer': path.resolve(__dirname, './node_modules/buffer'),
@@ -60,6 +62,7 @@ export default defineConfig({
       'process': path.resolve(__dirname, './node_modules/process'),
       'readline': path.resolve(__dirname, './src/shims/readline'),
       'setimmediate': path.resolve(__dirname, './node_modules/setimmediate'),
+      'stack-utils': path.resolve(__dirname, './src/shims/stack-utils'),
       'stream': path.resolve(__dirname, './node_modules/readable-stream'),
       'tls': path.resolve(__dirname, './src/shims/tls'),
       'url': path.resolve(__dirname, './src/shims/url'),
@@ -92,6 +95,7 @@ export default defineConfig({
   ],
   build: {
     outDir: path.resolve(__dirname, './lib/'),
+    assetsInlineLimit: 0,
     // skip code obfuscation
     minify: false,
     lib: {
