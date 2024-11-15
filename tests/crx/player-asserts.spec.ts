@@ -19,11 +19,13 @@ import { dumpLogHeaders, expect, test } from "./crxRecorderTest";
 test.beforeEach(async ({ mockPaths }) => {
   await mockPaths({
     'root.html': `<html>
+      <body>
       <input type="checkbox">
       <input type="checkbox" checked>
       <input type="text" value="input with value">
       <select><option>A</option><option selected>B</option></select>
       <div data-testid="text">Some long text</div>
+      <body>
     </html>`,
   });
 });
@@ -40,19 +42,21 @@ test('should pass assertions', async ({ page, recorderPage, baseURL, recordActio
   await recordAssertion(page.locator('select'), 'assertValue');
   await recordAssertion(page.getByTestId('text'), 'assertText');
   await recordAssertion(page.getByTestId('text'), 'assertVisible');
+  await recordAssertion(page.locator('body'), 'assertSnapshot');
 
   // stop record and play
   await recorderPage.getByTitle('Record').click();
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► frame.navigate( ${baseURL}/root.html ) ✅ — XXms`,
-    `► frame.assertChecked( page.getByRole('checkbox').first() ) ✅ — XXms`,
-    `► frame.assertChecked( page.getByRole('checkbox').nth(1) ) ✅ — XXms`,
-    `► frame.assertValue( page.getByRole('textbox') ) ✅ — XXms`,
-    `► frame.assertValue( page.getByRole('combobox') ) ✅ — XXms`,
-    `► frame.assertText( page.getByTestId('text') ) ✅ — XXms`,
-    `► frame.assertVisible( page.getByTestId('text') ) ✅ — XXms`,
+    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
+    `► expect( page.getByRole('checkbox').first() ).toBeChecked() ✅ — XXms`,
+    `► expect( page.getByRole('checkbox').nth(1) ).toBeChecked() ✅ — XXms`,
+    `► expect( page.getByRole('textbox') ).toHaveValue() ✅ — XXms`,
+    `► expect( page.getByRole('combobox') ).toHaveValue() ✅ — XXms`,
+    `► expect( page.getByTestId('text') ).toContainText() ✅ — XXms`,
+    `► expect( page.getByTestId('text') ).toBeVisible() ✅ — XXms`,
+    `► expect( page.locator('body') ).toMatchAriaSnapshot() ✅ — XXms`,
   ]);
 });
 
@@ -70,8 +74,8 @@ test('should fail assertChecked=true', async ({ page, recorderPage, baseURL, rec
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► frame.navigate( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ frame.assertChecked( page.getByRole('checkbox').first() ) ❌ — XXms`,
+    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
+    `▼ expect( page.getByRole('checkbox').first() ).toBeChecked() ❌ — XXms`,
   ]);
 });
 
@@ -89,8 +93,8 @@ test('should fail assertChecked=false', async ({ page, recorderPage, baseURL, re
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► frame.navigate( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ frame.assertChecked( page.getByRole('checkbox').nth(1) ) ❌ — XXms`,
+    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
+    `▼ expect( page.getByRole('checkbox').nth(1) ).toBeChecked() ❌ — XXms`,
   ]);
 });
 
@@ -108,8 +112,8 @@ test('should fail assertValue in textbox', async ({ page, recorderPage, baseURL,
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► frame.navigate( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ frame.assertValue( page.getByRole('textbox') ) ❌ — XXms`,
+    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
+    `▼ expect( page.getByRole('textbox') ).toHaveValue() ❌ — XXms`,
   ]);
 });
 
@@ -127,8 +131,8 @@ test('should fail assertValue in select', async ({ page, recorderPage, baseURL, 
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► frame.navigate( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ frame.assertValue( page.getByRole('combobox') ) ❌ — XXms`,
+    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
+    `▼ expect( page.getByRole('combobox') ).toHaveValue() ❌ — XXms`,
   ]);
 });
 
@@ -146,8 +150,8 @@ test('should fail assertText', async ({ page, recorderPage, baseURL, recordActio
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► frame.navigate( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ frame.assertText( page.getByTestId('text') ) ❌ — XXms`,
+    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
+    `▼ expect( page.getByTestId('text') ).toContainText() ❌ — XXms`,
   ]);
 });
 
@@ -167,8 +171,8 @@ test('should fail assertVisible', async ({ page, recorderPage, baseURL, recordAc
   await recorderPage.getByTitle('Step over (F10)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► frame.navigate( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ frame.assertVisible( page.getByTestId('text') ) ⏸️`,
+    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
+    `▼ expect( page.getByTestId('text') ).toBeVisible() ⏸️`,
   ]);
 
   // remove element
@@ -178,7 +182,7 @@ test('should fail assertVisible', async ({ page, recorderPage, baseURL, recordAc
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► frame.navigate( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ frame.assertVisible( page.getByTestId('text') ) ❌ — XXms`,
+    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
+    `▼ expect( page.getByTestId('text') ).toBeVisible() ❌ — XXms`,
   ]);
 });
