@@ -152,6 +152,7 @@ class JSLintingService extends LintingService {
           'notice/notice': 'off',
           '@typescript-eslint/no-unused-vars': 'off',
           'max-len': ['error', { code: 100 }],
+          'react/react-in-jsx-scope': 'off',
         },
       }
     });
@@ -209,6 +210,16 @@ class CSharpLintingService extends LintingService {
   }
 }
 
+class JavaLintingService extends LintingService {
+  supports(codeLang) {
+    return codeLang === 'java';
+  }
+
+  async lint(snippets) {
+    return await this.spawnAsync('java', ['-jar', path.join(__dirname, 'java', 'target', 'java-syntax-checker-1.0-SNAPSHOT.jar')], snippets, path.join(__dirname, 'java'))
+  }
+}
+
 class LintingServiceFactory {
   constructor() {
     /** @type {LintingService[]} */
@@ -219,6 +230,7 @@ class LintingServiceFactory {
       this.services.push(
         new PythonLintingService(),
         new CSharpLintingService(),
+        new JavaLintingService(),
       );
     }
     this._metrics = {};

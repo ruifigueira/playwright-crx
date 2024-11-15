@@ -1041,9 +1041,9 @@ await page.dragAndDrop('#source', '#target', {
 ```
 
 ```java
-page.dragAndDrop("#source", '#target');
+page.dragAndDrop("#source", "#target");
 // or specify exact positions relative to the top-left corners of the elements:
-page.dragAndDrop("#source", '#target', new Page.DragAndDropOptions()
+page.dragAndDrop("#source", "#target", new Page.DragAndDropOptions()
   .setSourcePosition(34, 7).setTargetPosition(10, 20));
 ```
 
@@ -1217,8 +1217,6 @@ await page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches);
 // → true
 await page.evaluate(() => matchMedia('(prefers-color-scheme: light)').matches);
 // → false
-await page.evaluate(() => matchMedia('(prefers-color-scheme: no-preference)').matches);
-// → false
 ```
 
 ```java
@@ -1226,8 +1224,6 @@ page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.DARK
 page.evaluate("() => matchMedia('(prefers-color-scheme: dark)').matches");
 // → true
 page.evaluate("() => matchMedia('(prefers-color-scheme: light)').matches");
-// → false
-page.evaluate("() => matchMedia('(prefers-color-scheme: no-preference)').matches");
 // → false
 ```
 
@@ -1237,8 +1233,6 @@ await page.evaluate("matchMedia('(prefers-color-scheme: dark)').matches")
 # → True
 await page.evaluate("matchMedia('(prefers-color-scheme: light)').matches")
 # → False
-await page.evaluate("matchMedia('(prefers-color-scheme: no-preference)').matches")
-# → False
 ```
 
 ```python sync
@@ -1247,7 +1241,6 @@ page.evaluate("matchMedia('(prefers-color-scheme: dark)').matches")
 # → True
 page.evaluate("matchMedia('(prefers-color-scheme: light)').matches")
 # → False
-page.evaluate("matchMedia('(prefers-color-scheme: no-preference)').matches")
 ```
 
 ```csharp
@@ -1255,8 +1248,6 @@ await page.EmulateMediaAsync(new() { ColorScheme = ColorScheme.Dark });
 await page.EvaluateAsync("matchMedia('(prefers-color-scheme: dark)').matches");
 // → true
 await page.EvaluateAsync("matchMedia('(prefers-color-scheme: light)').matches");
-// → false
-await page.EvaluateAsync("matchMedia('(prefers-color-scheme: no-preference)').matches");
 // → false
 ```
 
@@ -1281,16 +1272,16 @@ Passing `'Null'` disables CSS media emulation.
 * langs: js, java
 - `colorScheme` <null|[ColorScheme]<"light"|"dark"|"no-preference">>
 
-Emulates `'prefers-colors-scheme'` media feature, supported values are `'light'`, `'dark'`, `'no-preference'`. Passing
-`null` disables color scheme emulation.
+Emulates [prefers-colors-scheme](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme) media feature, supported values are `'light'` and `'dark'`. Passing
+`null` disables color scheme emulation. `'no-preference'` is deprecated.
 
 ### option: Page.emulateMedia.colorScheme
 * since: v1.9
 * langs: csharp, python
 - `colorScheme` <[ColorScheme]<"light"|"dark"|"no-preference"|"null">>
 
-Emulates `'prefers-colors-scheme'` media feature, supported values are `'light'`, `'dark'`, `'no-preference'`. Passing
-`'Null'` disables color scheme emulation.
+Emulates [prefers-colors-scheme](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme) media feature, supported values are `'light'` and `'dark'`. Passing
+`'Null'` disables color scheme emulation. `'no-preference'` is deprecated.
 
 ### option: Page.emulateMedia.reducedMotion
 * since: v1.12
@@ -1716,7 +1707,7 @@ public class Example {
   public static void main(String[] args) {
     try (Playwright playwright = Playwright.create()) {
       BrowserType webkit = playwright.webkit();
-      Browser browser = webkit.launch({ headless: false });
+      Browser browser = webkit.launch(new BrowserType.LaunchOptions().setHeadless(false));
       BrowserContext context = browser.newContext();
       Page page = context.newPage();
       page.exposeBinding("pageURL", (source, args) -> source.page().url());
@@ -1886,26 +1877,27 @@ public class Example {
   public static void main(String[] args) {
     try (Playwright playwright = Playwright.create()) {
       BrowserType webkit = playwright.webkit();
-      Browser browser = webkit.launch({ headless: false });
+      Browser browser = webkit.launch(new BrowserType.LaunchOptions().setHeadless(false));
       Page page = browser.newPage();
       page.exposeFunction("sha256", args -> {
-        String text = (String) args[0];
-        MessageDigest crypto;
         try {
-          crypto = MessageDigest.getInstance("SHA-256");
+          String text = (String) args[0];
+          MessageDigest crypto = MessageDigest.getInstance("SHA-256");
+          byte[] token = crypto.digest(text.getBytes(StandardCharsets.UTF_8));
+          return Base64.getEncoder().encodeToString(token);
         } catch (NoSuchAlgorithmException e) {
           return null;
         }
-        byte[] token = crypto.digest(text.getBytes(StandardCharsets.UTF_8));
-        return Base64.getEncoder().encodeToString(token);
       });
-      page.setContent("<script>\n" +
+      page.setContent(
+        "<script>\n" +
         "  async function onClick() {\n" +
         "    document.querySelector('div').textContent = await window.sha256('PLAYWRIGHT');\n" +
         "  }\n" +
         "</script>\n" +
         "<button onclick=\"onClick()\">Click me</button>\n" +
-        "<div></div>\n");
+        "<div></div>"
+      );
       page.click("button");
     }
   }
@@ -2106,7 +2098,7 @@ const frame = page.frame({ url: /.*domain.*/ });
 ```
 
 ```java
-Frame frame = page.frameByUrl(Pattern.compile(".*domain.*");
+Frame frame = page.frameByUrl(Pattern.compile(".*domain.*"));
 ```
 
 ```py
@@ -3161,12 +3153,12 @@ await page.getByRole('button', { name: 'Start here' }).click();
 
 ```java
 // Setup the handler.
-page.addLocatorHandler(page.getByText("Sign up to the newsletter"), () => {
+page.addLocatorHandler(page.getByText("Sign up to the newsletter"), () -> {
   page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("No thanks")).click();
 });
 
 // Write the test as usual.
-page.goto("https://example.com");
+page.navigate("https://example.com");
 page.getByRole("button", Page.GetByRoleOptions().setName("Start here")).click();
 ```
 
@@ -3218,12 +3210,12 @@ await page.getByRole('button', { name: 'Start here' }).click();
 
 ```java
 // Setup the handler.
-page.addLocatorHandler(page.getByText("Confirm your security details")), () => {
+page.addLocatorHandler(page.getByText("Confirm your security details"), () -> {
   page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Remind me later")).click();
 });
 
 // Write the test as usual.
-page.goto("https://example.com");
+page.navigate("https://example.com");
 page.getByRole("button", Page.GetByRoleOptions().setName("Start here")).click();
 ```
 
@@ -3275,12 +3267,12 @@ await page.getByRole('button', { name: 'Start here' }).click();
 
 ```java
 // Setup the handler.
-page.addLocatorHandler(page.locator("body")), () => {
+page.addLocatorHandler(page.locator("body"), () -> {
   page.evaluate("window.removeObstructionsForTestIfNeeded()");
-}, new Page.AddLocatorHandlerOptions.setNoWaitAfter(true));
+}, new Page.AddLocatorHandlerOptions().setNoWaitAfter(true));
 
 // Write the test as usual.
-page.goto("https://example.com");
+page.navigate("https://example.com");
 page.getByRole("button", Page.GetByRoleOptions().setName("Start here")).click();
 ```
 
@@ -3326,7 +3318,7 @@ await page.addLocatorHandler(page.getByLabel('Close'), async locator => {
 ```
 
 ```java
-page.addLocatorHandler(page.getByLabel("Close"), locator => {
+page.addLocatorHandler(page.getByLabel("Close"), locator -> {
   locator.click();
 }, new Page.AddLocatorHandlerOptions().setTimes(1));
 ```
@@ -3699,8 +3691,8 @@ await page.routeWebSocket('/ws', ws => {
 
 ```java
 page.routeWebSocket("/ws", ws -> {
-  ws.onMessage(message -> {
-    if ("request".equals(message))
+  ws.onMessage(frame -> {
+    if ("request".equals(frame.text()))
       ws.send("response");
   });
 });
@@ -3730,8 +3722,8 @@ page.route_web_socket("/ws", handler)
 
 ```csharp
 await page.RouteWebSocketAsync("/ws", ws => {
-  ws.OnMessage(message => {
-    if (message == "request")
+  ws.OnMessage(frame => {
+    if (frame.Text == "request")
       ws.Send("response");
   });
 });

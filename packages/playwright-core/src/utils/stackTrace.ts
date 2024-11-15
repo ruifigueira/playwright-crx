@@ -16,9 +16,9 @@
 
 import path from 'path';
 import { parseStackTraceLine } from '../utilsBundle';
-import { isUnderTest } from './';
 import type { StackFrame } from '@protocol/channels';
 import { colors } from '../utilsBundle';
+import { findRepeatedSubsequences } from './sequence';
 
 export function rewriteErrorMessage<E extends Error>(e: E, newMessage: string): E {
   const lines: string[] = (e.stack?.split('\n') || []).filter(l => l.startsWith('    at '));
@@ -50,7 +50,6 @@ export function captureRawStack(): RawStack {
 export function captureLibraryStackTrace(): { frames: StackFrame[], apiName: string } {
   const stack = captureRawStack();
 
-  const isTesting = isUnderTest();
   type ParsedFrame = {
     frame: StackFrame;
     frameText: string;
@@ -134,8 +133,28 @@ export function formatCallLog(log: string[] | undefined): string {
     return '';
   return `
 Call log:
-  ${colors.dim('- ' + (log || []).join('\n  - '))}
+${colors.dim(log.join('\n'))}
 `;
+}
+
+export function compressCallLog(log: string[]): string[] {
+  const lines: string[] = [];
+
+  for (const block of findRepeatedSubsequences(log)) {
+    for (let i = 0; i < block.sequence.length; i++) {
+      const line = block.sequence[i];
+      const leadingWhitespace = line.match(/^\s*/);
+      const whitespacePrefix = '  ' + leadingWhitespace?.[0] || '';
+      const countPrefix = `${block.count} × `;
+      if (block.count > 1 && i === 0)
+        lines.push(whitespacePrefix + countPrefix + line.trim());
+      else if (block.count > 1)
+        lines.push(whitespacePrefix + ' '.repeat(countPrefix.length - 2) + '- ' + line.trim());
+      else
+        lines.push(whitespacePrefix + '- ' + line.trim());
+    }
+  }
+  return lines;
 }
 
 export type ExpectZone = {

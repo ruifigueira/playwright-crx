@@ -19,6 +19,7 @@ import { matcherHint } from './matcherHint';
 import type { MatcherResult } from './matcherHint';
 import type { ExpectMatcherState } from '../../types/test';
 import type { Locator } from 'playwright-core';
+import { isRegExp } from 'playwright-core/lib/utils';
 
 // Omit colon and one or more spaces, so can call getLabelPrinter.
 const EXPECTED_LABEL = 'Expected';
@@ -44,22 +45,50 @@ export async function toEqual<T>(
   const timeout = options.timeout ?? this.timeout;
 
   const { matches: pass, received, log, timedOut } = await query(!!this.isNot, timeout);
+  if (pass === !this.isNot) {
+    return {
+      name: matcherName,
+      message: () => '',
+      pass,
+      expected
+    };
+  }
 
-  const message = pass
-    ? () =>
-      matcherHint(this, receiver, matcherName, 'locator', undefined, matcherOptions, timedOut ? timeout : undefined) +
-      `Expected: not ${this.utils.printExpected(expected)}\n` +
-      `Received: ${this.utils.printReceived(received)}` + callLogText(log)
-    : () =>
-      matcherHint(this, receiver, matcherName, 'locator', undefined, matcherOptions, timedOut ? timeout : undefined) +
-      this.utils.printDiffOrStringify(
-          expected,
-          received,
-          EXPECTED_LABEL,
-          RECEIVED_LABEL,
-          false,
-      ) + callLogText(log);
+  let printedReceived: string | undefined;
+  let printedExpected: string | undefined;
+  let printedDiff: string | undefined;
+  if (pass) {
+    printedExpected = `Expected: not ${this.utils.printExpected(expected)}`;
+    printedReceived = `Received: ${this.utils.printReceived(received)}`;
+  } else if (Array.isArray(expected) && Array.isArray(received)) {
+    const normalizedExpected = expected.map((exp, index) => {
+      const rec = received[index];
+      if (isRegExp(exp))
+        return exp.test(rec) ? rec : exp;
 
+      return exp;
+    });
+    printedDiff = this.utils.printDiffOrStringify(
+        normalizedExpected,
+        received,
+        EXPECTED_LABEL,
+        RECEIVED_LABEL,
+        false,
+    );
+  } else {
+    printedDiff = this.utils.printDiffOrStringify(
+        expected,
+        received,
+        EXPECTED_LABEL,
+        RECEIVED_LABEL,
+        false,
+    );
+  }
+  const message = () => {
+    const header = matcherHint(this, receiver, matcherName, 'locator', undefined, matcherOptions, timedOut ? timeout : undefined);
+    const details = printedDiff || `${printedExpected}\n${printedReceived}`;
+    return `${header}${details}${callLogText(log)}`;
+  };
   // Passing the actual and expected objects so that a custom reporter
   // could access them, for example in order to display a custom visual diff,
   // or create a different error message

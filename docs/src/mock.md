@@ -195,15 +195,15 @@ await Expect(page.GetByTextAsync("Loquat", new () { Exact = true })).ToBeVisible
 page.route("*/**/api/v1/fruits", route -> {
   Response response = route.fetch();
   byte[] json = response.body();
-  parsed = new Gson().fromJson(json, JsonObject.class)
+  JsonObject parsed = new Gson().fromJson(new String(json), JsonObject.class);
   parsed.add(new JsonObject().add("name", "Loquat").add("id", 100));
   // Fulfill using the original response, while patching the response body
   // with the given JSON object.
-  route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(json.toString()));
+  route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(parsed.toString()));
 });
 
 // Go to the page
-page.goto("https://demo.playwright.dev/api-mocking");
+page.navigate("https://demo.playwright.dev/api-mocking");
 
 // Assert that the Loquat fruit is visible
 assertThat(page.getByText("Loquat", new Page.GetByTextOptions().setExact(true))).isVisible();
@@ -294,7 +294,7 @@ page.routeFromHAR(Path.of("./hars/fruit.har"), new RouteFromHAROptions()
 );
 
 // Go to the page
-page.goto("https://demo.playwright.dev/api-mocking");
+page.navigate("https://demo.playwright.dev/api-mocking");
 
 // Assert that the fruit is visible
 assertThat(page.getByText("Strawberry")).isVisible();
@@ -392,10 +392,11 @@ page.routeFromHAR(Path.of("./hars/fruit.har"), new RouteFromHAROptions()
 );
 
 // Go to the page
-page.goto("https://demo.playwright.dev/api-mocking");
+page.navigate("https://demo.playwright.dev/api-mocking");
 
 // Assert that the Playwright fruit is visible
-assertThat(page.getByText("Playwright", new Page.GetByTextOptions().setExact(true))).isVisible();
+assertThat(page.getByText("Playwright", new Page.GetByTextOptions()
+  .setExact(true))).isVisible();
 ```
 In the trace of our test we can see that the route was fulfilled from the HAR file and the API was not called.
 ![trace showing the HAR file being used](https://github.com/microsoft/playwright/assets/13063165/1bd7ab66-ea4f-43c2-a4e5-ca17d4837ff1)
@@ -434,3 +435,122 @@ pwsh bin/Debug/netX/playwright.ps1 open --save-har=example.har --save-har-glob="
 ```
 
 Read more about [advanced networking](./network.md).
+
+## Mock WebSockets
+
+The following code will intercept WebSocket connections and mock entire communcation over the WebSocket, instead of connecting to the server. This example responds to a `"request"` with a `"response"`.
+
+```js
+await page.routeWebSocket('wss://example.com/ws', ws => {
+  ws.onMessage(message => {
+    if (message === 'request')
+      ws.send('response');
+  });
+});
+```
+
+```java
+page.routeWebSocket("wss://example.com/ws", ws -> {
+  ws.onMessage(frame -> {
+    if ("request".equals(frame.text()))
+      ws.send("response");
+  });
+});
+```
+
+```python async
+def message_handler(ws: WebSocketRoute, message: Union[str, bytes]):
+  if message == "request":
+    ws.send("response")
+
+await page.route_web_socket("wss://example.com/ws", lambda ws: ws.on_message(
+    lambda message: message_handler(ws, message)
+))
+```
+
+```python sync
+def message_handler(ws: WebSocketRoute, message: Union[str, bytes]):
+  if message == "request":
+    ws.send("response")
+
+page.route_web_socket("wss://example.com/ws", lambda ws: ws.on_message(
+    lambda message: message_handler(ws, message)
+))
+```
+
+```csharp
+await page.RouteWebSocketAsync("wss://example.com/ws", ws => {
+  ws.OnMessage(frame => {
+    if (frame.Text == "request")
+      ws.Send("response");
+  });
+});
+```
+
+Alternatively, you may want to connect to the actual server, but intercept messages in-between and modify or block them. Here is an example that modifies some of the messages sent by the page to the server, and leaves the rest unmodified.
+
+```js
+await page.routeWebSocket('wss://example.com/ws', ws => {
+  const server = ws.connectToServer();
+  ws.onMessage(message => {
+    if (message === 'request')
+      server.send('request2');
+    else
+      server.send(message);
+  });
+});
+```
+
+```java
+page.routeWebSocket("wss://example.com/ws", ws -> {
+  WebSocketRoute server = ws.connectToServer();
+  ws.onMessage(frame -> {
+    if ("request".equals(frame.text()))
+      server.send("request2");
+    else
+      server.send(frame.text());
+  });
+});
+```
+
+```python async
+def message_handler(server: WebSocketRoute, message: Union[str, bytes]):
+  if message == "request":
+    server.send("request2")
+  else:
+    server.send(message)
+
+def handler(ws: WebSocketRoute):
+  server = ws.connect_to_server()
+  ws.on_message(lambda message: message_handler(server, message))
+
+await page.route_web_socket("wss://example.com/ws", handler)
+```
+
+```python sync
+def message_handler(server: WebSocketRoute, message: Union[str, bytes]):
+  if message == "request":
+    server.send("request2")
+  else:
+    server.send(message)
+
+def handler(ws: WebSocketRoute):
+  server = ws.connect_to_server()
+  ws.on_message(lambda message: message_handler(server, message))
+
+page.route_web_socket("wss://example.com/ws", handler)
+```
+
+```csharp
+await page.RouteWebSocketAsync("wss://example.com/ws", ws => {
+  var server = ws.ConnectToServer();
+  ws.OnMessage(frame => {
+    if (frame.Text == "request")
+      server.Send("request2");
+    else
+      server.Send(frame.Text);
+  });
+});
+```
+
+For more details, see [WebSocketRoute].
