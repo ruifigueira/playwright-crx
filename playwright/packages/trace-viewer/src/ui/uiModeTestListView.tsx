@@ -47,12 +47,14 @@ export const TestListView: React.FC<{
   isLoading?: boolean,
   onItemSelected: (item: { treeItem?: TreeItem, testCase?: reporterTypes.TestCase, testFile?: SourceLocation }) => void,
   requestedCollapseAllCount: number,
+  requestedExpandAllCount: number,
   setFilterText: (text: string) => void,
   onRevealSource: () => void,
-}> = ({ filterText, testModel, testServerConnection, testTree, runTests, runningState, watchAll, watchedTreeIds, setWatchedTreeIds, isLoading, onItemSelected, requestedCollapseAllCount, setFilterText, onRevealSource }) => {
+}> = ({ filterText, testModel, testServerConnection, testTree, runTests, runningState, watchAll, watchedTreeIds, setWatchedTreeIds, isLoading, onItemSelected, requestedCollapseAllCount, requestedExpandAllCount, setFilterText, onRevealSource }) => {
   const [treeState, setTreeState] = React.useState<TreeState>({ expandedItems: new Map() });
   const [selectedTreeItemId, setSelectedTreeItemId] = React.useState<string | undefined>();
   const [collapseAllCount, setCollapseAllCount] = React.useState(requestedCollapseAllCount);
+  const [expandAllCount, setExpandAllCount] = React.useState(requestedExpandAllCount);
 
   // Look for a first failure within the run batch to select it.
   React.useEffect(() => {
@@ -62,6 +64,16 @@ export const TestListView: React.FC<{
       for (const item of testTree.flatTreeItems())
         treeState.expandedItems.set(item.id, false);
       setCollapseAllCount(requestedCollapseAllCount);
+      setSelectedTreeItemId(undefined);
+      setTreeState({ ...treeState });
+      return;
+    }
+
+    if (expandAllCount !== requestedExpandAllCount) {
+      treeState.expandedItems.clear();
+      for (const item of testTree.flatTreeItems())
+        treeState.expandedItems.set(item.id, true);
+      setExpandAllCount(requestedExpandAllCount);
       setSelectedTreeItemId(undefined);
       setTreeState({ ...treeState });
       return;
@@ -85,7 +97,7 @@ export const TestListView: React.FC<{
 
     if (selectedTreeItem)
       setSelectedTreeItemId(selectedTreeItem.id);
-  }, [runningState, setSelectedTreeItemId, testTree, collapseAllCount, setCollapseAllCount, requestedCollapseAllCount, treeState, setTreeState]);
+  }, [runningState, setSelectedTreeItemId, testTree, collapseAllCount, setCollapseAllCount, requestedCollapseAllCount, expandAllCount, setExpandAllCount, requestedExpandAllCount, treeState, setTreeState]);
 
   // Compute selected item.
   const { selectedTreeItem } = React.useMemo(() => {
@@ -147,12 +159,15 @@ export const TestListView: React.FC<{
     rootItem={testTree.rootItem}
     dataTestId='test-tree'
     render={treeItem => {
-      return <div className='hbox ui-mode-list-item'>
-        <div className='ui-mode-list-item-title'>
-          <span title={treeItem.title}>{treeItem.title}</span>
+      const prefixId = treeItem.id.replace(/[^\w\d-_]/g, '-');
+      const labelId = prefixId + '-label';
+      const timeId = prefixId + '-time';
+      return <div className='hbox ui-mode-tree-item' aria-labelledby={`${labelId} ${timeId}`}>
+        <div id={labelId} className='ui-mode-tree-item-title'>
+          <span>{treeItem.title}</span>
           {treeItem.kind === 'case' ? treeItem.tags.map(tag => <TagView key={tag} tag={tag.slice(1)} onClick={e => handleTagClick(e, tag)} />) : null}
         </div>
-        {!!treeItem.duration && treeItem.status !== 'skipped' && <div className='ui-mode-list-item-time'>{msToString(treeItem.duration)}</div>}
+        {!!treeItem.duration && treeItem.status !== 'skipped' && <div id={timeId} className='ui-mode-tree-item-time'>{msToString(treeItem.duration)}</div>}
         <Toolbar noMinHeight={true} noShadow={true}>
           <ToolbarButton icon='play' title='Run' onClick={() => runTreeItem(treeItem)} disabled={!!runningState && !runningState.completed}></ToolbarButton>
           <ToolbarButton icon='go-to-file' title='Show source' onClick={onRevealSource} style={(treeItem.kind === 'group' && treeItem.subKind === 'folder') ? { visibility: 'hidden' } : {}}></ToolbarButton>
@@ -167,6 +182,7 @@ export const TestListView: React.FC<{
       </div>;
     }}
     icon={treeItem => testStatusIcon(treeItem.status)}
+    title={treeItem => treeItem.title}
     selectedItem={selectedTreeItem}
     onAccepted={runTreeItem}
     onSelected={treeItem => {

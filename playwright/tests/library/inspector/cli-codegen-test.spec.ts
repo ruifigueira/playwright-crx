@@ -85,13 +85,22 @@ test('test', async ({ page }) => {`;
   await cli.waitFor(expectedResult);
 });
 
-test('should work with --save-har', async ({ runCLI }, testInfo) => {
+test('should not generate recordHAR with --save-har', async ({ runCLI }, testInfo) => {
   const harFileName = testInfo.outputPath('har.har');
-  const expectedResult = `
-  recordHar: {
-    mode: 'minimal',
-    path: '${harFileName.replace(/\\/g, '\\\\')}'
-  }`;
+  const expectedResult = `  await page.routeFromHAR('${harFileName.replace(/\\/g, '\\\\')}');`;
+  const cli = runCLI(['--target=playwright-test', `--save-har=${harFileName}`], {
+    autoExitWhen: expectedResult,
+  });
+  await cli.waitForCleanExit();
+  const json = JSON.parse(fs.readFileSync(harFileName, 'utf-8'));
+  expect(json.log.creator.name).toBe('Playwright');
+});
+
+test('should generate routeFromHAR with --save-har', async ({ runCLI }, testInfo) => {
+  const harFileName = testInfo.outputPath('har.har');
+  const expectedResult = `test('test', async ({ page }) => {
+  await page.routeFromHAR('${harFileName.replace(/\\/g, '\\\\')}');
+});`;
   const cli = runCLI(['--target=playwright-test', `--save-har=${harFileName}`], {
     autoExitWhen: expectedResult,
   });

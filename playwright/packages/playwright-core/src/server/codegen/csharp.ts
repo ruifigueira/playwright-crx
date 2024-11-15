@@ -146,6 +146,8 @@ export class CSharpLanguageGenerator implements LanguageGenerator {
         const assertion = action.value ? `ToHaveValueAsync(${quote(action.value)})` : `ToBeEmptyAsync()`;
         return `await Expect(${subject}.${this._asLocator(action.selector)}).${assertion};`;
       }
+      case 'assertSnapshot':
+        return `await Expect(${subject}.${this._asLocator(action.selector)}).ToMatchAriaSnapshotAsync(${quote(action.snapshot)});`;
     }
   }
 
@@ -169,6 +171,8 @@ export class CSharpLanguageGenerator implements LanguageGenerator {
       using var playwright = await Playwright.CreateAsync();
       await using var browser = await playwright.${toPascal(options.browserName)}.LaunchAsync(${formatObject(options.launchOptions, '    ', 'BrowserTypeLaunchOptions')});
       var context = await browser.NewContextAsync(${formatContextOptions(options.contextOptions, options.deviceName)});`);
+    if (options.contextOptions.recordHar)
+      formatter.add(`      await context.RouteFromHARAsync(${quote(options.contextOptions.recordHar.path)});`);
     formatter.newLine();
     return formatter.format();
   }
@@ -194,6 +198,8 @@ export class CSharpLanguageGenerator implements LanguageGenerator {
     formatter.add(`    [${this._mode === 'nunit' ? 'Test' : 'TestMethod'}]
     public async Task MyTest()
     {`);
+    if (options.contextOptions.recordHar)
+      formatter.add(`    await context.RouteFromHARAsync(${quote(options.contextOptions.recordHar.path)});`);
     return formatter.format();
   }
 
@@ -259,32 +265,22 @@ function toPascal(value: string): string {
   return value[0].toUpperCase() + value.slice(1);
 }
 
-function convertContextOptions(options: BrowserContextOptions): any {
-  const result: any = { ...options };
-  if (options.recordHar) {
-    result['recordHarPath'] = options.recordHar.path;
-    result['recordHarContent'] = options.recordHar.content;
-    result['recordHarMode'] = options.recordHar.mode;
-    result['recordHarOmitContent'] = options.recordHar.omitContent;
-    result['recordHarUrlFilter'] = options.recordHar.urlFilter;
-    delete result.recordHar;
-  }
-  return result;
-}
-
-function formatContextOptions(options: BrowserContextOptions, deviceName: string | undefined): string {
+function formatContextOptions(contextOptions: BrowserContextOptions, deviceName: string | undefined): string {
+  let options = { ...contextOptions };
+  // recordHAR is replaced with routeFromHAR in the generated code.
+  delete options.recordHar;
   const device = deviceName && deviceDescriptors[deviceName];
   if (!device) {
     if (!Object.entries(options).length)
       return '';
-    return formatObject(convertContextOptions(options), '    ', 'BrowserNewContextOptions');
+    return formatObject(options, '    ', 'BrowserNewContextOptions');
   }
 
   options = sanitizeDeviceOptions(device, options);
   if (!Object.entries(options).length)
     return `playwright.Devices[${quote(deviceName!)}]`;
 
-  return formatObject(convertContextOptions(options), '    ', `BrowserNewContextOptions(playwright.Devices[${quote(deviceName!)}])`);
+  return formatObject(options, '    ', `BrowserNewContextOptions(playwright.Devices[${quote(deviceName!)}])`);
 }
 
 class CSharpFormatter {

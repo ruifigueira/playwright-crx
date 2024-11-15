@@ -118,6 +118,8 @@ export async function loadConfig(location: ConfigLocation, overrides?: ConfigCLI
   const babelPlugins = (userConfig as any)['@playwright/test']?.babelPlugins || [];
   const external = userConfig.build?.external || [];
   setTransformConfig({ babelPlugins, external });
+  if (!overrides?.tsconfig)
+    setSingleTSConfig(fullConfig?.singleTSConfigPath);
 
   // 4. Send transform options to ESM loader.
   await configureESMLoaderTransformConfig();
@@ -137,13 +139,25 @@ function validateConfig(file: string, config: Config) {
   }
 
   if ('globalSetup' in config && config.globalSetup !== undefined) {
-    if (typeof config.globalSetup !== 'string')
+    if (Array.isArray(config.globalSetup)) {
+      config.globalSetup.forEach((item, index) => {
+        if (typeof item !== 'string')
+          throw errorWithFile(file, `config.globalSetup[${index}] must be a string`);
+      });
+    } else if (typeof config.globalSetup !== 'string') {
       throw errorWithFile(file, `config.globalSetup must be a string`);
+    }
   }
 
   if ('globalTeardown' in config && config.globalTeardown !== undefined) {
-    if (typeof config.globalTeardown !== 'string')
+    if (Array.isArray(config.globalTeardown)) {
+      config.globalTeardown.forEach((item, index) => {
+        if (typeof item !== 'string')
+          throw errorWithFile(file, `config.globalTeardown[${index}] must be a string`);
+      });
+    } else if (typeof config.globalTeardown !== 'string') {
       throw errorWithFile(file, `config.globalTeardown must be a string`);
+    }
   }
 
   if ('globalTimeout' in config && config.globalTimeout !== undefined) {
@@ -364,11 +378,6 @@ export function restartWithExperimentalTsEsm(configFile: string | undefined, for
 
   // Now check for the newer API presence.
   if (!require('node:module').register) {
-    // Older API is experimental, only supported on Node 16+.
-    const nodeVersion = +process.versions.node.split('.')[0];
-    if (nodeVersion < 16)
-      return false;
-
     // With older API requiring a process restart, do so conditionally on the config.
     const configIsModule = !!configFile && fileIsModule(configFile);
     if (!force && !configIsModule)

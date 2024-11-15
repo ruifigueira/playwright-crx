@@ -36,6 +36,7 @@ export type TraceViewerFixtures = {
 
 class TraceViewerPage {
   actionTitles: Locator;
+  actionsTree: Locator;
   callLines: Locator;
   consoleLines: Locator;
   logLines: Locator;
@@ -46,9 +47,11 @@ class TraceViewerPage {
   networkRequests: Locator;
   metadataTab: Locator;
   snapshotContainer: Locator;
+  sourceCodeTab: Locator;
 
   constructor(public page: Page) {
     this.actionTitles = page.locator('.action-title');
+    this.actionsTree = page.getByTestId('actions-tree');
     this.callLines = page.locator('.call-tab .call-line');
     this.logLines = page.getByTestId('log-list').locator('.list-view-entry');
     this.consoleLines = page.locator('.console-line');
@@ -59,21 +62,32 @@ class TraceViewerPage {
     this.networkRequests = page.getByTestId('network-list').locator('.list-view-entry');
     this.snapshotContainer = page.locator('.snapshot-container iframe.snapshot-visible[name=snapshot]');
     this.metadataTab = page.getByTestId('metadata-view');
+    this.sourceCodeTab = page.getByTestId('source-code');
   }
 
   async actionIconsText(action: string) {
-    const entry = await this.page.waitForSelector(`.list-view-entry:has-text("${action}")`);
+    const entry = await this.page.waitForSelector(`.tree-view-entry:has-text("${action}")`);
     await entry.waitForSelector('.action-icon-value:visible');
     return await entry.$$eval('.action-icon-value:visible', ee => ee.map(e => e.textContent));
   }
 
   async actionIcons(action: string) {
-    return await this.page.waitForSelector(`.list-view-entry:has-text("${action}") .action-icons`);
+    return await this.page.waitForSelector(`.tree-view-entry:has-text("${action}") .action-icons`);
+  }
+
+  @step
+  async expandAction(title: string, ordinal: number = 0) {
+    await this.actionsTree.locator('.tree-view-entry', { hasText: title }).nth(ordinal).locator('.codicon-chevron-right').click();
   }
 
   @step
   async selectAction(title: string, ordinal: number = 0) {
     await this.page.locator(`.action-title:has-text("${title}")`).nth(ordinal).click();
+  }
+
+  @step
+  async hoverAction(title: string, ordinal: number = 0) {
+    await this.page.locator(`.action-title:has-text("${title}")`).nth(ordinal).hover();
   }
 
   @step

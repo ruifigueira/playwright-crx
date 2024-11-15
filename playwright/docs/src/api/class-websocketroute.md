@@ -8,7 +8,7 @@ Whenever a [`WebSocket`](https://developer.mozilla.org/en-US/docs/Web/API/WebSoc
 By default, the routed WebSocket will not connect to the server. This way, you can mock entire communcation over the WebSocket. Here is an example that responds to a `"request"` with a `"response"`.
 
 ```js
-await page.routeWebSocket('/ws', ws => {
+await page.routeWebSocket('wss://example.com/ws', ws => {
   ws.onMessage(message => {
     if (message === 'request')
       ws.send('response');
@@ -17,9 +17,9 @@ await page.routeWebSocket('/ws', ws => {
 ```
 
 ```java
-page.routeWebSocket("/ws", ws -> {
-  ws.onMessage(message -> {
-    if ("request".equals(message))
+page.routeWebSocket("wss://example.com/ws", ws -> {
+  ws.onMessage(frame -> {
+    if ("request".equals(frame.text()))
       ws.send("response");
   });
 });
@@ -30,7 +30,7 @@ def message_handler(ws: WebSocketRoute, message: Union[str, bytes]):
   if message == "request":
     ws.send("response")
 
-await page.route_web_socket("/ws", lambda ws: ws.on_message(
+await page.route_web_socket("wss://example.com/ws", lambda ws: ws.on_message(
     lambda message: message_handler(ws, message)
 ))
 ```
@@ -40,21 +40,84 @@ def message_handler(ws: WebSocketRoute, message: Union[str, bytes]):
   if message == "request":
     ws.send("response")
 
-page.route_web_socket("/ws", lambda ws: ws.on_message(
+page.route_web_socket("wss://example.com/ws", lambda ws: ws.on_message(
     lambda message: message_handler(ws, message)
 ))
 ```
 
 ```csharp
-await page.RouteWebSocketAsync("/ws", ws => {
-  ws.OnMessage(message => {
-    if (message == "request")
+await page.RouteWebSocketAsync("wss://example.com/ws", ws => {
+  ws.OnMessage(frame => {
+    if (frame.Text == "request")
       ws.Send("response");
   });
 });
 ```
 
 Since we do not call [`method: WebSocketRoute.connectToServer`] inside the WebSocket route handler, Playwright assumes that WebSocket will be mocked, and opens the WebSocket inside the page automatically.
+
+Here is another example that handles JSON messages:
+
+```js
+await page.routeWebSocket('wss://example.com/ws', ws => {
+  ws.onMessage(message => {
+    const json = JSON.parse(message);
+    if (json.request === 'question')
+      ws.send(JSON.stringify({ response: 'answer' }));
+  });
+});
+```
+
+```java
+page.routeWebSocket("wss://example.com/ws", ws -> {
+  ws.onMessage(frame -> {
+    JsonObject json = new JsonParser().parse(frame.text()).getAsJsonObject();
+    if ("question".equals(json.get("request").getAsString())) {
+      Map<String, String> result = new HashMap();
+      result.put("response", "answer");
+      ws.send(gson.toJson(result));
+    }
+  });
+});
+```
+
+```python async
+def message_handler(ws: WebSocketRoute, message: Union[str, bytes]):
+  json_message = json.loads(message)
+  if json_message["request"] == "question":
+    ws.send(json.dumps({ "response": "answer" }))
+
+await page.route_web_socket("wss://example.com/ws", lambda ws: ws.on_message(
+    lambda message: message_handler(ws, message)
+))
+```
+
+```python sync
+def message_handler(ws: WebSocketRoute, message: Union[str, bytes]):
+  json_message = json.loads(message)
+  if json_message["request"] == "question":
+    ws.send(json.dumps({ "response": "answer" }))
+
+page.route_web_socket("wss://example.com/ws", lambda ws: ws.on_message(
+    lambda message: message_handler(ws, message)
+))
+```
+
+```csharp
+await page.RouteWebSocketAsync("wss://example.com/ws", ws => {
+  ws.OnMessage(frame => {
+    using var jsonDoc = JsonDocument.Parse(frame.Text);
+    JsonElement root = jsonDoc.RootElement;
+    if (root.TryGetProperty("request", out JsonElement requestElement) && requestElement.GetString() == "question")
+    {
+      var response = new Dictionary<string, string> { ["response"] = "answer" };
+      string jsonResponse = JsonSerializer.Serialize(response);
+      ws.Send(jsonResponse);
+    }
+  });
+});
+```
+
 
 **Intercepting**
 
@@ -77,11 +140,11 @@ await page.routeWebSocket('/ws', ws => {
 ```java
 page.routeWebSocket("/ws", ws -> {
   WebSocketRoute server = ws.connectToServer();
-  ws.onMessage(message -> {
-    if ("request".equals(message))
+  ws.onMessage(frame -> {
+    if ("request".equals(frame.text()))
       server.send("request2");
     else
-      server.send(message);
+      server.send(frame.text());
   });
 });
 ```
@@ -117,11 +180,11 @@ page.route_web_socket("/ws", handler)
 ```csharp
 await page.RouteWebSocketAsync("/ws", ws => {
   var server = ws.ConnectToServer();
-  ws.OnMessage(message => {
-    if (message == "request")
+  ws.OnMessage(frame => {
+    if (frame.Text == "request")
       server.Send("request2");
     else
-      server.Send(message);
+      server.Send(frame.Text);
   });
 });
 ```
@@ -152,13 +215,13 @@ await page.routeWebSocket('/ws', ws => {
 ```java
 page.routeWebSocket("/ws", ws -> {
   WebSocketRoute server = ws.connectToServer();
-  ws.onMessage(message -> {
-    if (!"blocked-from-the-page".equals(message))
-      server.send(message);
+  ws.onMessage(frame -> {
+    if (!"blocked-from-the-page".equals(frame.text()))
+      server.send(frame.text());
   });
-  server.onMessage(message -> {
-    if (!"blocked-from-the-server".equals(message))
-      ws.send(message);
+  server.onMessage(frame -> {
+    if (!"blocked-from-the-server".equals(frame.text()))
+      ws.send(frame.text());
   });
 });
 ```
@@ -200,13 +263,13 @@ page.route_web_socket("/ws", handler)
 ```csharp
 await page.RouteWebSocketAsync("/ws", ws => {
   var server = ws.ConnectToServer();
-  ws.OnMessage(message => {
-    if (message != "blocked-from-the-page")
-      server.Send(message);
+  ws.OnMessage(frame => {
+    if (frame.Text != "blocked-from-the-page")
+      server.Send(frame.Text);
   });
-  server.OnMessage(message => {
-    if (message != "blocked-from-the-server")
-      ws.Send(message);
+  server.OnMessage(frame => {
+    if (frame.Text != "blocked-from-the-server")
+      ws.Send(frame.Text);
   });
 });
 ```
@@ -256,19 +319,25 @@ By default, closing one side of the connection, either in the page or on the ser
 ### param: WebSocketRoute.onClose.handler
 * since: v1.48
 * langs: js, python
-- `handler` <[function]\([number]|[undefined], [string]|[undefined]\): [Promise<any>|any]>
+- `handler` <[function]\([int]|[undefined], [string]|[undefined]\): [Promise<any>|any]>
 
 Function that will handle WebSocket closure. Received an optional [close code](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/close#code) and an optional [close reason](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/close#reason).
 
 ### param: WebSocketRoute.onClose.handler
 * since: v1.48
-* langs: java, csharp
-- `handler` <[function]\([null]|[number], [null]|[string]\)>
+* langs: java
+- `handler` <[function]\([null]|[int], [null]|[string]\)>
 
 Function that will handle WebSocket closure. Received an optional [close code](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/close#code) and an optional [close reason](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/close#reason).
 
+### param: WebSocketRoute.onClose.handler
+* since: v1.48
+* langs: csharp
+- `handler` <[function]\([int?], [string]\)>
 
-## async method: WebSocketRoute.onMessage
+Function that will handle WebSocket closure. Received an optional [close code](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/close#code) and an optional [close reason](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/close#reason).
+
+## method: WebSocketRoute.onMessage
 * since: v1.48
 
 This method allows to handle messages that are sent by the WebSocket, either from the page or from the server.

@@ -56,6 +56,11 @@ const EXECUTABLE_PATHS = {
     'mac': ['chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'],
     'win': ['chrome-win', 'chrome.exe'],
   },
+  'chromium-headless-shell': {
+    'linux': ['chrome-linux', 'headless_shell'],
+    'mac': ['chrome-mac', 'headless_shell'],
+    'win': ['chrome-win', 'headless_shell.exe'],
+  },
   'firefox': {
     'linux': ['firefox', 'firefox'],
     'mac': ['firefox', 'Nightly.app', 'Contents', 'MacOS', 'firefox'],
@@ -103,6 +108,35 @@ const DOWNLOAD_PATHS: Record<BrowserName | InternalTool, DownloadPaths> = {
     'mac15': 'builds/chromium/%s/chromium-mac.zip',
     'mac15-arm64': 'builds/chromium/%s/chromium-mac-arm64.zip',
     'win64': 'builds/chromium/%s/chromium-win64.zip',
+  },
+  'chromium-headless-shell': {
+    '<unknown>': undefined,
+    'ubuntu18.04-x64': undefined,
+    'ubuntu20.04-x64': 'builds/chromium/%s/chromium-headless-shell-linux.zip',
+    'ubuntu22.04-x64': 'builds/chromium/%s/chromium-headless-shell-linux.zip',
+    'ubuntu24.04-x64': 'builds/chromium/%s/chromium-headless-shell-linux.zip',
+    'ubuntu18.04-arm64': undefined,
+    'ubuntu20.04-arm64': 'builds/chromium/%s/chromium-headless-shell-linux-arm64.zip',
+    'ubuntu22.04-arm64': 'builds/chromium/%s/chromium-headless-shell-linux-arm64.zip',
+    'ubuntu24.04-arm64': 'builds/chromium/%s/chromium-headless-shell-linux-arm64.zip',
+    'debian11-x64': 'builds/chromium/%s/chromium-headless-shell-linux.zip',
+    'debian11-arm64': 'builds/chromium/%s/chromium-headless-shell-linux-arm64.zip',
+    'debian12-x64': 'builds/chromium/%s/chromium-headless-shell-linux.zip',
+    'debian12-arm64': 'builds/chromium/%s/chromium-headless-shell-linux-arm64.zip',
+    'mac10.13': undefined,
+    'mac10.14': undefined,
+    'mac10.15': undefined,
+    'mac11': 'builds/chromium/%s/chromium-headless-shell-mac.zip',
+    'mac11-arm64': 'builds/chromium/%s/chromium-headless-shell-mac-arm64.zip',
+    'mac12': 'builds/chromium/%s/chromium-headless-shell-mac.zip',
+    'mac12-arm64': 'builds/chromium/%s/chromium-headless-shell-mac-arm64.zip',
+    'mac13': 'builds/chromium/%s/chromium-headless-shell-mac.zip',
+    'mac13-arm64': 'builds/chromium/%s/chromium-headless-shell-mac-arm64.zip',
+    'mac14': 'builds/chromium/%s/chromium-headless-shell-mac.zip',
+    'mac14-arm64': 'builds/chromium/%s/chromium-headless-shell-mac-arm64.zip',
+    'mac15': 'builds/chromium/%s/chromium-headless-shell-mac.zip',
+    'mac15-arm64': 'builds/chromium/%s/chromium-headless-shell-mac-arm64.zip',
+    'win64': 'builds/chromium/%s/chromium-headless-shell-win64.zip',
   },
   'chromium-tip-of-tree': {
     '<unknown>': undefined,
@@ -318,7 +352,7 @@ export const registryDirectory = (() => {
 function isBrowserDirectory(browserDirectory: string): boolean {
   const baseName = path.basename(browserDirectory);
   for (const browserName of allDownloadable) {
-    if (baseName.startsWith(browserName + '-'))
+    if (baseName.startsWith(browserName.replace(/-/g, '_') + '-'))
       return true;
   }
   return false;
@@ -338,12 +372,13 @@ type BrowsersJSON = {
 type BrowsersJSONDescriptor = {
   name: string,
   revision: string,
+  hasRevisionOverride: boolean
   browserVersion?: string,
   installByDefault: boolean,
   dir: string,
 };
 
-function readDescriptors(browsersJSON: BrowsersJSON) {
+function readDescriptors(browsersJSON: BrowsersJSON): BrowsersJSONDescriptor[] {
   return (browsersJSON['browsers']).map(obj => {
     const name = obj.name;
     const revisionOverride = (obj.revisionOverrides || {})[hostPlatform];
@@ -352,6 +387,7 @@ function readDescriptors(browsersJSON: BrowsersJSON) {
     const descriptor: BrowsersJSONDescriptor = {
       name,
       revision,
+      hasRevisionOverride: !!revisionOverride,
       // We only put browser version for the supported operating systems.
       browserVersion: revisionOverride ? undefined : obj.browserVersion,
       installByDefault: !!obj.installByDefault,
@@ -367,10 +403,10 @@ function readDescriptors(browsersJSON: BrowsersJSON) {
 }
 
 export type BrowserName = 'chromium' | 'firefox' | 'webkit' | 'bidi';
-type InternalTool = 'ffmpeg' | 'firefox-beta' | 'chromium-tip-of-tree' | 'android';
+type InternalTool = 'ffmpeg' | 'firefox-beta' | 'chromium-tip-of-tree' | 'chromium-headless-shell' | 'android';
 type BidiChannel = 'bidi-firefox-stable' | 'bidi-firefox-beta' | 'bidi-firefox-nightly' | 'bidi-chrome-canary' | 'bidi-chrome-stable' | 'bidi-chromium';
 type ChromiumChannel = 'chrome' | 'chrome-beta' | 'chrome-dev' | 'chrome-canary' | 'msedge' | 'msedge-beta' | 'msedge-dev' | 'msedge-canary';
-const allDownloadable = ['chromium', 'firefox', 'webkit', 'ffmpeg', 'firefox-beta', 'chromium-tip-of-tree'];
+const allDownloadable = ['android', 'chromium', 'firefox', 'webkit', 'ffmpeg', 'firefox-beta', 'chromium-tip-of-tree', 'chromium-headless-shell'];
 
 export interface Executable {
   type: 'browser' | 'tool' | 'channel';
@@ -445,10 +481,28 @@ export class Registry {
       executablePath: () => chromiumExecutable,
       executablePathOrDie: (sdkLanguage: string) => executablePathOrDie('chromium', chromiumExecutable, chromium.installByDefault, sdkLanguage),
       installType: chromium.installByDefault ? 'download-by-default' : 'download-on-demand',
-      _validateHostRequirements: (sdkLanguage: string) => this._validateHostRequirements(sdkLanguage, 'chromium', chromium.dir, ['chrome-linux'], [], ['chrome-win']),
+      _validateHostRequirements: (sdkLanguage: string) => this._validateHostRequirements(sdkLanguage, chromium.dir, ['chrome-linux'], [], ['chrome-win']),
       downloadURLs: this._downloadURLs(chromium),
       browserVersion: chromium.browserVersion,
       _install: () => this._downloadExecutable(chromium, chromiumExecutable),
+      _dependencyGroup: 'chromium',
+      _isHermeticInstallation: true,
+    });
+
+    const chromiumHeadlessShell = descriptors.find(d => d.name === 'chromium-headless-shell')!;
+    const chromiumHeadlessShellExecutable = findExecutablePath(chromiumHeadlessShell.dir, 'chromium-headless-shell');
+    this._executables.push({
+      type: 'channel',
+      name: 'chromium-headless-shell',
+      browserName: 'chromium',
+      directory: chromiumHeadlessShell.dir,
+      executablePath: () => chromiumHeadlessShellExecutable,
+      executablePathOrDie: (sdkLanguage: string) => executablePathOrDie('chromium', chromiumHeadlessShellExecutable, chromiumHeadlessShell.installByDefault, sdkLanguage),
+      installType: chromiumHeadlessShell.installByDefault ? 'download-by-default' : 'download-on-demand',
+      _validateHostRequirements: (sdkLanguage: string) => this._validateHostRequirements(sdkLanguage, chromiumHeadlessShell.dir, ['chrome-linux'], [], ['chrome-win']),
+      downloadURLs: this._downloadURLs(chromiumHeadlessShell),
+      browserVersion: chromium.browserVersion,
+      _install: () => this._downloadExecutable(chromiumHeadlessShell, chromiumHeadlessShellExecutable),
       _dependencyGroup: 'chromium',
       _isHermeticInstallation: true,
     });
@@ -463,7 +517,7 @@ export class Registry {
       executablePath: () => chromiumTipOfTreeExecutable,
       executablePathOrDie: (sdkLanguage: string) => executablePathOrDie('chromium-tip-of-tree', chromiumTipOfTreeExecutable, chromiumTipOfTree.installByDefault, sdkLanguage),
       installType: chromiumTipOfTree.installByDefault ? 'download-by-default' : 'download-on-demand',
-      _validateHostRequirements: (sdkLanguage: string) => this._validateHostRequirements(sdkLanguage, 'chromium', chromiumTipOfTree.dir, ['chrome-linux'], [], ['chrome-win']),
+      _validateHostRequirements: (sdkLanguage: string) => this._validateHostRequirements(sdkLanguage, chromiumTipOfTree.dir, ['chrome-linux'], [], ['chrome-win']),
       downloadURLs: this._downloadURLs(chromiumTipOfTree),
       browserVersion: chromiumTipOfTree.browserVersion,
       _install: () => this._downloadExecutable(chromiumTipOfTree, chromiumTipOfTreeExecutable),
@@ -573,7 +627,7 @@ export class Registry {
       executablePath: () => chromiumExecutable,
       executablePathOrDie: (sdkLanguage: string) => executablePathOrDie('chromium', chromiumExecutable, chromium.installByDefault, sdkLanguage),
       installType: 'download-on-demand',
-      _validateHostRequirements: (sdkLanguage: string) => this._validateHostRequirements(sdkLanguage, 'chromium', chromium.dir, ['chrome-linux'], [], ['chrome-win']),
+      _validateHostRequirements: (sdkLanguage: string) => this._validateHostRequirements(sdkLanguage, chromium.dir, ['chrome-linux'], [], ['chrome-win']),
       downloadURLs: this._downloadURLs(chromium),
       browserVersion: chromium.browserVersion,
       _install: () => this._downloadExecutable(chromium, chromiumExecutable),
@@ -591,7 +645,7 @@ export class Registry {
       executablePath: () => firefoxExecutable,
       executablePathOrDie: (sdkLanguage: string) => executablePathOrDie('firefox', firefoxExecutable, firefox.installByDefault, sdkLanguage),
       installType: firefox.installByDefault ? 'download-by-default' : 'download-on-demand',
-      _validateHostRequirements: (sdkLanguage: string) => this._validateHostRequirements(sdkLanguage, 'firefox', firefox.dir, ['firefox'], [], ['firefox']),
+      _validateHostRequirements: (sdkLanguage: string) => this._validateHostRequirements(sdkLanguage, firefox.dir, ['firefox'], [], ['firefox']),
       downloadURLs: this._downloadURLs(firefox),
       browserVersion: firefox.browserVersion,
       _install: () => this._downloadExecutable(firefox, firefoxExecutable),
@@ -609,7 +663,7 @@ export class Registry {
       executablePath: () => firefoxBetaExecutable,
       executablePathOrDie: (sdkLanguage: string) => executablePathOrDie('firefox-beta', firefoxBetaExecutable, firefoxBeta.installByDefault, sdkLanguage),
       installType: firefoxBeta.installByDefault ? 'download-by-default' : 'download-on-demand',
-      _validateHostRequirements: (sdkLanguage: string) => this._validateHostRequirements(sdkLanguage, 'firefox', firefoxBeta.dir, ['firefox'], [], ['firefox']),
+      _validateHostRequirements: (sdkLanguage: string) => this._validateHostRequirements(sdkLanguage, firefoxBeta.dir, ['firefox'], [], ['firefox']),
       downloadURLs: this._downloadURLs(firefoxBeta),
       browserVersion: firefoxBeta.browserVersion,
       _install: () => this._downloadExecutable(firefoxBeta, firefoxBetaExecutable),
@@ -637,7 +691,7 @@ export class Registry {
       executablePath: () => webkitExecutable,
       executablePathOrDie: (sdkLanguage: string) => executablePathOrDie('webkit', webkitExecutable, webkit.installByDefault, sdkLanguage),
       installType: webkit.installByDefault ? 'download-by-default' : 'download-on-demand',
-      _validateHostRequirements: (sdkLanguage: string) => this._validateHostRequirements(sdkLanguage, 'webkit', webkit.dir, webkitLinuxLddDirectories, ['libGLESv2.so.2', 'libx264.so'], ['']),
+      _validateHostRequirements: (sdkLanguage: string) => this._validateHostRequirements(sdkLanguage, webkit.dir, webkitLinuxLddDirectories, ['libGLESv2.so.2', 'libx264.so'], ['']),
       downloadURLs: this._downloadURLs(webkit),
       browserVersion: webkit.browserVersion,
       _install: () => this._downloadExecutable(webkit, webkitExecutable),
@@ -825,17 +879,11 @@ export class Registry {
     return this._executables.filter(e => e.installType === 'download-by-default');
   }
 
-  private _addRequirementsAndDedupe(executables: Executable[]): ExecutableImpl[] {
-    const set = new Set<ExecutableImpl>();
-    for (const executable of executables as ExecutableImpl[]) {
-      set.add(executable);
-      if (executable.browserName === 'chromium')
-        set.add(this.findExecutable('ffmpeg')!);
-    }
-    return Array.from(set);
+  private _dedupe(executables: Executable[]): ExecutableImpl[] {
+    return Array.from(new Set(executables as ExecutableImpl[]));
   }
 
-  private async _validateHostRequirements(sdkLanguage: string, browserName: BrowserName, browserDirectory: string, linuxLddDirectories: string[], dlOpenLibraries: string[], windowsExeAndDllDirectories: string[]) {
+  private async _validateHostRequirements(sdkLanguage: string, browserDirectory: string, linuxLddDirectories: string[], dlOpenLibraries: string[], windowsExeAndDllDirectories: string[]) {
     if (os.platform() === 'linux')
       return await validateDependenciesLinux(sdkLanguage, linuxLddDirectories.map(d => path.join(browserDirectory, d)), dlOpenLibraries);
     if (os.platform() === 'win32' && os.arch() === 'x64')
@@ -843,7 +891,7 @@ export class Registry {
   }
 
   async installDeps(executablesToInstallDeps: Executable[], dryRun: boolean) {
-    const executables = this._addRequirementsAndDedupe(executablesToInstallDeps);
+    const executables = this._dedupe(executablesToInstallDeps);
     const targets = new Set<DependencyGroup>();
     for (const executable of executables) {
       if (executable._dependencyGroup)
@@ -857,7 +905,7 @@ export class Registry {
   }
 
   async install(executablesToInstall: Executable[], forceReinstall: boolean) {
-    const executables = this._addRequirementsAndDedupe(executablesToInstall);
+    const executables = this._dedupe(executablesToInstall);
     await fs.promises.mkdir(registryDirectory, { recursive: true });
     const lockfilePath = path.join(registryDirectory, '__dirlock');
     const linksDir = path.join(registryDirectory, '.links');
@@ -1011,6 +1059,13 @@ export class Registry {
       throw new Error(`ERROR: Playwright does not support ${descriptor.name} on ${hostPlatform}`);
     if (!isOfficiallySupportedPlatform)
       logPolitely(`BEWARE: your OS is not officially supported by Playwright; downloading fallback build for ${hostPlatform}.`);
+    if (descriptor.hasRevisionOverride) {
+      const message = `You are using a frozen ${descriptor.name} browser which does not receive updates anymore on ${hostPlatform}. Please update to the latest version of your operating system to test up-to-date browsers.`;
+      if (process.env.GITHUB_ACTIONS)
+        console.log(`::warning title=Playwright::${message}`);  // eslint-disable-line no-console
+      else
+        logPolitely(message);
+    }
 
     const displayName = descriptor.name.split('-').map(word => {
       return word === 'ffmpeg' ? 'FFMPEG' : word.charAt(0).toUpperCase() + word.slice(1);
@@ -1144,11 +1199,6 @@ export function buildPlaywrightCLICommand(sdkLanguage: string, parameters: strin
       return `${packageManagerCommand} playwright ${parameters}`;
     }
   }
-}
-
-export async function installDefaultBrowsersForNpmInstall() {
-  const defaultBrowserNames = registry.defaultExecutables().map(e => e.name);
-  return installBrowsersForNpmInstall(defaultBrowserNames);
 }
 
 export async function installBrowsersForNpmInstall(browsers: string[]) {

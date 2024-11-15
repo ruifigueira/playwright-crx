@@ -2553,16 +2553,15 @@ export interface Page {
    * // → true
    * await page.evaluate(() => matchMedia('(prefers-color-scheme: light)').matches);
    * // → false
-   * await page.evaluate(() => matchMedia('(prefers-color-scheme: no-preference)').matches);
-   * // → false
    * ```
    *
    * @param options
    */
   emulateMedia(options?: {
     /**
-     * Emulates `'prefers-colors-scheme'` media feature, supported values are `'light'`, `'dark'`, `'no-preference'`.
-     * Passing `null` disables color scheme emulation.
+     * Emulates [prefers-colors-scheme](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme)
+     * media feature, supported values are `'light'` and `'dark'`. Passing `null` disables color scheme emulation.
+     * `'no-preference'` is deprecated.
      */
     colorScheme?: null|"light"|"dark"|"no-preference";
 
@@ -9761,7 +9760,8 @@ export interface Browser {
     }>;
 
     /**
-     * Emulates `'prefers-colors-scheme'` media feature, supported values are `'light'`, `'dark'`, `'no-preference'`. See
+     * Emulates [prefers-colors-scheme](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme)
+     * media feature, supported values are `'light'` and `'dark'`. See
      * [page.emulateMedia([options])](https://playwright.dev/docs/api/class-page#page-emulate-media) for more details.
      * Passing `null` resets emulation to system defaults. Defaults to `'light'`.
      */
@@ -12425,6 +12425,57 @@ export interface Locator {
   and(locator: Locator): Locator;
 
   /**
+   * Captures the aria snapshot of the given element. Read more about [aria snapshots](https://playwright.dev/docs/aria-snapshots) and
+   * [expect(locator).toMatchAriaSnapshot(expected[, options])](https://playwright.dev/docs/api/class-locatorassertions#locator-assertions-to-match-aria-snapshot)
+   * for the corresponding assertion.
+   *
+   * **Usage**
+   *
+   * ```js
+   * await page.getByRole('link').ariaSnapshot();
+   * ```
+   *
+   * **Details**
+   *
+   * This method captures the aria snapshot of the given element. The snapshot is a string that represents the state of
+   * the element and its children. The snapshot can be used to assert the state of the element in the test, or to
+   * compare it to state in the future.
+   *
+   * The ARIA snapshot is represented using [YAML](https://yaml.org/spec/1.2.2/) markup language:
+   * - The keys of the objects are the roles and optional accessible names of the elements.
+   * - The values are either text content or an array of child elements.
+   * - Generic static text can be represented with the `text` key.
+   *
+   * Below is the HTML markup and the respective ARIA snapshot:
+   *
+   * ```html
+   * <ul aria-label="Links">
+   *   <li><a href="/">Home</a></li>
+   *   <li><a href="/about">About</a></li>
+   * <ul>
+   * ```
+   *
+   * ```yml
+   * - list "Links":
+   *   - listitem:
+   *     - link "Home"
+   *   - listitem:
+   *     - link "About"
+   * ```
+   *
+   * @param options
+   */
+  ariaSnapshot(options?: {
+    /**
+     * Maximum time in milliseconds. Defaults to `0` - no timeout. The default value can be changed via `actionTimeout`
+     * option in the config, or by using the
+     * [browserContext.setDefaultTimeout(timeout)](https://playwright.dev/docs/api/class-browsercontext#browser-context-set-default-timeout)
+     * or [page.setDefaultTimeout(timeout)](https://playwright.dev/docs/api/class-page#page-set-default-timeout) methods.
+     */
+    timeout?: number;
+  }): Promise<string>;
+
+  /**
    * Calls [blur](https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/blur) on the element.
    * @param options
    */
@@ -14726,7 +14777,8 @@ export interface BrowserType<Unused = {}> {
     }>;
 
     /**
-     * Emulates `'prefers-colors-scheme'` media feature, supported values are `'light'`, `'dark'`, `'no-preference'`. See
+     * Emulates [prefers-colors-scheme](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme)
+     * media feature, supported values are `'light'` and `'dark'`. See
      * [page.emulateMedia([options])](https://playwright.dev/docs/api/class-page#page-emulate-media) for more details.
      * Passing `null` resets emulation to system defaults. Defaults to `'light'`.
      */
@@ -15355,7 +15407,7 @@ export interface CDPSession {
  * the WebSocket. Here is an example that responds to a `"request"` with a `"response"`.
  *
  * ```js
- * await page.routeWebSocket('/ws', ws => {
+ * await page.routeWebSocket('wss://example.com/ws', ws => {
  *   ws.onMessage(message => {
  *     if (message === 'request')
  *       ws.send('response');
@@ -15367,6 +15419,18 @@ export interface CDPSession {
  * [webSocketRoute.connectToServer()](https://playwright.dev/docs/api/class-websocketroute#web-socket-route-connect-to-server)
  * inside the WebSocket route handler, Playwright assumes that WebSocket will be mocked, and opens the WebSocket
  * inside the page automatically.
+ *
+ * Here is another example that handles JSON messages:
+ *
+ * ```js
+ * await page.routeWebSocket('wss://example.com/ws', ws => {
+ *   ws.onMessage(message => {
+ *     const json = JSON.parse(message);
+ *     if (json.request === 'question')
+ *       ws.send(JSON.stringify({ response: 'answer' }));
+ *   });
+ * });
+ * ```
  *
  * **Intercepting**
  *
@@ -16522,7 +16586,8 @@ export interface AndroidDevice {
     bypassCSP?: boolean;
 
     /**
-     * Emulates `'prefers-colors-scheme'` media feature, supported values are `'light'`, `'dark'`, `'no-preference'`. See
+     * Emulates [prefers-colors-scheme](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme)
+     * media feature, supported values are `'light'` and `'dark'`. See
      * [page.emulateMedia([options])](https://playwright.dev/docs/api/class-page#page-emulate-media) for more details.
      * Passing `null` resets emulation to system defaults. Defaults to `'light'`.
      */
@@ -18542,6 +18607,10 @@ export interface Clock {
   /**
    * Makes `Date.now` and `new Date()` return fixed fake time at all times, keeps all the timers running.
    *
+   * Use this method for simple scenarios where you only need to test with a predefined time. For more advanced
+   * scenarios, use [clock.install([options])](https://playwright.dev/docs/api/class-clock#clock-install) instead. Read
+   * docs on [clock emulation](https://playwright.dev/docs/clock) to learn more.
+   *
    * **Usage**
    *
    * ```js
@@ -18555,7 +18624,8 @@ export interface Clock {
   setFixedTime(time: number|string|Date): Promise<void>;
 
   /**
-   * Sets current system time but does not trigger any timers.
+   * Sets system time, but does not trigger any timers. Use this to test how the web page reacts to a time shift, for
+   * example switching from summer to winter time, or changing time zones.
    *
    * **Usage**
    *
@@ -18998,7 +19068,8 @@ export interface Electron {
     bypassCSP?: boolean;
 
     /**
-     * Emulates `'prefers-colors-scheme'` media feature, supported values are `'light'`, `'dark'`, `'no-preference'`. See
+     * Emulates [prefers-colors-scheme](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme)
+     * media feature, supported values are `'light'` and `'dark'`. See
      * [page.emulateMedia([options])](https://playwright.dev/docs/api/class-page#page-emulate-media) for more details.
      * Passing `null` resets emulation to system defaults. Defaults to `'light'`.
      */
@@ -19748,10 +19819,7 @@ export interface FrameLocator {
  * An example to trigger select-all with the keyboard
  *
  * ```js
- * // on Windows and Linux
- * await page.keyboard.press('Control+A');
- * // on macOS
- * await page.keyboard.press('Meta+A');
+ * await page.keyboard.press('ControlOrMeta+A');
  * ```
  *
  */
@@ -20606,12 +20674,12 @@ export interface Route {
    *
    * **Details**
    *
-   * Note that any overrides such as [`url`](https://playwright.dev/docs/api/class-route#route-continue-option-url) or
-   * [`headers`](https://playwright.dev/docs/api/class-route#route-continue-option-headers) only apply to the request
-   * being routed. If this request results in a redirect, overrides will not be applied to the new redirected request.
-   * If you want to propagate a header through redirects, use the combination of
-   * [route.fetch([options])](https://playwright.dev/docs/api/class-route#route-fetch) and
-   * [route.fulfill([options])](https://playwright.dev/docs/api/class-route#route-fulfill) instead.
+   * The [`headers`](https://playwright.dev/docs/api/class-route#route-continue-option-headers) option applies to both
+   * the routed request and any redirects it initiates. However,
+   * [`url`](https://playwright.dev/docs/api/class-route#route-continue-option-url),
+   * [`method`](https://playwright.dev/docs/api/class-route#route-continue-option-method), and
+   * [`postData`](https://playwright.dev/docs/api/class-route#route-continue-option-post-data) only apply to the
+   * original request and are not carried over to redirected requests.
    *
    * [route.continue([options])](https://playwright.dev/docs/api/class-route#route-continue) will immediately send the
    * request to the network, other matching handlers won't be invoked. Use
@@ -20987,6 +21055,45 @@ export interface Touchscreen {
  *
  */
 export interface Tracing {
+  /**
+   * **NOTE** Use `test.step` instead when available.
+   *
+   * Creates a new group within the trace, assigning any subsequent API calls to this group, until
+   * [tracing.groupEnd()](https://playwright.dev/docs/api/class-tracing#tracing-group-end) is called. Groups can be
+   * nested and will be visible in the trace viewer.
+   *
+   * **Usage**
+   *
+   * ```js
+   * // use test.step instead
+   * await test.step('Log in', async () => {
+   *   // ...
+   * });
+   * ```
+   *
+   * @param name Group name shown in the trace viewer.
+   * @param options
+   */
+  group(name: string, options?: {
+    /**
+     * Specifies a custom location for the group to be shown in the trace viewer. Defaults to the location of the
+     * [tracing.group(name[, options])](https://playwright.dev/docs/api/class-tracing#tracing-group) call.
+     */
+    location?: {
+      file: string;
+
+      line?: number;
+
+      column?: number;
+    };
+  }): Promise<void>;
+
+  /**
+   * Closes the last group created by
+   * [tracing.group(name[, options])](https://playwright.dev/docs/api/class-tracing#tracing-group).
+   */
+  groupEnd(): Promise<void>;
+
   /**
    * Start tracing.
    *
@@ -21820,7 +21927,8 @@ export interface BrowserContextOptions {
   }>;
 
   /**
-   * Emulates `'prefers-colors-scheme'` media feature, supported values are `'light'`, `'dark'`, `'no-preference'`. See
+   * Emulates [prefers-colors-scheme](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme)
+   * media feature, supported values are `'light'` and `'dark'`. See
    * [page.emulateMedia([options])](https://playwright.dev/docs/api/class-page#page-emulate-media) for more details.
    * Passing `null` resets emulation to system defaults. Defaults to `'light'`.
    */

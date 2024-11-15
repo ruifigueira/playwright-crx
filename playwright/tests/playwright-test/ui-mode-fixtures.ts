@@ -20,7 +20,8 @@ import * as path from 'path';
 import type { TestChildProcess } from '../config/commonFixtures';
 import { cleanEnv, cliEntrypoint, test as base, writeFiles, removeFolders } from './playwright-test-fixtures';
 import type { Files, RunOptions } from './playwright-test-fixtures';
-import type { Browser, BrowserType, Page, TestInfo } from './stable-test-runner';
+import type { Browser, Page, TestInfo } from './stable-test-runner';
+import { chromium } from './stable-test-runner';
 import { createGuid } from '../../packages/playwright-core/src/utils/crypto';
 
 type Latch = {
@@ -66,16 +67,17 @@ export function dumpTestTree(page: Page, options: { time?: boolean } = {}): () =
     }
 
     const result: string[] = [];
-    const listItems = treeElement.querySelectorAll('[role=listitem]');
-    for (const listItem of listItems) {
-      const iconElements = listItem.querySelectorAll('.codicon');
+    const treeItems = treeElement.querySelectorAll('[role=treeitem]');
+    for (const treeItem of treeItems) {
+      const treeItemHeader = treeItem.querySelector('.tree-view-entry');
+      const iconElements = treeItemHeader.querySelectorAll('.codicon');
       const treeIcon = iconName(iconElements[0]);
       const statusIcon = iconName(iconElements[1]);
-      const indent = listItem.querySelectorAll('.list-view-indent').length;
-      const watch = listItem.querySelector('.toolbar-button.eye.toggled') ? ' 👁' : '';
-      const selected = listItem.classList.contains('selected') ? ' <=' : '';
-      const title = listItem.querySelector('.ui-mode-list-item-title').childNodes[0].textContent;
-      const timeElement = options.time ? listItem.querySelector('.ui-mode-list-item-time') : undefined;
+      const indent = treeItemHeader.querySelectorAll('.tree-view-indent').length;
+      const watch = treeItemHeader.querySelector('.toolbar-button.eye.toggled') ? ' 👁' : '';
+      const selected = treeItem.getAttribute('aria-selected') === 'true' ? ' <=' : '';
+      const title = treeItemHeader.querySelector('.ui-mode-tree-item-title').childNodes[0].textContent;
+      const timeElement = options.time ? treeItemHeader.querySelector('.ui-mode-tree-item-time') : undefined;
       const time = timeElement ? ' ' + timeElement.textContent.replace(/[.\d]+m?s/, 'XXms') : '';
       result.push('    ' + '  '.repeat(indent) + treeIcon + ' ' + statusIcon + ' ' + title + time + watch + selected);
     }
@@ -105,14 +107,11 @@ export const test = base
             cwd: options.cwd ? path.resolve(baseDir, options.cwd) : baseDir,
           });
           let page: Page;
-          // We want to have ToT playwright-core here, since we install it's browsers and otherwise
-          // don't have the right browser revision (ToT revisions != stable-test-runner revisions).
-          const chromium: BrowserType = require('../../packages/playwright-core').chromium;
           if (options.useWeb) {
             await testProcess.waitForOutput('Listening on');
             const line = testProcess.output.split('\n').find(l => l.includes('Listening on'));
             const uiAddress = line!.split(' ')[2];
-            browser = await chromium.launch();
+            browser = await chromium.launch({ channel: 'chrome' });
             page = await browser.newPage();
             await page.goto(uiAddress);
           } else {

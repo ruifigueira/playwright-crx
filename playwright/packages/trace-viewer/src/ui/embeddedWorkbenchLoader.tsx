@@ -65,6 +65,7 @@ export const EmbeddedWorkbenchLoader: React.FunctionComponent = () => {
           const url = traceURLs[i];
           const params = new URLSearchParams();
           params.set('trace', url);
+          params.set('limit', String(traceURLs.length));
           const response = await fetch(`contexts?${params.toString()}`);
           if (!response.ok) {
             setProcessingErrorMessage((await response.json()).error);
@@ -91,7 +92,7 @@ export const EmbeddedWorkbenchLoader: React.FunctionComponent = () => {
     <div className='progress'>
       <div className='inner-progress' style={{ width: progress.total ? (100 * progress.done / progress.total) + '%' : 0 }}></div>
     </div>
-    <Workbench model={model} openPage={openPage} onOpenExternally={openSourceLocation} showSettings />
+    <Workbench model={model} openPage={openPage} onOpenExternally={openSourceLocation} />
     {!traceURLs.length && <div className='empty-state'>
       <div className='title'>Select test to see the trace</div>
     </div>}

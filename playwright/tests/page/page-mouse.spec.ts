@@ -190,7 +190,9 @@ it('should select the text with mouse', async ({ page, server }) => {
   })).toBe(text);
 });
 
-it('should trigger hover state', async ({ page, server }) => {
+it('should trigger hover state', async ({ page, server, headless }) => {
+  it.skip(!headless, 'headed messes up with hover');
+
   await page.goto(server.PREFIX + '/input/scrollable.html');
   await page.hover('#button-6');
   expect(await page.evaluate(() => document.querySelector('button:hover').id)).toBe('button-6');
@@ -200,14 +202,18 @@ it('should trigger hover state', async ({ page, server }) => {
   expect(await page.evaluate(() => document.querySelector('button:hover').id)).toBe('button-91');
 });
 
-it('should trigger hover state on disabled button', async ({ page, server }) => {
+it('should trigger hover state on disabled button', async ({ page, server, headless }) => {
+  it.skip(!headless, 'headed messes up with hover');
+
   await page.goto(server.PREFIX + '/input/scrollable.html');
   await page.$eval('#button-6', (button: HTMLButtonElement) => button.disabled = true);
   await page.hover('#button-6', { timeout: 5000 });
   expect(await page.evaluate(() => document.querySelector('button:hover').id)).toBe('button-6');
 });
 
-it('should trigger hover state with removed window.Node', async ({ page, server }) => {
+it('should trigger hover state with removed window.Node', async ({ page, server, headless }) => {
+  it.skip(!headless, 'headed messes up with hover');
+
   await page.goto(server.PREFIX + '/input/scrollable.html');
   await page.evaluate(() => delete window.Node);
   await page.hover('#button-6');
@@ -283,8 +289,7 @@ it('should not crash on mouse drag with any button', async ({ page }) => {
 
 it('should dispatch mouse move after context menu was opened', async ({ page, browserName, isWindows }) => {
   it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/20823' });
-  it.fixme(browserName === 'firefox');
-  it.skip(browserName === 'chromium' && isWindows, 'context menu support is best-effort for Linux and MacOS');
+  it.fixme(browserName === 'chromium' && isWindows, 'context menu support is best-effort for Linux and MacOS');
   await page.evaluate(() => {
     window['contextMenuPromise'] = new Promise(x => {
       window.addEventListener('contextmenu', x, false);
