@@ -25,6 +25,7 @@ import { CrxPlaywright } from './server/crxPlaywright';
 import { CrxPlaywrightDispatcher } from './server/dispatchers/crxPlaywrightDispatcher';
 import { PageBinding } from 'playwright-core/lib/server/page';
 
+export { registerSourceMap } from './utils/sourceMapUtils';
 export { debug as _debug } from 'debug';
 export { setUnderTest as _setUnderTest } from 'playwright-core/lib/utils';
 

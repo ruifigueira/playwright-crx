@@ -18,8 +18,19 @@ import type { Crx } from './src/types/types';
 
 export * from './src/types/types';
 
+export interface RawSourceMap {
+  version: number;
+  sources: string[];
+  names: string[];
+  sourceRoot?: string;
+  sourcesContent?: string[];
+  mappings: string;
+  file: string;
+}
+
 export const crx: Crx;
 export function _setUnderTest(): void;
+export const registerSourceMap: (url?: string, sourceMapUrl?: string | RawSourceMap) => Promise<void>;
 export const _debug: {
   enable(namespaces: string): void;
   enabled(namespaces: string): boolean;

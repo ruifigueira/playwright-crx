@@ -40,5 +40,8 @@
     "page": "preferences.html",
     "open_in_tab": false
   },
-  "permissions": ["debugger", "tabs", "contextMenus", "storage", "sidePanel"]
+  "permissions": ["debugger", "tabs", "contextMenus", "storage", "sidePanel"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'"
+  }
 }
