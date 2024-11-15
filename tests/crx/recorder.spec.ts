@@ -225,15 +225,15 @@ test('should record with all supported actions and assertions', async ({ context
   // await expect(page.locator('div')).toContainText('Some long text');
   // await expect(page.getByText('Some long text')).toBeVisible();
   // await expect(page.locator('body')).toMatchAriaSnapshot(\`
-    - checkbox: on
-    - button "button clicked"
-    - textbox: Hello world
-    - combobox:
-      - option "A"
-      - option "B" [selected]
-    - textbox: C:\\\\fakepath\\\\file-to-upload.txt
-    - text: Some long text
-    \`);
+  //  - checkbox: on
+  //  - button "button clicked"
+  //  - textbox: Hello world
+  //  - combobox:
+  //    - option "A"
+  //    - option "B" [selected]
+  //  - textbox: C:\\\\fakepath\\\\file-to-upload.txt
+  //  - text: Some long text
+  //  \`);
 ​
   // ---------------------
   await context.close();

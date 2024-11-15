@@ -21,11 +21,12 @@ import { createGuid, isUnderTest, ManualPromise, monotonicTime, serializeExpecte
 import { Frame } from 'playwright-core/lib/server/frames';
 import { CallMetadata } from '@protocol/callMetadata';
 import { serializeError } from 'playwright-core/lib/server/errors';
-import { buildFullSelector } from 'playwright-core/lib/utils/isomorphic/recorderUtils';
+import { buildFullSelector, traceParamsForAction } from 'playwright-core/lib/utils/isomorphic/recorderUtils';
 import { toKeyboardModifiers } from 'playwright-core/lib/server/codegen/language';
 import { ActionInContextWithLocation, Location } from './script';
-import { FrameDescription } from '@recorder/actions';
+import { ActionInContext, FrameDescription } from '@recorder/actions';
 import { toClickOptions } from 'playwright-core/lib/server/recorder/recorderRunner';
+import { parseAriaSnapshot } from 'playwright-core/lib/server/ariaSnapshot';
 
 class Stopped extends Error {}
 
@@ -110,24 +111,30 @@ export default class Player extends EventEmitter {
   private async _performAction(actionInContext: PerformAction) {
     this._checkStopped();
 
-    const innerPerformAction = async (mainFrame: Frame | null, action: string, params: any, cb: (callMetadata: CallMetadata) => Promise<any>): Promise<void> => {
+    const innerPerformAction = async (mainFrame: Frame | null, actionInContext: PerformAction, cb: (callMetadata: CallMetadata) => Promise<any>): Promise<void> => {
       const context = mainFrame ?? this._context;
-  
+      let traceParams: ReturnType<typeof traceParamsForAction>;
+      
+      switch (actionInContext.action.name) {
+        case 'pause': traceParams = { method: 'pause', params: {}, apiName: 'page.pause' }; break;
+        case 'openPage': traceParams = { method: 'newPage', params: { url: actionInContext.action.url }, apiName: 'browserContext.newPage' }; break;
+        case 'closePage': traceParams = { method: 'close', params: {}, apiName: 'page.close' }; break;
+        default: traceParams = traceParamsForAction(actionInContext as ActionInContext); break;
+      }
+
       const callMetadata: CallMetadata = {
         id: `call@${createGuid()}`,
-        apiName: 'frame.' + action,
-        internal: action === 'pause',
+        internal: actionInContext.action.name === 'pause',
         objectId: context.guid,
         pageId: mainFrame?._page.guid,
         frameId: mainFrame?.guid,
         startTime: monotonicTime(),
         endTime: 0,
         type: 'Frame',
-        method: action,
-        params,
         log: [],
         location: actionInContext.location,
         playing: true,
+        ...traceParams,
       };
 
       try {
@@ -145,17 +152,27 @@ export default class Player extends EventEmitter {
       }
     }
 
+    // similar to playwright/packages/playwright-core/src/server/recorder/recorderRunner.ts
+    const kActionTimeout = isUnderTest() ? 2000 : 5000;
+
     const { action } = actionInContext;  
     const { _pageAliases: pageAliases, _context: context } = this;
     
     if (action.name === 'pause')
-      return await innerPerformAction(null, 'pause', {}, () => Promise.resolve());
+      return await innerPerformAction(null, actionInContext, () => Promise.resolve());
   
     if (action.name === 'openPage')
-      return await innerPerformAction(null, 'openPage', { url: action.url }, async callMetadata => {
+      return await innerPerformAction(null, actionInContext, async callMetadata => {
         const pageAlias = actionInContext.frame.pageAlias;
         if ([...pageAliases.values()].includes(pageAlias)) throw new Error(`Page with alias ${pageAlias} already exists`);
         const newPage = await context.newPage(callMetadata);
+        if (action.url && action.url !== 'about:blank' && action.url !== 'chrome://newtab/') {
+          const navigateCallMetadata = {
+            ...callMetadata,
+            ...traceParamsForAction({ ...actionInContext, action: { name: 'navigate', url: action.url } } as ActionInContext),
+          };
+          await newPage.mainFrame().goto(navigateCallMetadata, action.url, { timeout: kActionTimeout });
+        }
         pageAliases.set(newPage, pageAlias);
       });
   
@@ -164,14 +181,12 @@ export default class Player extends EventEmitter {
     if (!page)
       throw new Error('Internal error: page not found');
     const mainFrame = page.mainFrame();
-    
-    const kActionTimeout = isUnderTest() ? 2000 : 5000;
-  
+      
     if (action.name === 'navigate')
-      return await innerPerformAction(mainFrame, 'navigate', { url: action.url }, callMetadata => mainFrame.goto(callMetadata, action.url, { timeout: kActionTimeout }));
+      return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.goto(callMetadata, action.url, { timeout: kActionTimeout }));
     
     if (action.name === 'closePage')
-      return await innerPerformAction(mainFrame, action.name, {}, async callMetadata => {
+      return await innerPerformAction(mainFrame, actionInContext, async callMetadata => {
         pageAliases.delete(page);
         await page.close(callMetadata, { runBeforeUnload: true });
       });
@@ -180,27 +195,27 @@ export default class Player extends EventEmitter {
     
     if (action.name === 'click') {
       const options = toClickOptions(action);
-      return await innerPerformAction(mainFrame, 'click', { selector }, callMetadata => mainFrame.click(callMetadata, selector, { ...options, timeout: kActionTimeout, strict: true }));
+      return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.click(callMetadata, selector, { ...options, timeout: kActionTimeout, strict: true }));
     }
     if (action.name === 'press') {
       const modifiers = toKeyboardModifiers(action.modifiers);
       const shortcut = [...modifiers, action.key].join('+');
-      return await innerPerformAction(mainFrame, 'press', { selector, key: shortcut }, callMetadata => mainFrame.press(callMetadata, selector, shortcut, { timeout: kActionTimeout, strict: true }));
+      return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.press(callMetadata, selector, shortcut, { timeout: kActionTimeout, strict: true }));
     }
     if (action.name === 'fill')
-      return await innerPerformAction(mainFrame, 'fill', { selector, text: action.text }, callMetadata => mainFrame.fill(callMetadata, selector, action.text, { timeout: kActionTimeout, strict: true }));
+      return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.fill(callMetadata, selector, action.text, { timeout: kActionTimeout, strict: true }));
     if (action.name === 'setInputFiles')
-      return await innerPerformAction(mainFrame, 'setInputFiles', { selector: action.selector, files: action.files }, () => Promise.reject(new Error(`player does not support setInputFiles yet`)));
+      return await innerPerformAction(mainFrame, actionInContext, () => Promise.reject(new Error(`player does not support setInputFiles yet`)));
     if (action.name === 'check')
-      return await innerPerformAction(mainFrame, 'check', { selector }, callMetadata => mainFrame.check(callMetadata, selector, { timeout: kActionTimeout, strict: true }));
+      return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.check(callMetadata, selector, { timeout: kActionTimeout, strict: true }));
     if (action.name === 'uncheck')
-      return await innerPerformAction(mainFrame, 'uncheck', { selector }, callMetadata => mainFrame.uncheck(callMetadata, selector, { timeout: kActionTimeout, strict: true }));
+      return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.uncheck(callMetadata, selector, { timeout: kActionTimeout, strict: true }));
     if (action.name === 'select') {
       const values = action.options.map(value => ({ value }));
-      return await innerPerformAction(mainFrame, 'selectOption', { selector, values }, callMetadata => mainFrame.selectOption(callMetadata, selector, [], values, { timeout: kActionTimeout, strict: true }));
+      return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.selectOption(callMetadata, selector, [], values, { timeout: kActionTimeout, strict: true }));
     }
     if (action.name === 'assertChecked') {
-      return await innerPerformAction(mainFrame, 'assertChecked', { selector }, callMetadata => mainFrame.expect(callMetadata, selector, {
+      return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.expect(callMetadata, selector, {
         selector,
         expression: 'to.be.checked',
         isNot: !action.checked,
@@ -208,7 +223,7 @@ export default class Player extends EventEmitter {
       }));
     }
     if (action.name === 'assertText') {
-      return await innerPerformAction(mainFrame, 'assertText', { selector }, callMetadata => mainFrame.expect(callMetadata, selector, {
+      return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.expect(callMetadata, selector, {
         selector,
         expression: 'to.have.text',
         expectedText: serializeExpectedTextValues([action.text], { matchSubstring: true, normalizeWhiteSpace: true }),
@@ -217,7 +232,7 @@ export default class Player extends EventEmitter {
       }));
     }
     if (action.name === 'assertValue') {
-      return await innerPerformAction(mainFrame, 'assertValue', { selector }, callMetadata => mainFrame.expect(callMetadata, selector, {
+      return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.expect(callMetadata, selector, {
         selector,
         expression: 'to.have.value',
         expectedText: serializeExpectedTextValues([action.value], { matchSubstring: false, normalizeWhiteSpace: true }),
@@ -226,7 +241,7 @@ export default class Player extends EventEmitter {
       }));
     }
     if (action.name === 'assertVisible') {
-      return await innerPerformAction(mainFrame, 'assertVisible', { selector }, callMetadata => mainFrame.expect(callMetadata, selector, {
+      return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.expect(callMetadata, selector, {
         selector,
         expression: 'to.be.visible',
         isNot: false,
@@ -234,10 +249,10 @@ export default class Player extends EventEmitter {
       }));
     }
     if (action.name === 'assertSnapshot') {
-      return await innerPerformAction(mainFrame, 'assertSnapshot', { selector }, callMetadata => mainFrame.expect(callMetadata, selector, {
+      return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.expect(callMetadata, selector, {
         selector,
-        expression: 'to.match.snapshot',
-        expectedText: serializeExpectedTextValues([action.snapshot], { matchSubstring: false, normalizeWhiteSpace: false }),
+        expression: 'to.match.aria',
+        expectedValue: parseAriaSnapshot(action.snapshot),
         isNot: false,
         timeout: kActionTimeout,
       }));
