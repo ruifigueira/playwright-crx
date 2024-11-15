@@ -16,7 +16,10 @@
 
 import path from 'path';
 import sourcemaps from 'rollup-plugin-sourcemaps';
-import { defineConfig } from 'vite';
+import { defineConfig, Plugin } from 'vite';
+import replace from '@rollup/plugin-replace';
+
+const baseDir = __dirname.replace(/\\/g, '/');
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -74,6 +77,19 @@ export default defineConfig({
   define: {
     'require.resolve': 'Boolean',
   },
+  plugins: [
+    replace({
+      preventAssignment: true,
+    '__dirname': id => {
+      const relativePath = path.posix.relative(baseDir, path.posix.dirname(id));
+      return [
+        'src',
+        'playwright/packages/playwright-core/src',
+        'playwright/packages/playwright/src',
+      ].some(p => relativePath.startsWith(p)) ? JSON.stringify(relativePath) : '__dirname';
+    },
+    }) as Plugin<any>,
+  ],
   build: {
     outDir: path.resolve(__dirname, './lib/'),
     // skip code obfuscation
