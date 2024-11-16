@@ -22,10 +22,16 @@ import sourcemaps from 'rollup-plugin-sourcemaps';
 export default defineConfig({
   resolve: {
     alias: {
+      '@injected': path.resolve(__dirname, '../../playwright/packages/playwright-core/src/server/injected'),
       '@isomorphic': path.resolve(__dirname, '../../playwright/packages/playwright-core/src/utils/isomorphic'),
+      '@playwright-core': path.resolve(__dirname, '../../playwright/packages/playwright-core/src'),
       '@protocol': path.resolve(__dirname, '../../playwright/packages/protocol/src'),
       '@web': path.resolve(__dirname, '../../playwright/packages/web/src'),
       '@recorder': path.resolve(__dirname, '../../playwright/packages/recorder/src'),
+      '@testIsomorphic': path.resolve(__dirname, '../../playwright/packages/playwright/src/isomorphic'),
+      '@testTypes': path.resolve(__dirname, '../../playwright/packages/playwright/types'),
+      '@trace': path.resolve(__dirname, '../../playwright/packages/trace/src'),
+      '@trace-viewer': path.resolve(__dirname, '../../playwright/packages/trace-viewer/src'),
     },
   },
   build: {
@@ -39,7 +45,7 @@ export default defineConfig({
       plugins: [sourcemaps()],
       input: {
         'index': path.resolve(__dirname, 'index.html'),
-        'saving': path.resolve(__dirname, 'saving.html'),
+        'fs': path.resolve(__dirname, 'fs.html'),
         'preferences': path.resolve(__dirname, 'preferences.html'),
         'background': path.resolve(__dirname, 'src/background.ts'),
       },

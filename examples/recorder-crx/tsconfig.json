@@ -17,10 +17,16 @@
     "baseUrl": ".",
     "useUnknownInCatchVariables": false,
     "paths": {
+      "@injected/*": ["../../playwright/packages/playwright-core/src/server/injected/*"],
       "@isomorphic/*": ["../../playwright/packages/playwright-core/src/utils/isomorphic/*"],
+      "@playwright-core/*": ["../../playwright/packages/playwright-core/src/*"],
       "@protocol/*": ["../../playwright/packages/protocol/src/*"],
       "@web/*": ["../../playwright/packages/web/src/*"],
       "@recorder/*": ["../../playwright/packages/recorder/src/*"],
+      "@testIsomorphic/*": ["../../playwright/packages/playwright/src/isomorphic/*"],
+      "@testTypes/*": ["../../playwright/packages/playwright/types/*"],
+      "@trace/*": ["../../playwright/packages/trace/src/*"],
+      "@trace-viewer/*": ["../../playwright/packages/trace-viewer/src/*"],
     }
   },
   "include": ["src"],

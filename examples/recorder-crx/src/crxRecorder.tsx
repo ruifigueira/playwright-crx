@@ -22,6 +22,7 @@ import { PreferencesForm } from './preferencesForm';
 import { CallLog, ElementInfo, Mode, Source } from '@recorder/recorderTypes';
 import { Recorder } from '@recorder/recorder';
 import { addSettingsChangedListener, CrxSettings, defaultSettings, loadSettings, removeSettingsChangedListener } from './settings';
+import { CrxTestServerConnection } from './testServer/crxTestServerTransport';
 import './crxRecorder.css';
 
 function setElementPicked(elementInfo: ElementInfo, userGesture?: boolean) {
@@ -41,9 +42,16 @@ export const CrxRecorder: React.FC = ({
   const [log, setLog] = React.useState(new Map<string, CallLog>());
   const [mode, setMode] = React.useState<Mode>('none');
   const [selectedFileId, setSelectedFileId] = React.useState<string | undefined>();
+  const [testServer, setTestServer] = React.useState<CrxTestServerConnection>();
 
   React.useEffect(() => {
-    const port = chrome.runtime.connect({ name: 'recorder' });
+    const testServer = new CrxTestServerConnection();
+    setTestServer(new CrxTestServerConnection());
+    return () => testServer.close();
+  }, []);
+
+  React.useEffect(() => {
+    const port = chrome.runtime.connect({ name: 'crx-recorder' });
     const onMessage = (msg: any) => {
       if (!('type' in msg) || msg.type !== 'recorder') return;
   
@@ -85,7 +93,7 @@ export const CrxRecorder: React.FC = ({
   }, []);
 
   const requestSave = React.useCallback(() => {
-    if (!sources.length || !selectedFileId)
+    if (!testServer || !sources.length || !selectedFileId)
       return;
 
     const source = sources.find(s => s.id === selectedFileId);
@@ -98,6 +106,7 @@ export const CrxRecorder: React.FC = ({
       source.footer,
     ].filter(Boolean).join('\n');
 
+    const language = source.language;
     let suggestedName: string | undefined;
     switch (selectedFileId) {
       case 'javascript': suggestedName = 'example.js'; break;
@@ -115,14 +124,12 @@ export const CrxRecorder: React.FC = ({
     if (!suggestedName)
       return;
 
-    // send message to background script because we can't save files directly from the extension
-    // see: https://issues.chromium.org/issues/337540332
-    chrome.runtime.sendMessage({ event: 'saveRequested', params: { code, suggestedName } });
-  }, [sources, selectedFileId]);
+    testServer.saveScript({ code, language, suggestedName }).catch(() => {});
+  }, [sources, selectedFileId, testServer]);
 
   const requestSaveStorageState = React.useCallback(() => {
-    chrome.runtime.sendMessage({ event: 'saveStorageStateRequested' });
-  }, []);
+    testServer?.saveStorageState().catch(() => {});
+  }, [testServer]);
 
   React.useEffect(() => {
     const keydownHandler = (e: KeyboardEvent) => {

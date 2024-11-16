@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { RecorderEventData, RecorderMessage, RecorderWindow } from "./crxRecorderApp";
+import type { RecorderEventData, RecorderMessage, RecorderWindow } from "./crxRecorderApp";
 
 export class PopupRecorderWindow implements RecorderWindow {
   private _recorderUrl: string;
@@ -45,6 +45,8 @@ export class PopupRecorderWindow implements RecorderWindow {
       return;
     this._portPromise = new Promise<chrome.runtime.Port>(resolve => {
       const onConnect = (port: chrome.runtime.Port) => {
+        if (port.name !== 'crx-recorder')
+          return;
         chrome.runtime.onConnect.removeListener(onConnect);
         port.onDisconnect.addListener(this.close.bind(this));
         if (this.onMessage)
