@@ -120,7 +120,7 @@ export class TestServerConnection implements TestServerInterface, TestServerInte
     return this._isClosed;
   }
 
-  private async _sendMessage(method: string, params?: any): Promise<any> {
+  protected async _sendMessage(method: string, params?: any): Promise<any> {
     const logForTest = (globalThis as any).__logForTest;
     logForTest?.({ method, params });
 
@@ -133,11 +133,11 @@ export class TestServerConnection implements TestServerInterface, TestServerInte
     });
   }
 
-  private _sendMessageNoReply(method: string, params?: any) {
+  protected _sendMessageNoReply(method: string, params?: any) {
     this._sendMessage(method, params).catch(() => { });
   }
 
-  private _dispatchEvent(method: string, params?: any) {
+  protected _dispatchEvent(method: string, params?: any) {
     if (method === 'report')
       this._onReportEmitter.fire(params);
     else if (method === 'stdio')
