@@ -1,4 +1,4 @@
-.saving {
+.fs {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -14,7 +14,7 @@
   line-height: 24px;
 }
 
-.saving .title {
+.fs .title {
   font-size: 24px;
   font-weight: bold;
   margin-bottom: 30px;

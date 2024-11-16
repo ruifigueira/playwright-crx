@@ -18,6 +18,7 @@ import { Mode } from '@recorder/recorderTypes';
 import type { CrxApplication } from 'playwright-crx';
 import playwright, { crx, registerSourceMap, _debug, _setUnderTest, _isUnderTest as isUnderTest } from 'playwright-crx';
 import { addSettingsChangedListener, CrxSettings, defaultSettings, loadSettings } from './settings';
+import { CrxTestServerDispatcher } from './testServer/crxTestServerDispatcher';
 
 registerSourceMap().catch(() => {});
 
@@ -110,7 +111,7 @@ async function attach(tab: chrome.tabs.Tab, mode?: Mode) {
 
   // we need to open sidepanel before any async call
   if (sidepanel)
-    chrome.sidePanel.open({ windowId: tab.windowId });
+    chrome.sidePanel.open({ windowId: tab.windowId }).catch(e => console.error(e));
   
   // ensure one attachment at a time
   chrome.action.disable();
@@ -162,92 +163,20 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
     await attach(tab, 'recording');
 });
 
-async function doSave(params: { body: string, suggestedName: string }) {
-  const crxApp = await getCrxApp();
-  const currMode = crxApp.recorder.mode();
-  await crxApp.recorder.setMode('none');
-
-  // to avoid playwright from interfering too much, we use chrome tabs api to open and wait for the tab to close
-  // and only attach playwright to click the link (showSaveFilePicker requires a user gesture)
-  const saveTab = await chrome.tabs.create({ url: chrome.runtime.getURL('saving.html') });
-  const closePromise = new Promise<void>(async resolve => {
-    const tabClosed = (tabId: number) => {
-      if (tabId === saveTab.id) {
-        chrome.tabs.onRemoved.removeListener(tabClosed);
-        resolve();
-      }
-    };
-    chrome.tabs.onRemoved.addListener(tabClosed);
-  });
-
-  const page = await crxApp.attach(saveTab.id!);
-  const elem = page.getByRole('link');
-  await elem.evaluateHandle(async (elem, { body, suggestedName }) => {
-    const handler = async () => {
-      elem.removeEventListener('click', handler);
-      try {
-        const fileHandle = await showSaveFilePicker({ suggestedName });
-        const writable = await fileHandle.createWritable({ keepExistingData: false });
-        await writable.write(body);
-        await writable.close();
-      } catch (e) {
-        // not much we can do here
-      }
-
-      window.close();
-    };
-    elem.addEventListener('click', handler);
-  }, params);
-
-  await elem.click();
-  await crxApp.detach(page);
-  await closePromise;
-
-  await crxApp.recorder.setMode(currMode);
-}
-
-async function saveScript(params: { code: string, suggestedName: string }) {
-  await doSave({ body: params.code, suggestedName: params.suggestedName });
-}
-
-async function saveStorageState() {
-  const crxApp = await crxAppPromise;
-  if (!crxApp)
+chrome.runtime.onConnect.addListener(async port => {
+  if (port.name !== 'crx-test-server')
     return;
-
-  const { cookies: allCookies, origins } = await crxApp.context().storageState();
-  const urls = Array.from(new Set(crxApp.pages().flatMap(p => [p.url(), ...p.frames().map(f => f.url())])));
-  const parsedURLs = urls.map(s => new URL(s));
-  const cookies = allCookies.filter(c => {
-    if (!parsedURLs.length)
-      return true;
-    for (const parsedURL of parsedURLs) {
-      let domain = c.domain;
-      if (!domain.startsWith('.'))
-        domain = '.' + domain;
-      if (!('.' + parsedURL.hostname).endsWith(domain))
-        continue;
-      if (!parsedURL.pathname.startsWith(c.path))
-        continue;
-      if (parsedURL.protocol !== 'https:' && parsedURL.hostname !== 'localhost' && c.secure)
-        continue;
-      return true;
+  const testServerPromise = new Promise<CrxTestServerDispatcher>(resolve =>
+    getCrxApp().then(crxApp => resolve(new CrxTestServerDispatcher(crxApp))));
+  port.onMessage.addListener(async ({ id, method, params }) => {
+    try {
+      const testServer = await testServerPromise;
+      const result = await (testServer as any)[method](params);
+      port.postMessage({ id, method, params, result });
+    } catch (error) {
+      port.postMessage({ id, method, params, error });
     }
-    return false;
   });
-  const storageState = { cookies, origins };
-
-  await doSave({
-    body: JSON.stringify(storageState, undefined, 2),
-    suggestedName: 'storageState.json',
-  });
-}
-
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.event === 'saveRequested')
-    saveScript(message.params).catch(e => {});
-  else if (message.event === 'saveStorageStateRequested')
-    saveStorageState().catch(e => {});
 });
 
 // for testing
