@@ -1,0 +1,110 @@
+/*
+  Copyright (c) Microsoft Corporation.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+*/
+
+.ui-mode-sidebar {
+  background-color: var(--vscode-sideBar-background);
+}
+
+.ui-mode-sidebar > .settings-toolbar {
+  border-top: 1px solid var(--vscode-panel-border);
+  cursor: pointer;
+}
+
+.ui-mode-sidebar > .settings-view {
+  margin: 0 0 8px 23px;
+}
+
+.ui-mode-sidebar input[type=search] {
+  flex: auto;
+}
+
+.ui-mode-sidebar .toolbar-button:not([disabled]) .codicon-play {
+  color: var(--vscode-debugIcon-restartForeground);
+}
+
+.ui-mode-sidebar .toolbar-button:not([disabled]) .codicon-debug-stop {
+  color: var(--vscode-debugIcon-stopForeground);
+}
+
+.ui-mode .section-title {
+  display: flex;
+  flex: auto;
+  flex-direction: row;
+  align-items: center;
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: bold;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  padding: 8px;
+  height: 30px;
+}
+
+.ui-mode-sidebar img {
+  flex: none;
+  margin-left: 6px;
+  width: 24px;
+  height: 24px;
+}
+
+.ui-mode .disconnected {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: auto;
+  flex-direction: column;
+  background-color: var(--vscode-editor-background);
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1000;
+  line-height: 24px;
+}
+
+.disconnected .title {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 30px;
+}
+
+.status-line {
+  flex: auto;
+  white-space: nowrap;
+  line-height: 22px;
+  padding-left: 10px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 30px;
+}
+
+.status-line > div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ui-mode-sidebar input[type=search] {
+  flex: auto;
+  padding: 0 5px;
+  line-height: 24px;
+  outline: none;
+  margin: 0 4px;
+  border: none;
+  color: var(--vscode-input-foreground);
+  background-color: var(--vscode-input-background);
+}

@@ -127,10 +127,6 @@ export const CrxRecorder: React.FC = ({
     testServer.saveScript({ code, language, suggestedName }).catch(() => {});
   }, [sources, selectedFileId, testServer]);
 
-  const requestSaveStorageState = React.useCallback(() => {
-    testServer?.saveStorageState().catch(() => {});
-  }, [testServer]);
-
   React.useEffect(() => {
     const keydownHandler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 's') {
@@ -160,7 +156,8 @@ export const CrxRecorder: React.FC = ({
           <div className="dropdown">
             <ToolbarButton icon="tools" title='Tools' disabled={false} onClick={() => {}}></ToolbarButton>
             <div className="dropdown-content right-align">
-              <a href="#" onClick={requestSaveStorageState}>Save storage state</a>
+              <a href="#" onClick={() => testServer?.saveStorageState()}>Save storage state</a>
+              <a href="#" onClick={() => testServer?.openUiMode()}>Open UI Mode</a>
             </div>
           </div>
           <ToolbarSeparator />

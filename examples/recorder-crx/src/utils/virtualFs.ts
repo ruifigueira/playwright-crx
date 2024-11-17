@@ -168,12 +168,6 @@ async function requestFs(crxApp: CrxApplication, options: FsPageOptions) {
   await crxApp.recorder.setMode(currMode);
 }
 
-export async function virtualFs(key: string) {
-  const dirHandle = await keyval.get(key) as FileSystemDirectoryHandle;
-  if (dirHandle)
-    new VirtualFs(dirHandle);
-}
-
 export async function saveFile(crxApp: CrxApplication, options: Omit<FsPageOptions, 'method'>) {
   await requestFs(crxApp, { method: 'showSaveFilePicker', ...options });
 }

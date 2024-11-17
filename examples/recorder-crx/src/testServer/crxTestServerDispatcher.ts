@@ -1,16 +1,44 @@
-import type { CrxApplication } from "playwright-crx/test";
-import { CrxTestServerExtension } from "./crxTestServerTransport";
-import type { NetworkCookie } from "@protocol/channels";
-import { saveFile } from "../utils/virtualFs";
 import type { Language } from "@isomorphic/locatorGenerators";
+import { TestServerInterface } from "@testIsomorphic/testServerInterface";
+import type { CrxApplication } from "playwright-crx/test";
+import { filterCookies } from "../utils/network";
+import { readReport } from "../utils/project";
+import { requestVirtualFs, saveFile, VirtualFs } from "../utils/virtualFs";
+import { CrxTestServerExtension } from "./crxTestServerTransport";
 
-export class CrxTestServerDispatcher implements CrxTestServerExtension {
-  private _crxApp: CrxApplication;
+export class CrxTestServerDispatcher implements Partial<TestServerInterface>, CrxTestServerExtension {
+  private _crxAppPromise: Promise<CrxApplication>;
+  private _virtualFsPromise: Promise<VirtualFs> | undefined;
 
-  constructor(crxApp: CrxApplication) {
-    this._crxApp = crxApp;
+  constructor(crxAppPromise: Promise<CrxApplication>, port: chrome.runtime.Port) {
+    this._crxAppPromise = crxAppPromise;
+    port.onMessage.addListener(async ({ id, method, params }) => {
+      try {
+        const result = await (this as any)[method]?.(params);
+        port.postMessage({ id, method, params, result });
+      } catch (error) {
+        port.postMessage({ id, method, params, error });
+      }
+    });
   }
+
+  async initialize() {
+    this._virtualFsPromise = requestVirtualFs(await this._crxAppPromise, 'ui-mode.project-dir', 'readwrite');
+    await this._virtualFsPromise;
+  }
+
+  async ping() { }
+
+  async checkBrowsers(_: Parameters<TestServerInterface['checkBrowsers']>[0]): ReturnType<TestServerInterface['checkBrowsers']> { return { hasBrowsers: true } }
+  async runGlobalSetup(_: Parameters<TestServerInterface['runGlobalSetup']>[0]): ReturnType<TestServerInterface['runGlobalSetup']> { return { report: [], status: 'passed' } }
+  async runGlobalTeardown(_: Parameters<TestServerInterface['runGlobalTeardown']>[0]): ReturnType<TestServerInterface['runGlobalTeardown']> { return { report: [], status: 'passed' } }
   
+  async listTests(_: Parameters<TestServerInterface['listTests']>[0]): ReturnType<TestServerInterface['listTests']> {
+    const virtualFs = await this._virtualFsPromise;
+    const report = virtualFs ? await readReport(virtualFs) : [];
+    return { report, status: 'passed' };
+  }
+
   async saveScript(params: { code: string, language: Language, suggestedName: string }) {
     let acceptTypes: FilePickerAcceptType[] = []; 
     switch (params.language) {
@@ -21,9 +49,10 @@ export class CrxTestServerDispatcher implements CrxTestServerExtension {
       case 'java': acceptTypes = [{ description: 'Java file', accept: { 'text/x-java-source': ['.java'] } }]; break;
       case 'python': acceptTypes = [{ description: 'Python file', accept: { 'text/x-python': ['.py'] } }]; break;
       case 'csharp': acceptTypes = [{ description: 'C# file', accept: { 'text/x-csharp': ['.cs'] } }]; break;
+      case 'jsonl': acceptTypes = [{ description: 'JSON Lines file', accept: { 'text/jsonl': ['.jsonl'] } }]; break;
     };
 
-    await saveFile(this._crxApp, {
+    await saveFile(await this._crxAppPromise, {
       params: {
         types: acceptTypes,
         body: params.code,
@@ -33,7 +62,7 @@ export class CrxTestServerDispatcher implements CrxTestServerExtension {
   }
   
   async saveStorageState() {
-    const crxApp = this._crxApp;
+    const crxApp = await this._crxAppPromise;
     const { cookies: allCookies, origins } = await crxApp.context().storageState();
     const urls = Array.from(new Set(crxApp.pages().flatMap(p => [p.url(), ...p.frames().map(f => f.url())])));
     const cookies = filterCookies(allCookies, urls);
@@ -49,27 +78,8 @@ export class CrxTestServerDispatcher implements CrxTestServerExtension {
       }
     });
   }
-}
 
-// borrowed from playwright/packages/playwright-core/src/server/network.ts
-function filterCookies(cookies: NetworkCookie[], urls: string[]): NetworkCookie[] {
-  const parsedURLs = urls.map(s => new URL(s));
-  // Chromiums's cookies are missing sameSite when it is 'None'
-  return cookies.filter(c => {
-    if (!parsedURLs.length)
-      return true;
-    for (const parsedURL of parsedURLs) {
-      let domain = c.domain;
-      if (!domain.startsWith('.'))
-        domain = '.' + domain;
-      if (!('.' + parsedURL.hostname).endsWith(domain))
-        continue;
-      if (!parsedURL.pathname.startsWith(c.path))
-        continue;
-      if (parsedURL.protocol !== 'https:' && parsedURL.hostname !== 'localhost' && c.secure)
-        continue;
-      return true;
-    }
-    return false;
-  });
+  async openUiMode() {
+    await chrome.windows.create({ url: chrome.runtime.getURL('uiMode.html') });
+  }
 }
