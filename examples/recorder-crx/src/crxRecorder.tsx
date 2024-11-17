@@ -136,13 +136,6 @@ export const CrxRecorder: React.FC = ({
     testServer.saveScript({ code, language: 'javascript', suggestedName: filename }).catch(() => {});
   }, [sources, selectedFileId, testServer, settings]);
 
-  const requestSaveStorageState = React.useCallback(() => {
-    if (!settings.experimental)
-      return;
-
-    testServer?.saveStorageState().catch(() => {});
-  }, [testServer, settings]);
-
   React.useEffect(() => {
     if (!settings.experimental)
       return;
@@ -183,7 +176,8 @@ export const CrxRecorder: React.FC = ({
           <div className="dropdown">
             <ToolbarButton icon="tools" title='Tools' disabled={false} onClick={() => {}}></ToolbarButton>
             <div className="dropdown-content right-align">
-              <a href="#" onClick={requestSaveStorageState}>Save storage state</a>
+              <a href="#" onClick={() => testServer?.saveStorageState()}>Save storage state</a>
+              <a href="#" onClick={() => testServer?.openUiMode()}>Open UI Mode</a>
             </div>
           </div>
           <ToolbarSeparator />

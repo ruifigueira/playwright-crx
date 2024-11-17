@@ -4,6 +4,7 @@ import { TestServerConnection, type TestServerTransport } from '@testIsomorphic/
 export interface CrxTestServerExtension {
   saveScript(params: { code: string, language: Language; suggestedName: string }): Promise<void>;
   saveStorageState(): Promise<void>;
+  openUiMode(): Promise<void>;
 }
 
 export class CrxTestServerConnection extends TestServerConnection implements CrxTestServerExtension {
@@ -18,6 +19,10 @@ export class CrxTestServerConnection extends TestServerConnection implements Crx
 
   async saveStorageState() {
     await this._sendMessage('saveStorageState');
+  }
+
+  async openUiMode() {
+    await this._sendMessage('openUiMode');
   }
 }
 

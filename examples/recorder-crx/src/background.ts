@@ -164,19 +164,9 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
 });
 
 chrome.runtime.onConnect.addListener(async port => {
-  if (port.name !== 'crx-test-server')
+  if (port.name !== 'crx-test-server' || !crxAppPromise)
     return;
-  const testServerPromise = new Promise<CrxTestServerDispatcher>(resolve =>
-    getCrxApp().then(crxApp => resolve(new CrxTestServerDispatcher(crxApp))));
-  port.onMessage.addListener(async ({ id, method, params }) => {
-    try {
-      const testServer = await testServerPromise;
-      const result = await (testServer as any)[method](params);
-      port.postMessage({ id, method, params, result });
-    } catch (error) {
-      port.postMessage({ id, method, params, error });
-    }
-  });
+  new CrxTestServerDispatcher(crxAppPromise, port);
 });
 
 // for testing

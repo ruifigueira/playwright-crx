@@ -1,5 +1,6 @@
 /**
  * Copyright (c) Microsoft Corporation.
+ * Modifications Rui Figueira.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,29 +15,24 @@
  * limitations under the License.
  */
 
-import '@web/third_party/vscode/codicon.css';
-import '@web/common.css';
-import React from 'react';
-import { TeleSuite } from '@testIsomorphic/teleReceiver';
+import { TeleSuite, TeleTestCase } from '@testIsomorphic/teleReceiver';
 import { TeleSuiteUpdater, type TeleSuiteUpdaterProgress, type TeleSuiteUpdaterTestModel } from '@testIsomorphic/teleSuiteUpdater';
-import type { TeleTestCase } from '@testIsomorphic/teleReceiver';
-import type * as reporterTypes from 'playwright/types/testReporter';
+import { statusEx, TestTree, type TreeItem } from '@testIsomorphic/testTree';
+import type { SourceLocation } from '@trace-viewer/ui/modelUtil';
+import { SettingsView } from '@trace-viewer/ui/settingsView';
+import { FiltersView } from '@trace-viewer/ui/uiModeFiltersView';
+import { TestListView } from '@trace-viewer/ui/uiModeTestListView';
+import { TraceView } from '@trace-viewer/ui/uiModeTraceView';
 import { SplitView } from '@web/components/splitView';
-import type { SourceLocation } from './modelUtil';
-import './uiModeView.css';
-import { ToolbarButton } from '@web/components/toolbarButton';
 import { Toolbar } from '@web/components/toolbar';
-import type { XtermDataSource } from '@web/components/xtermWrapper';
-import { XtermWrapper } from '@web/components/xtermWrapper';
+import { ToolbarButton } from '@web/components/toolbarButton';
+import { XtermDataSource, XtermWrapper } from '@web/components/xtermWrapper';
 import { useDarkModeSetting } from '@web/theme';
 import { clsx, settings, useSetting } from '@web/uiUtils';
-import { statusEx, TestTree } from '@testIsomorphic/testTree';
-import type { TreeItem  } from '@testIsomorphic/testTree';
-import { TestServerConnection, WebSocketTestServerTransport } from '@testIsomorphic/testServerConnection';
-import { FiltersView } from './uiModeFiltersView';
-import { TestListView } from './uiModeTestListView';
-import { TraceView } from './uiModeTraceView';
-import { SettingsView } from './settingsView';
+import type * as reporterTypes from 'playwright/types/testReporter';
+import * as React from 'react';
+import './crxUiModeView.css';
+import { CrxTestServerConnection } from './testServer/crxTestServerTransport';
 
 let xtermSize = { cols: 80, rows: 24 };
 const xtermDataSource: XtermDataSource = {
@@ -47,9 +43,6 @@ const xtermDataSource: XtermDataSource = {
 };
 
 const searchParams = new URLSearchParams(window.location.search);
-const guid = searchParams.get('ws');
-const wsURL = new URL(`../${guid}`, window.location.toString());
-wsURL.protocol = (window.location.protocol === 'https:' ? 'wss:' : 'ws:');
 const queryParams = {
   args: searchParams.getAll('arg'),
   grep: searchParams.get('grep') || undefined,
@@ -66,7 +59,7 @@ if (queryParams.updateSnapshots && !['all', 'none', 'missing'].includes(queryPar
 
 const isMac = navigator.platform === 'MacIntel';
 
-export const UIModeView: React.FC<{}> = ({
+export const CrxUiModeView: React.FC<{}> = ({
 }) => {
   const [filterText, setFilterText] = React.useState<string>('');
   const [isShowingOutput, setIsShowingOutput] = React.useState<boolean>(false);
@@ -93,7 +86,7 @@ export const UIModeView: React.FC<{}> = ({
   const [expandAllCount, setExpandAllCount] = React.useState(0);
   const [isDisconnected, setIsDisconnected] = React.useState(false);
   const [hasBrowsers, setHasBrowsers] = React.useState(true);
-  const [testServerConnection, setTestServerConnection] = React.useState<TestServerConnection>();
+  const [testServerConnection, setTestServerConnection] = React.useState<CrxTestServerConnection>();
   const [teleSuiteUpdater, setTeleSuiteUpdater] = React.useState<TeleSuiteUpdater>();
   const [settingsVisible, setSettingsVisible] = React.useState(false);
   const [testingOptionsVisible, setTestingOptionsVisible] = React.useState(false);
@@ -111,7 +104,7 @@ export const UIModeView: React.FC<{}> = ({
   const reloadTests = React.useCallback(() => {
     setTestServerConnection(prevConnection => {
       prevConnection?.close();
-      return new TestServerConnection(new WebSocketTestServerTransport(wsURL));
+      return new CrxTestServerConnection();
     });
   }, []);
 
@@ -414,6 +407,9 @@ export const UIModeView: React.FC<{}> = ({
       <div className='title'>UI Mode disconnected</div>
       <div><a href='#' onClick={() => window.location.href = '/'}>Reload the page</a> to reconnect</div>
     </div>}
+    <Toolbar>
+      <ToolbarButton icon='save' title='Save' disabled={false} onClick={() => {}}>Save</ToolbarButton>
+    </Toolbar>
     <SplitView
       sidebarSize={250}
       minSidebarSize={150}
