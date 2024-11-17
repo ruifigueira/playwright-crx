@@ -1,6 +1,6 @@
 import './fs.css';
 import * as ReactDOM from 'react-dom/client';
-import { clientRequestFs, FsMethodsParamsMap, FsPageOptions } from './testServer/virtualFs';
+import { clientRequestFs, FsMethodsParamsMap, FsPageOptions } from './utils/virtualFs';
 
 const searchParams = new URLSearchParams(window.location.search);
 

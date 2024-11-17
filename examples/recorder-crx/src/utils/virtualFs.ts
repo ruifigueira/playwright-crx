@@ -35,6 +35,11 @@ export class VirtualFs {
 		this._dirHandle = dirHandle;
 	}
 
+  root() {
+    const { kind, name } = this._dirHandle;
+    return { kind, name, path: '' } satisfies VirtualFile;
+  }
+
   async checkPermission(mode: FileSystemPermissionMode) {
     const permission = await this._dirHandle.queryPermission({ mode });
     return permission === 'granted';
