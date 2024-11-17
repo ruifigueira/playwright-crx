@@ -1,7 +1,7 @@
 import type { CrxApplication } from "playwright-crx/test";
 import { CrxTestServerExtension } from "./crxTestServerTransport";
 import type { NetworkCookie } from "@protocol/channels";
-import { saveFile } from "./virtualFs";
+import { saveFile } from "../utils/virtualFs";
 import type { Language } from "@isomorphic/locatorGenerators";
 
 export class CrxTestServerDispatcher implements CrxTestServerExtension {
