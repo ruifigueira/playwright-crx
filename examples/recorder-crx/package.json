@@ -9,6 +9,7 @@
     "build": "tsc && vite build"
   },
   "dependencies": {
+    "@zip.js/zip.js": "^2.7.53",
     "idb-keyval": "^6.2.1",
     "playwright-crx": "0.11.0",
     "react": "^18.3.1",
