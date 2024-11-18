@@ -1,6 +1,89 @@
 import type { JsonConfig, JsonProject, JsonSuite, TeleReporterReceiver } from '@testIsomorphic/teleReceiver';
 import { sha1 } from './sha1';
-import { VirtualFile, VirtualFs } from 'src/utils/virtualFs';
+import { VirtualDirectory, VirtualFile, VirtualFs } from '../utils/virtualFs';
+import { parse } from './parser';
+import { extractTestScript, scriptToCode } from './script';
+import { loadTrace } from '../sw/crxMain';
+
+export class ExtendedProjectVirtualFs implements VirtualFs {
+  private _wrappedFs: VirtualFs;
+  
+  constructor(fs: VirtualFs) {
+    this._wrappedFs = fs;
+  }
+
+  root(): VirtualDirectory {
+    return this._wrappedFs.root();
+  }
+
+  async checkPermission(mode: FileSystemPermissionMode): Promise<boolean> {
+    return this._wrappedFs.checkPermission(mode);
+  }
+
+  async getFile(path: string): Promise<VirtualFile | undefined> {
+    const fileOrAlternativePaths = await this._resolvePath(path);
+    if (!fileOrAlternativePaths)
+      return;
+    if (!Array.isArray(fileOrAlternativePaths))
+      return fileOrAlternativePaths;
+    const [zipPath] = fileOrAlternativePaths;
+    const zipFile = await this._wrappedFs.getFile(zipPath);
+    if (!zipFile)
+      return;
+    return { kind: 'file', name: zipFile.name.replace(/.zip$/, '.ts'), path };
+  }
+
+  async listFiles(path?: string): Promise<VirtualFile[]> {
+    const files = await this._wrappedFs.listFiles(path);
+    const filenames = new Set(files.map(f => f.name));
+    const virtualFiles = files.filter(f => {
+      return f.kind === 'file' && f.name.endsWith('.zip') &&
+        !(filenames.has(f.name.replace(/\.zip$/, '.ts')) || filenames.has(f.name.replace(/\.zip$/, '.js')))
+    }).map(f => ({ kind: 'file', name: f.name.replace(/\.zip$/, '.ts'), path: f.path.replace(/\.zip$/, '.ts') } satisfies VirtualFile));
+    return [...files, ...virtualFiles];
+  }
+
+	async readFile(filePath: string, options: { encoding: 'utf-8' }): Promise<string>;
+	async readFile(filePath: string): Promise<Blob>;
+	async readFile(filePath: string, options?: { encoding: 'utf-8' }): Promise<string | Blob> {
+    const fileOrAlternativePaths = await this._resolvePath(filePath);
+    if (!fileOrAlternativePaths)
+      throw new Error(`File not found: ${filePath}`);
+    if (!Array.isArray(fileOrAlternativePaths))
+      return options ? this._wrappedFs.readFile(filePath, options) : this._wrappedFs.readFile(filePath);
+
+    const [zipPath, jsonPath] = fileOrAlternativePaths;
+
+    let title = 'test';
+    if (jsonPath) {
+      try {
+        const jsonData = await this._wrappedFs.readFile(jsonPath, { encoding: 'utf-8' });
+        title = JSON.parse(jsonData)?.title ?? 'test';
+      } catch (e) {
+        // oh well...
+      }
+    }
+
+    const traceModel = await loadTrace(zipPath, null, 'sw', 1, () => {});
+    const [contextEntry] = traceModel.contextEntries;
+    const script = extractTestScript(contextEntry, { title });
+    const code = scriptToCode(script);
+    return code;
+  }
+
+  async writeFile() {
+    throw new Error('ProjectVirtualFs does not support write operations');
+  }
+
+  async _resolvePath(path: string): Promise<VirtualFile | [string, string] | undefined> {
+    if (/\.(js|ts)$/.test(path)) {
+      const file = await this._wrappedFs.getFile(path);
+      return file ?? [path.replace(/\.(js|ts)$/, '.zip'), path.replace(/\.(js|ts)$/, '.json')];
+    }
+
+    return await this._wrappedFs.getFile(path);
+  }
+}
 
 type TeleReporterReceiverEventMap = {
   onConfigure: {
@@ -52,82 +135,39 @@ function generateHexString(length: number = 32) {
   return hexString;
 }
 
-async function getSuitesRecursively(fs: VirtualFs, directory: VirtualFile = fs.root()): Promise<{ suite: JsonSuite, onTestBegin: TeleReporterReceiverEventMap['onTestBegin'], onTestEnd: TeleReporterReceiverEventMap['onTestEnd'] }[]> {
-  const relativePath = directory.path;
+function generateTestId(testFilepath: string, title: string) {
+  const fileId = sha1(testFilepath).slice(0, 20);
+  const testIdExpression = `[project=]${testFilepath}\x1e${title}`;
+  const testId = fileId + '-' + sha1(testIdExpression).slice(0, 20);
+  return testId;
+}
+
+async function getSuitesRecursively(fs: VirtualFs, directory: VirtualFile = fs.root()): Promise<JsonSuite[]> {
   const children = await fs.listFiles(directory.path);
   const files = children.filter(h => h.kind === 'file');
-  const zipFiles = files.filter(f => f.name.endsWith('.zip'));
-  const filesByName = new Map(files.map(f => [f.name, f]));
-  const fileEntries = await Promise.all(zipFiles.map(async zipFile => {
-    const jsonFile = filesByName.get(zipFile.name.replace(/\.zip$/, '.json'));
-    let title = 'test';
-    if (jsonFile) {
-      const jsonData = await fs.readFile(jsonFile.path, { encoding: 'utf-8' });
-      title = JSON.parse(jsonData)?.title ?? 'test';
-    }
-    const testFilename = zipFile.name.replace(/\.zip$/, '.ts');
-    const fileId = sha1(relativePath).slice(0, 20);
-    const testIdExpression = `[project=]${relativePath}/${testFilename}\x1e${title}`;
-    const testId = fileId + '-' + sha1(testIdExpression).slice(0, 20);
-    const testPath = relativePath ? `${relativePath}/${testFilename}` : testFilename;
-    const zipPath = zipFile.path;
-
-    const suite = {
-      title: testPath,
-      location: { file: testPath, column: 0, line: 0 },
-      entries: [{
-        testId,
+  const jsFiles = files.filter(f => /\.(ts|js)$/.test(f.name));
+  
+  const jsEntries = await Promise.all(jsFiles.map(async jsFile => {
+    const code = await fs.readFile(jsFile.path, { encoding: 'utf-8' });
+    const parsed = parse(code, jsFile.path, 'data-testid');
+    return {
+      title: jsFile.path,
+      location: { file: jsFile.path, column: 0, line: 0 },
+      entries: parsed.tests.map(({ title, location }) => ({
+        testId: generateTestId(jsFile.path, title),
         title,
-        location: { file: testPath, line: 3, column: 5 },
+        location: { ...location, column: 0, line: location.line ?? 0 },
         retries: 0,
         tags: [],
         repeatEachIndex: 0,
         annotations: []
-      }],
+      })),
     } satisfies JsonSuite;
-
-    const testRunId = generateHexString();
-    const onTestBegin = {
-      method: 'onTestBegin',
-      params: {
-        testId,
-        result: {
-          id: testRunId,
-          retry: 0,
-          workerIndex: 0,
-          parallelIndex: 0,
-          startTime: new Date().getTime(),
-        }
-      }
-    } satisfies TeleReporterReceiverEventMap['onTestBegin'];
-    const onTestEnd = {
-      method: 'onTestEnd',
-      params: {
-        test: {
-          testId,
-          expectedStatus: 'passed',
-          annotations: [],
-          timeout: 30000
-        },
-        result: {
-          id: testRunId,
-          duration: 0,
-          status: 'passed',
-          errors: [],
-          attachments: [{
-            name: 'trace',
-            path: zipPath,
-            contentType: 'application/zip',
-          }]
-        }
-      }
-    } satisfies TeleReporterReceiverEventMap['onTestEnd'];
-    return { suite, onTestBegin, onTestEnd };
   }));
   
   const directories = children.filter(h => h.kind === 'directory');
   const directoryEntries = await Promise.all(directories.map(d => getSuitesRecursively(fs, d)));
-  return [...fileEntries, ...directoryEntries.flatMap(e => e)];
+  return [...jsEntries, ...directoryEntries.flatMap(e => e)];
 }
 
 export async function readReport(fs: VirtualFs): Promise<TeleReporter> {
@@ -138,20 +178,17 @@ export async function readReport(fs: VirtualFs): Promise<TeleReporter> {
     globalTimeout: 0,
     maxFailures: 0,
     metadata: {},
-    rootDir: 'tests',
+    rootDir: '',
     version: '1.48.2',
     workers: 1
   } satisfies JsonConfig;
 
-  const data = await getSuitesRecursively(fs);
-  const suites = data.map(d => d.suite);
-  const onTestBegins = data.map(d => d.onTestBegin);
-  const onTestEnds = data.map(d => d.onTestEnd);
+  const suites = await getSuitesRecursively(fs);
 
   const project: JsonProject = {
     metadata: {},
     name: 'chromium',
-    outputDir: '../test-results',
+    outputDir: 'test-results',
     repeatEach: 1,
     retries: 0,
     testDir: '',
@@ -178,7 +215,5 @@ export async function readReport(fs: VirtualFs): Promise<TeleReporter> {
         }
       }
     },
-    ...onTestBegins,
-    ...onTestEnds,
   ];
 }

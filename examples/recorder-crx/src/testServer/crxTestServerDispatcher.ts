@@ -1,8 +1,8 @@
 import type { Language } from "@isomorphic/locatorGenerators";
-import { TestServerInterface } from "@testIsomorphic/testServerInterface";
+import type { TestServerInterface } from "@testIsomorphic/testServerInterface";
 import type { CrxApplication } from "playwright-crx/test";
 import { filterCookies } from "../utils/network";
-import { readReport } from "../utils/project";
+import { ExtendedProjectVirtualFs, readReport } from "../utils/project";
 import { requestVirtualFs, saveFile, VirtualFs } from "../utils/virtualFs";
 import { CrxTestServerExtension } from "./crxTestServerTransport";
 
@@ -23,7 +23,7 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Cr
   }
 
   async initialize() {
-    this._virtualFsPromise = requestVirtualFs(await this._crxAppPromise, 'ui-mode.project-dir', 'readwrite');
+    this._virtualFsPromise = requestVirtualFs('ui-mode.project-dir', 'readwrite');
     await this._virtualFsPromise;
   }
 
@@ -35,7 +35,7 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Cr
   
   async listTests(_: Parameters<TestServerInterface['listTests']>[0]): ReturnType<TestServerInterface['listTests']> {
     const virtualFs = await this._virtualFsPromise;
-    const report = virtualFs ? await readReport(virtualFs) : [];
+    const report = virtualFs ? await readReport(new ExtendedProjectVirtualFs(virtualFs)) : [];
     return { report, status: 'passed' };
   }
 

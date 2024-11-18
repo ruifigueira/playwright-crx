@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Mode } from '@recorder/recorderTypes';
+import type { Mode } from '@recorder/recorderTypes';
 import type { CrxApplication } from 'playwright-crx';
 import playwright, { crx, registerSourceMap, _debug, _setUnderTest, _isUnderTest as isUnderTest } from 'playwright-crx';
 import { addSettingsChangedListener, CrxSettings, defaultSettings, loadSettings } from './settings';
