@@ -52,13 +52,17 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Cr
       case 'jsonl': acceptTypes = [{ description: 'JSON Lines file', accept: { 'text/jsonl': ['.jsonl'] } }]; break;
     };
 
-    await saveFile(await this._crxAppPromise, {
+    const handle = await saveFile({
       params: {
         types: acceptTypes,
-        body: params.code,
         suggestedName: params.suggestedName,
       }
     });
+    if (handle) {
+      const writable = await handle.createWritable();
+      await writable.write(params.code);
+      await writable.close();
+    }
   }
   
   async saveStorageState() {
@@ -68,15 +72,19 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Cr
     const cookies = filterCookies(allCookies, urls);
     const storageState = { cookies, origins };
   
-    await saveFile(crxApp, {
+    const handle = await saveFile({
       params: {
         types: [{
           accept: { 'application/json': ['.json'] },
         }],
-        body: JSON.stringify(storageState, undefined, 2),
         suggestedName: 'storageState.json',
       }
     });
+    if (handle) {
+      const writable = await handle.createWritable();
+      await writable.write(JSON.stringify(storageState));
+      await writable.close();
+    }
   }
 
   async openUiMode() {

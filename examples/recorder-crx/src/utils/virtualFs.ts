@@ -1,5 +1,4 @@
 import * as keyval from 'idb-keyval';
-import type { CrxApplication } from '../../../../test';
 
 export type VirtualFile = {
 	kind: 'file' | 'directory';
@@ -95,7 +94,7 @@ class FileSystemApiVirtualFs implements VirtualFs{
 
 export type FsMethodsParamsMap = {
   showDirectoryPicker: Parameters<typeof showDirectoryPicker>[0];
-  showSaveFilePicker: Parameters<typeof showSaveFilePicker>[0] & { body: string };
+  showSaveFilePicker: Parameters<typeof showSaveFilePicker>[0];
   requestPermission: Parameters<FileSystemDirectoryHandle['requestPermission']>[0];
 };
 
@@ -117,22 +116,25 @@ export async function clientRequestFs() {
   const searchParams = new URLSearchParams(window.location.search);
 
   const method = searchParams.get('method') as keyof FsMethodsParamsMap;
-  const key = searchParams.get('key') as string | undefined;
-  const params = window['__crx_params'];
+  const key = searchParams.get('key');
+  const params = searchParams.has('params') ? JSON.parse(searchParams.get('params')!) : {} as keyof FsMethodsParamsMap;
 
   try {
     switch (method) {
       case 'showDirectoryPicker': {
-        const dirHandle = await showDirectoryPicker(params as DirectoryPickerOptions);
+        const handle = await showDirectoryPicker(params as DirectoryPickerOptions);
         if (key)
-          await keyval.set(key, dirHandle);
+          await keyval.set(key, handle);
+        else
+          window.postMessage({ 'event': 'directoryPicked', handle }, '*');
         break;
       }
       case 'showSaveFilePicker': {
-        const fileHandle = await showSaveFilePicker(params as SaveFilePickerOptions);
-        const writable = await fileHandle.createWritable();
-        await writable.write((params as { body: string }).body);
-        await writable.close();
+        const handle = await showSaveFilePicker(params as SaveFilePickerOptions);
+        if (key)
+          await keyval.set(key, handle);
+        else
+        window.postMessage({ 'event': 'saveFilePicked', handle }, '*');
         break; 
       }
       case 'requestPermission': {
@@ -149,50 +151,52 @@ export async function clientRequestFs() {
   window.close();
 }
 
-async function requestFs(crxApp: CrxApplication, options: FsPageOptions) {
-  const currMode = crxApp.recorder.mode;
-  await crxApp.recorder.setMode('none');
-
+async function requestFs(options: FsPageOptions): Promise<FileSystemHandle | undefined> {
   const searchParams = new URLSearchParams();
   if (options.title) searchParams.set('title', options.title);
   if (options.subtitle) searchParams.set('subtitle', options.subtitle);
   if (options.key) searchParams.set('key', options.key);
   searchParams.set('method', options.method);
+  searchParams.set(`params`, JSON.stringify(options.params));
+
+  let handle: FileSystemHandle | undefined;
 
   // to avoid playwright from interfering too much, we use chrome tabs api to open and wait for the tab to close
   // and only attach playwright to click the link (showSaveFilePicker requires a user gesture)
   const saveTab = await chrome.tabs.create({ url: chrome.runtime.getURL(`fs.html?${searchParams}`) });
   const closePromise = new Promise<void>(async resolve => {
+    const messageReceived = (message: any, sender: chrome.runtime.MessageSender) => {
+      if (sender.tab?.id !== saveTab.id) 
+        return;
+      if ([ 'directoryPicked', 'saveFilePicked' ].includes(message.event)) {
+        handle = message.handle as FileSystemHandle;
+      }
+    };
     const tabClosed = (tabId: number) => {
       if (tabId === saveTab.id) {
+        chrome.runtime.onMessage.removeListener(messageReceived);
         chrome.tabs.onRemoved.removeListener(tabClosed);
         resolve();
       }
     };
+    chrome.runtime.onMessage.addListener(messageReceived);
     chrome.tabs.onRemoved.addListener(tabClosed);
   });
 
-  const page = await crxApp.attach(saveTab.id!);
-  await page.evaluate(async params => {
-    window['__crx_params'] = params;
-  }, options.params);
-
-  await page.locator('.fs').click();
-  await crxApp.detach(page);
   await closePromise;
 
-  await crxApp.recorder.setMode(currMode);
+  return handle;
 }
 
-export async function saveFile(crxApp: CrxApplication, options: Omit<FsPageOptions, 'method'>) {
-  await requestFs(crxApp, { method: 'showSaveFilePicker', ...options });
+export async function saveFile(options: Omit<FsPageOptions, 'method'>): Promise<FileSystemFileHandle | undefined> {
+  return await requestFs({ method: 'showSaveFilePicker', ...options }) as FileSystemFileHandle;
 }
 
-export async function requestVirtualFs(crxApp: CrxApplication, key: string, mode: FileSystemPermissionMode) {
+export async function requestVirtualFs(key: string, mode: FileSystemPermissionMode) {
   let directory = await keyval.get(key) as FileSystemDirectoryHandle;
   if (directory)
     return new FileSystemApiVirtualFs(directory);
-  await requestFs(crxApp, { title: 'Select a project folder', key, method: 'showDirectoryPicker', params: { mode } });
+  await requestFs({ title: 'Select a project folder', key, method: 'showDirectoryPicker', params: { mode } });
   directory = await keyval.get(key) as FileSystemDirectoryHandle;
   if (!directory)
     throw new Error(`No directory was picked`);
@@ -200,7 +204,7 @@ export async function requestVirtualFs(crxApp: CrxApplication, key: string, mode
   switch (permission) {
     case 'denied': throw Error(`Permission denied for ${directory.name}`);
     case 'prompt': {
-      await requestFs(crxApp, { title: `Authorize acess to ${directory.name}`, key, method: 'requestPermission', params: { mode } });
+      await requestFs({ title: `Authorize acess to ${directory.name}`, key, method: 'requestPermission', params: { mode } });
       const newPermission = await directory.queryPermission({ mode });
       if (newPermission !== 'granted')
         throw Error(`Permission denied for ${directory.name}`);
