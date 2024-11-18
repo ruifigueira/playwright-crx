@@ -7,6 +7,12 @@ export type VirtualFile = {
 	path: string;
 }
 
+export type VirtualDirectory = {
+	kind: 'directory';
+	name: string;
+	path: string;
+}
+
 async function getDirectoryHandleByPath(dirHandle: FileSystemDirectoryHandle, path: string = '') {
 	const parts = path.split('/').filter(Boolean);
 	if (parts.length === 0)
@@ -28,7 +34,17 @@ async function getFileHandleByPath(dirHandle: FileSystemDirectoryHandle, path: s
 	return handle.getFileHandle(filename, options);
 }
 
-export class VirtualFs {
+
+export interface VirtualFs {
+  root(): VirtualDirectory;
+  checkPermission(mode: FileSystemPermissionMode): Promise<boolean>;
+	listFiles(path?: string): Promise<VirtualFile[]>;
+	readFile(filePath: string, options?: { encoding: 'utf-8' }): Promise<string>;
+	readFile(filePath: string): Promise<Blob>;
+  writeFile(filePath: string, content: string | Blob): Promise<void>;
+}
+
+class FileSystemApiVirtualFs implements VirtualFs{
 	private _dirHandle: FileSystemDirectoryHandle;
 
 	constructor(dirHandle: FileSystemDirectoryHandle) {
@@ -37,7 +53,7 @@ export class VirtualFs {
 
   root() {
     const { kind, name } = this._dirHandle;
-    return { kind, name, path: '' } satisfies VirtualFile;
+    return { kind, name, path: '' } satisfies VirtualDirectory;
   }
 
   async checkPermission(mode: FileSystemPermissionMode) {
@@ -175,7 +191,7 @@ export async function saveFile(crxApp: CrxApplication, options: Omit<FsPageOptio
 export async function requestVirtualFs(crxApp: CrxApplication, key: string, mode: FileSystemPermissionMode) {
   let directory = await keyval.get(key) as FileSystemDirectoryHandle;
   if (directory)
-    return new VirtualFs(directory);
+    return new FileSystemApiVirtualFs(directory);
   await requestFs(crxApp, { title: 'Select a project folder', key, method: 'showDirectoryPicker', params: { mode } });
   directory = await keyval.get(key) as FileSystemDirectoryHandle;
   if (!directory)
@@ -190,5 +206,5 @@ export async function requestVirtualFs(crxApp: CrxApplication, key: string, mode
         throw Error(`Permission denied for ${directory.name}`);
     };
   }
-  return new VirtualFs(directory);
+  return new FileSystemApiVirtualFs(directory);
 }
