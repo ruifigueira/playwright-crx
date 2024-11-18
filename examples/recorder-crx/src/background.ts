@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Mode } from '@recorder/recorderTypes';
+import type { Mode } from '@recorder/recorderTypes';
 import type { CrxApplication } from 'playwright-crx';
 import { CrxTestServerDispatcher } from './testServer/crxTestServerDispatcher';
 import playwright, { crx, registerSourceMap, _debug, _setUnderTest } from 'playwright-crx';

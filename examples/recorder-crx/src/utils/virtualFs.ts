@@ -33,12 +33,12 @@ async function getFileHandleByPath(dirHandle: FileSystemDirectoryHandle, path: s
 	return handle.getFileHandle(filename, options);
 }
 
-
 export interface VirtualFs {
   root(): VirtualDirectory;
+  getFile(path: string): Promise<VirtualFile | undefined>;
   checkPermission(mode: FileSystemPermissionMode): Promise<boolean>;
 	listFiles(path?: string): Promise<VirtualFile[]>;
-	readFile(filePath: string, options?: { encoding: 'utf-8' }): Promise<string>;
+	readFile(filePath: string, options: { encoding: 'utf-8' }): Promise<string>;
 	readFile(filePath: string): Promise<Blob>;
   writeFile(filePath: string, content: string | Blob): Promise<void>;
 }
@@ -53,6 +53,15 @@ class FileSystemApiVirtualFs implements VirtualFs{
   root() {
     const { kind, name } = this._dirHandle;
     return { kind, name, path: '' } satisfies VirtualDirectory;
+  }
+
+  async getFile(path: string): Promise<VirtualFile | undefined> {
+    try {
+      const { kind, name } = await getFileHandleByPath(this._dirHandle, path);
+      return { kind, name, path } satisfies VirtualFile;
+    } catch (e) {
+      return undefined;
+    }
   }
 
   async checkPermission(mode: FileSystemPermissionMode) {
@@ -73,7 +82,7 @@ class FileSystemApiVirtualFs implements VirtualFs{
 		return files;
 	}
 
-	async readFile(filePath: string, options?: { encoding: 'utf-8' }): Promise<string>;
+	async readFile(filePath: string, options: { encoding: 'utf-8' }): Promise<string>;
 	async readFile(filePath: string): Promise<Blob>;
 	async readFile(filePath: string, options?: { encoding: 'utf-8' }): Promise<string | Blob> {
 		const fileHandle = await getFileHandleByPath(this._dirHandle, filePath);

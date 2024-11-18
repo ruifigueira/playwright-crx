@@ -26,7 +26,7 @@ import { Language } from "playwright-core/lib/server/codegen/types";
 import { monotonicTime } from "playwright-core/lib/utils";
 import { TestOptions } from "./parser";
 
-export type Location = CallMetadata['location'];
+export type Location = Exclude<CallMetadata['location'], undefined>;
 export type ActionInContextWithLocation = ActionInContext & { location?: Location };
 
 export type Script = {
