@@ -110,9 +110,9 @@ export default defineConfig({
 
 ## property: TestConfig.globalSetup
 * since: v1.10
-- type: ?<[string]>
+- type: ?<[string]|[Array]<[string]>>
 
-Path to the global setup file. This file will be required and run before all the tests. It must export a single function that takes a [FullConfig] argument.
+Path to the global setup file. This file will be required and run before all the tests. It must export a single function that takes a [FullConfig] argument. Pass an array of paths to specify multiple global setup files.
 
 Learn more about [global setup and teardown](../test-global-setup-teardown.md).
 
@@ -128,9 +128,9 @@ export default defineConfig({
 
 ## property: TestConfig.globalTeardown
 * since: v1.10
-- type: ?<[string]>
+- type: ?<[string]|[Array]<[string]>>
 
-Path to the global teardown file. This file will be required and run after all the tests. It must export a single function. See also [`property: TestConfig.globalSetup`].
+Path to the global teardown file. This file will be required and run after all the tests. It must export a single function. See also [`property: TestConfig.globalSetup`]. Pass an array of paths to specify multiple global teardown files.
 
 Learn more about [global setup and teardown](../test-global-setup-teardown.md).
 
@@ -549,6 +549,22 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   timeout: 5 * 60 * 1000,
+});
+```
+
+## property: TestConfig.tsconfig
+* since: v1.49
+- type: ?<[string]>
+
+Path to a single `tsconfig` applicable to all imported files. By default, `tsconfig` for each imported file is looked up separately. Note that `tsconfig` property has no effect while the configuration file or any of its dependencies are loaded. Ignored when `--tsconfig` command line option is specified.
+
+**Usage**
+
+```js title="playwright.config.ts"
+import { defineConfig } from '@playwright/test';
+
+export default defineConfig({
+  tsconfig: './tsconfig.test.json',
 });
 ```
 

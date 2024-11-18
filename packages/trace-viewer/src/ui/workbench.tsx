@@ -41,6 +41,7 @@ import type { Entry } from '@trace/har';
 import './workbench.css';
 import { testStatusIcon, testStatusText } from './testUtils';
 import type { UITestStatus } from './testUtils';
+import type { AfterActionTraceEventAttachment } from '@trace/trace';
 
 export const Workbench: React.FunctionComponent<{
   model?: modelUtil.MultiTraceModel,
@@ -55,10 +56,10 @@ export const Workbench: React.FunctionComponent<{
   openPage?: (url: string, target?: string) => Window | any,
   onOpenExternally?: (location: modelUtil.SourceLocation) => void,
   revealSource?: boolean,
-  showSettings?: boolean,
-}> = ({ model, showSourcesFirst, rootDir, fallbackLocation, isLive, hideTimeline, status, annotations, inert, openPage, onOpenExternally, revealSource, showSettings }) => {
+}> = ({ model, showSourcesFirst, rootDir, fallbackLocation, isLive, hideTimeline, status, annotations, inert, openPage, onOpenExternally, revealSource }) => {
   const [selectedCallId, setSelectedCallId] = React.useState<string | undefined>(undefined);
   const [revealedError, setRevealedError] = React.useState<ErrorDescription | undefined>(undefined);
+  const [revealedAttachment, setRevealedAttachment] = React.useState<AfterActionTraceEventAttachment | undefined>(undefined);
   const [highlightedCallId, setHighlightedCallId] = React.useState<string | undefined>();
   const [highlightedEntry, setHighlightedEntry] = React.useState<Entry | undefined>();
   const [highlightedConsoleMessage, setHighlightedConsoleMessage] = React.useState<ConsoleEntry | undefined>();
@@ -68,7 +69,6 @@ export const Workbench: React.FunctionComponent<{
   const [highlightedLocator, setHighlightedLocator] = React.useState<string>('');
   const [selectedTime, setSelectedTime] = React.useState<Boundaries | undefined>();
   const [sidebarLocation, setSidebarLocation] = useSetting<'bottom' | 'right'>('propertiesSidebarLocation', 'bottom');
-  const showScreenshot = false;
 
   const setSelectedAction = React.useCallback((action: modelUtil.ActionTraceEventInContext | undefined) => {
     setSelectedCallId(action?.callId);
@@ -114,15 +114,15 @@ export const Workbench: React.FunctionComponent<{
     }
   }, [model, selectedCallId]);
 
-  const revealedStack = React.useMemo(() => {
-    if (revealedError)
-      return revealedError.stack;
-    return selectedAction?.stack;
-  }, [selectedAction, revealedError]);
-
   const activeAction = React.useMemo(() => {
     return highlightedAction || selectedAction;
   }, [selectedAction, highlightedAction]);
+
+  const revealedStack = React.useMemo(() => {
+    if (revealedError)
+      return revealedError.stack;
+    return activeAction?.stack;
+  }, [activeAction, revealedError]);
 
   const onActionSelected = React.useCallback((action: modelUtil.ActionTraceEventInContext) => {
     setSelectedAction(action);
@@ -146,6 +146,11 @@ export const Workbench: React.FunctionComponent<{
     selectPropertiesTab('inspector');
   }, [selectPropertiesTab]);
 
+  const revealAttachment = React.useCallback((attachment: AfterActionTraceEventAttachment) => {
+    selectPropertiesTab('attachments');
+    setRevealedAttachment(attachment);
+  }, [selectPropertiesTab]);
+
   React.useEffect(() => {
     if (revealSource)
       selectPropertiesTab('source');
@@ -164,7 +169,6 @@ export const Workbench: React.FunctionComponent<{
     id: 'inspector',
     title: 'Locator',
     render: () => <InspectorTab
-      showScreenshot={showScreenshot}
       sdkLanguage={sdkLanguage}
       setIsInspecting={setIsInspecting}
       highlightedLocator={highlightedLocator}
@@ -234,7 +238,7 @@ export const Workbench: React.FunctionComponent<{
     id: 'attachments',
     title: 'Attachments',
     count: attachments.length,
-    render: () => <AttachmentsTab model={model} />
+    render: () => <AttachmentsTab model={model} selectedAction={selectedAction} revealedAttachment={revealedAttachment} />
   };
 
   const tabs: TabbedPaneTabModel[] = [
@@ -299,6 +303,7 @@ export const Workbench: React.FunctionComponent<{
         setSelectedTime={setSelectedTime}
         onSelected={onActionSelected}
         onHighlighted={setHighlightedAction}
+        revealAttachment={revealAttachment}
         revealConsole={() => selectPropertiesTab('console')}
         isLive={isLive}
       />

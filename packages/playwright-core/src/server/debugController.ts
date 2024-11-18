@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { Mode, Source } from '@recorder/recorderTypes';
+import type { ElementInfo, Mode, Source } from '@recorder/recorderTypes';
 import { gracefullyProcessExitDoNotHang } from '../utils/processLauncher';
 import type { Browser } from './browser';
 import type { BrowserContext } from './browserContext';
@@ -24,6 +24,7 @@ import type { Playwright } from './playwright';
 import { Recorder } from './recorder';
 import { EmptyRecorderApp } from './recorder/recorderApp';
 import { asLocator, type Language } from '../utils';
+import { parseYamlForAriaSnapshot } from './ariaSnapshot';
 
 const internalMetadata = serverSideCallMetadata();
 
@@ -142,9 +143,13 @@ export class DebugController extends SdkObject {
     this._autoCloseTimer = setTimeout(heartBeat, 30000);
   }
 
-  async highlight(selector: string) {
-    for (const recorder of await this._allRecorders())
-      recorder.setHighlightedSelector(this._sdkLanguage, selector);
+  async highlight(params: { selector?: string, ariaTemplate?: string }) {
+    for (const recorder of await this._allRecorders()) {
+      if (params.ariaTemplate)
+        recorder.setHighlightedAriaTemplate(parseYamlForAriaSnapshot(params.ariaTemplate));
+      else if (params.selector)
+        recorder.setHighlightedSelector(this._sdkLanguage, params.selector);
+    }
   }
 
   async hideHighlight() {
@@ -221,9 +226,9 @@ class InspectingRecorderApp extends EmptyRecorderApp {
     this._debugController = debugController;
   }
 
-  override async setSelector(selector: string): Promise<void> {
-    const locator: string = asLocator(this._debugController._sdkLanguage, selector);
-    this._debugController.emit(DebugController.Events.InspectRequested, { selector, locator });
+  override async elementPicked(elementInfo: ElementInfo): Promise<void> {
+    const locator: string = asLocator(this._debugController._sdkLanguage, elementInfo.selector);
+    this._debugController.emit(DebugController.Events.InspectRequested, { selector: elementInfo.selector, locator });
   }
 
   override async setSources(sources: Source[]): Promise<void> {

@@ -305,10 +305,8 @@ it.describe('download event', () => {
   });
 
   it('should report alt-click downloads', async ({ browser, server, browserName }) => {
-    it.fixme(browserName === 'firefox');
+    it.skip(browserName === 'firefox', 'Firefox does not download on alt-click.');
 
-    // Firefox does not download on alt-click by default.
-    // Our WebKit embedder does not download on alt-click, although Safari does.
     server.setRoute('/download', (req, res) => {
       res.setHeader('Content-Type', 'application/octet-stream');
       res.end(`Hello world`);
@@ -638,8 +636,9 @@ it('should be able to download a inline PDF file via response interception', asy
   await page.close();
 });
 
-it('should be able to download a inline PDF file via navigation', async ({ browser, server, asset, browserName, headless }) => {
-  it.fixme(((!headless || !!process.env.PLAYWRIGHT_CHROMIUM_USE_HEADLESS_NEW) && browserName === 'chromium'));
+it('should be able to download a inline PDF file via navigation', async ({ browser, server, asset, browserName, isHeadlessShell }) => {
+  it.skip(browserName === 'chromium' && !isHeadlessShell, 'We expect PDF Viewer to open up in headed Chromium');
+
   const page = await browser.newPage();
   await page.goto(server.EMPTY_PAGE);
   await page.setContent(`

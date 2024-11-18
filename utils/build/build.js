@@ -275,21 +275,6 @@ for (const bundle of bundles) {
   });
 }
 
-// Build/watch web packages.
-for (const webPackage of ['html-reporter', 'recorder', 'trace-viewer']) {
-  steps.push({
-    command: 'npx',
-    args: [
-      'vite',
-      'build',
-      ...(watchMode ? ['--watch', '--minify=false'] : []),
-      ...(withSourceMaps ? ['--sourcemap'] : []),
-    ],
-    shell: true,
-    cwd: path.join(__dirname, '..', '..', 'packages', webPackage),
-    concurrent: true,
-  });
-}
 // Build/watch trace viewer service worker.
 steps.push({
   command: 'npx',
@@ -299,13 +284,46 @@ steps.push({
     'vite.sw.config.ts',
     'build',
     ...(watchMode ? ['--watch', '--minify=false'] : []),
-    ...(withSourceMaps ? ['--sourcemap'] : []),
+    ...(withSourceMaps ? ['--sourcemap=inline'] : []),
   ],
   shell: true,
   cwd: path.join(__dirname, '..', '..', 'packages', 'trace-viewer'),
-  concurrent: true,
+  concurrent: watchMode, // feeds into trace-viewer's `public` directory, so it needs to be finished before trace-viewer build starts
 });
 
+// Build/watch web packages.
+for (const webPackage of ['html-reporter', 'recorder', 'trace-viewer']) {
+  steps.push({
+    command: 'npx',
+    args: [
+      'vite',
+      'build',
+      ...(watchMode ? ['--watch', '--minify=false'] : []),
+      ...(withSourceMaps ? ['--sourcemap=inline'] : []),
+    ],
+    shell: true,
+    cwd: path.join(__dirname, '..', '..', 'packages', webPackage),
+    concurrent: true,
+  });
+}
+
+// web packages dev server
+if (watchMode) {
+  steps.push({
+    command: 'npx',
+    args: ['vite', '--port', '44223', '--base', '/trace/'],
+    shell: true,
+    cwd: path.join(__dirname, '..', '..', 'packages', 'trace-viewer'),
+    concurrent: true,
+  });
+  steps.push({
+    command: 'npx',
+    args: ['vite', '--port', '44224'],
+    shell: true,
+    cwd: path.join(__dirname, '..', '..', 'packages', 'html-reporter'),
+    concurrent: true,
+  });
+}
 
 // Generate injected.
 onChanges.push({

@@ -29,13 +29,14 @@ import type { CSSComplexSelectorList } from '../../utils/isomorphic/cssParser';
 import { generateSelector, type GenerateSelectorOptions } from './selectorGenerator';
 import type * as channels from '@protocol/channels';
 import { Highlight } from './highlight';
-import { getChecked, getAriaDisabled, getAriaRole, getElementAccessibleName, getElementAccessibleDescription, beginAriaCaches, endAriaCaches } from './roleUtils';
+import { getChecked, getAriaDisabled, getAriaRole, getElementAccessibleName, getElementAccessibleDescription } from './roleUtils';
 import { kLayoutSelectorNames, type LayoutSelectorName, layoutSelectorScore } from './layoutSelectorUtils';
 import { asLocator } from '../../utils/isomorphic/locatorGenerators';
 import type { Language } from '../../utils/isomorphic/locatorGenerators';
-import { cacheNormalizedWhitespaces, escapeHTML, escapeHTMLAttribute, normalizeWhiteSpace, trimStringWithEllipsis } from '../../utils/isomorphic/stringUtils';
-import { selectorForSimpleDomNodeId, generateSimpleDomNode } from './simpleDom';
-import type { SimpleDomNode } from './simpleDom';
+import { cacheNormalizedWhitespaces, normalizeWhiteSpace, trimStringWithEllipsis } from '../../utils/isomorphic/stringUtils';
+import { matchesAriaTree, renderedAriaTree, getAllByAria } from './ariaSnapshot';
+import type { AriaTemplateNode } from '@isomorphic/ariaSnapshot';
+import { parseYamlTemplate } from '@isomorphic/ariaSnapshot';
 
 export type FrameExpectParams = Omit<channels.FrameExpectParams, 'expectedValue'> & { expectedValue?: any };
 
@@ -65,6 +66,7 @@ export class InjectedScript {
   readonly isUnderTest: boolean;
   private _sdkLanguage: Language;
   private _testIdAttributeNameForStrictErrorAndConsoleCodegen: string = 'data-testid';
+  private _markedElements?: { callId: string, elements: Set<Element> };
   // eslint-disable-next-line no-restricted-globals
   readonly window: Window & typeof globalThis;
   readonly document: Document;
@@ -74,18 +76,15 @@ export class InjectedScript {
   // module-level globals will be duplicated, which leads to subtle bugs.
   readonly utils = {
     asLocator,
-    beginAriaCaches,
     cacheNormalizedWhitespaces,
     elementText,
-    endAriaCaches,
-    escapeHTML,
-    escapeHTMLAttribute,
     getAriaRole,
     getElementAccessibleDescription,
     getElementAccessibleName,
     isElementVisible,
     isInsideScope,
     normalizeWhiteSpace,
+    parseYamlTemplate,
   };
 
   // eslint-disable-next-line no-restricted-globals
@@ -147,13 +146,19 @@ export class InjectedScript {
   builtinSetTimeout(callback: Function, timeout: number) {
     if (this.window.__pwClock?.builtin)
       return this.window.__pwClock.builtin.setTimeout(callback, timeout);
-    return setTimeout(callback, timeout);
+    return this.window.setTimeout(callback, timeout);
+  }
+
+  builtinClearTimeout(timeout: number | undefined) {
+    if (this.window.__pwClock?.builtin)
+      return this.window.__pwClock.builtin.clearTimeout(timeout);
+    return this.window.clearTimeout(timeout);
   }
 
   builtinRequestAnimationFrame(callback: FrameRequestCallback) {
     if (this.window.__pwClock?.builtin)
       return this.window.__pwClock.builtin.requestAnimationFrame(callback);
-    return requestAnimationFrame(callback);
+    return this.window.requestAnimationFrame(callback);
   }
 
   eval(expression: string): any {
@@ -208,6 +213,16 @@ export class InjectedScript {
     }
     result.sort((a, b) => a.score - b.score);
     return new Set<Element>(result.map(r => r.element));
+  }
+
+  ariaSnapshot(node: Node, options?: { mode?: 'raw' | 'regex' }): string {
+    if (node.nodeType !== Node.ELEMENT_NODE)
+      throw this.createStacklessError('Can only capture aria snapshot of Element nodes.');
+    return renderedAriaTree(node as Element, options);
+  }
+
+  getAllByAria(document: Document, template: AriaTemplateNode): Element[] {
+    return getAllByAria(document.documentElement, template);
   }
 
   querySelectorAll(selector: ParsedSelector, root: Node): Element[] {
@@ -1081,14 +1096,33 @@ export class InjectedScript {
   }
 
   markTargetElements(markedElements: Set<Element>, callId: string) {
-    const customEvent = new CustomEvent('__playwright_target__', {
+    if (this._markedElements?.callId !== callId)
+      this._markedElements = undefined;
+    const previous = this._markedElements?.elements || new Set();
+
+    const unmarkEvent = new CustomEvent('__playwright_unmark_target__', {
       bubbles: true,
       cancelable: true,
       detail: callId,
       composed: true,
     });
-    for (const element of markedElements)
-      element.dispatchEvent(customEvent);
+    for (const element of previous) {
+      if (!markedElements.has(element))
+        element.dispatchEvent(unmarkEvent);
+    }
+
+    const markEvent = new CustomEvent('__playwright_mark_target__', {
+      bubbles: true,
+      cancelable: true,
+      detail: callId,
+      composed: true,
+    });
+    for (const element of markedElements) {
+      if (!previous.has(element))
+        element.dispatchEvent(markEvent);
+    }
+
+    this._markedElements = { callId, elements: markedElements };
   }
 
   private _setupGlobalListenersRemovalDetection() {
@@ -1236,6 +1270,16 @@ export class InjectedScript {
     }
 
     {
+      if (expression === 'to.match.aria') {
+        const result = matchesAriaTree(element, options.expectedValue);
+        return {
+          received: result.received,
+          matches: !!result.matches.length,
+        };
+      }
+    }
+
+    {
       // Single text value.
       let received: string | undefined;
       if (expression === 'to.have.attribute.value') {
@@ -1311,17 +1355,6 @@ export class InjectedScript {
       return { received, matches: mIndex === matchers.length };
     }
     throw this.createStacklessError('Unknown expect matcher: ' + expression);
-  }
-
-  generateSimpleDomNode(selector: string): SimpleDomNode | undefined {
-    const element = this.querySelector(this.parseSelector(selector), this.document.documentElement, true);
-    if (!element)
-      return;
-    return generateSimpleDomNode(this, element);
-  }
-
-  selectorForSimpleDomNodeId(nodeId: string) {
-    return selectorForSimpleDomNodeId(this, nodeId);
   }
 }
 
@@ -1543,6 +1576,7 @@ declare global {
     __pwClock?: {
       builtin: {
         setTimeout: Window['setTimeout'],
+        clearTimeout: Window['clearTimeout'],
         requestAnimationFrame: Window['requestAnimationFrame'],
       }
     }

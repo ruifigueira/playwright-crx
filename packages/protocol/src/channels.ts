@@ -741,10 +741,12 @@ export type DebugControllerSetRecorderModeOptions = {
 };
 export type DebugControllerSetRecorderModeResult = void;
 export type DebugControllerHighlightParams = {
-  selector: string,
+  selector?: string,
+  ariaTemplate?: string,
 };
 export type DebugControllerHighlightOptions = {
-
+  selector?: string,
+  ariaTemplate?: string,
 };
 export type DebugControllerHighlightResult = void;
 export type DebugControllerHideHighlightParams = {};
@@ -1777,6 +1779,7 @@ export type BrowserContextEnableRecorderParams = {
   device?: string,
   saveStorage?: string,
   outputFile?: string,
+  handleSIGINT?: boolean,
   omitCallTracking?: boolean,
 };
 export type BrowserContextEnableRecorderOptions = {
@@ -1790,6 +1793,7 @@ export type BrowserContextEnableRecorderOptions = {
   device?: string,
   saveStorage?: string,
   outputFile?: string,
+  handleSIGINT?: boolean,
   omitCallTracking?: boolean,
 };
 export type BrowserContextEnableRecorderResult = void;
@@ -2139,7 +2143,7 @@ export type PageReloadResult = {
 };
 export type PageExpectScreenshotParams = {
   expected?: Binary,
-  timeout?: number,
+  timeout: number,
   isNot: boolean,
   locator?: {
     frame: FrameChannel,
@@ -2164,7 +2168,6 @@ export type PageExpectScreenshotParams = {
 };
 export type PageExpectScreenshotOptions = {
   expected?: Binary,
-  timeout?: number,
   locator?: {
     frame: FrameChannel,
     selector: string,
@@ -2191,6 +2194,7 @@ export type PageExpectScreenshotResult = {
   errorMessage?: string,
   actual?: Binary,
   previous?: Binary,
+  timedOut?: boolean,
   log?: string[],
 };
 export type PageScreenshotParams = {
@@ -2509,6 +2513,7 @@ export interface FrameChannel extends FrameEventTarget, Channel {
   evalOnSelectorAll(params: FrameEvalOnSelectorAllParams, metadata?: CallMetadata): Promise<FrameEvalOnSelectorAllResult>;
   addScriptTag(params: FrameAddScriptTagParams, metadata?: CallMetadata): Promise<FrameAddScriptTagResult>;
   addStyleTag(params: FrameAddStyleTagParams, metadata?: CallMetadata): Promise<FrameAddStyleTagResult>;
+  ariaSnapshot(params: FrameAriaSnapshotParams, metadata?: CallMetadata): Promise<FrameAriaSnapshotResult>;
   blur(params: FrameBlurParams, metadata?: CallMetadata): Promise<FrameBlurResult>;
   check(params: FrameCheckParams, metadata?: CallMetadata): Promise<FrameCheckResult>;
   click(params: FrameClickParams, metadata?: CallMetadata): Promise<FrameClickResult>;
@@ -2612,6 +2617,16 @@ export type FrameAddStyleTagOptions = {
 };
 export type FrameAddStyleTagResult = {
   element: ElementHandleChannel,
+};
+export type FrameAriaSnapshotParams = {
+  selector: string,
+  timeout?: number,
+};
+export type FrameAriaSnapshotOptions = {
+  timeout?: number,
+};
+export type FrameAriaSnapshotResult = {
+  snapshot: string,
 };
 export type FrameBlurParams = {
   selector: string,
@@ -3149,7 +3164,7 @@ export type FrameExpectParams = {
   expectedValue?: SerializedArgument,
   useInnerText?: boolean,
   isNot: boolean,
-  timeout?: number,
+  timeout: number,
 };
 export type FrameExpectOptions = {
   expressionArg?: any,
@@ -3157,7 +3172,6 @@ export type FrameExpectOptions = {
   expectedNumber?: number,
   expectedValue?: SerializedArgument,
   useInnerText?: boolean,
-  timeout?: number,
 };
 export type FrameExpectResult = {
   matches: boolean,
@@ -4074,6 +4088,8 @@ export interface TracingChannel extends TracingEventTarget, Channel {
   _type_Tracing: boolean;
   tracingStart(params: TracingTracingStartParams, metadata?: CallMetadata): Promise<TracingTracingStartResult>;
   tracingStartChunk(params: TracingTracingStartChunkParams, metadata?: CallMetadata): Promise<TracingTracingStartChunkResult>;
+  tracingGroup(params: TracingTracingGroupParams, metadata?: CallMetadata): Promise<TracingTracingGroupResult>;
+  tracingGroupEnd(params?: TracingTracingGroupEndParams, metadata?: CallMetadata): Promise<TracingTracingGroupEndResult>;
   tracingStopChunk(params: TracingTracingStopChunkParams, metadata?: CallMetadata): Promise<TracingTracingStopChunkResult>;
   tracingStop(params?: TracingTracingStopParams, metadata?: CallMetadata): Promise<TracingTracingStopResult>;
 }
@@ -4101,6 +4117,25 @@ export type TracingTracingStartChunkOptions = {
 export type TracingTracingStartChunkResult = {
   traceName: string,
 };
+export type TracingTracingGroupParams = {
+  name: string,
+  location?: {
+    file: string,
+    line?: number,
+    column?: number,
+  },
+};
+export type TracingTracingGroupOptions = {
+  location?: {
+    file: string,
+    line?: number,
+    column?: number,
+  },
+};
+export type TracingTracingGroupResult = void;
+export type TracingTracingGroupEndParams = {};
+export type TracingTracingGroupEndOptions = {};
+export type TracingTracingGroupEndResult = void;
 export type TracingTracingStopChunkParams = {
   mode: 'archive' | 'discard' | 'entries',
 };

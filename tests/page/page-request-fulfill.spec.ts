@@ -309,10 +309,12 @@ it('should fetch original request and fulfill', async ({ page, server, isElectro
   expect(await page.title()).toEqual('Woof-Woof');
 });
 
-it('should fulfill with multiple set-cookie', async ({ page, server, isElectron, electronMajorVersion }) => {
+it('should fulfill with multiple set-cookie', async ({ page, server, isElectron, electronMajorVersion, isAndroid }) => {
   it.skip(isElectron && electronMajorVersion < 14, 'Electron 14+ is required');
+  it.skip(isAndroid, 'Android does not have an isolated context per test, so we get cookies from other tests');
+
   const cookies = ['a=b', 'c=d'];
-  await page.route('**/empty.html', async route => {
+  await page.route('**/multiple-set-cookie.html', async route => {
     void route.fulfill({
       status: 200,
       headers: {
@@ -323,7 +325,7 @@ it('should fulfill with multiple set-cookie', async ({ page, server, isElectron,
       body: ''
     });
   });
-  const response = await page.goto(server.EMPTY_PAGE);
+  const response = await page.goto(server.PREFIX + '/multiple-set-cookie.html');
   expect((await page.evaluate(() => document.cookie)).split(';').map(s => s.trim()).sort()).toEqual(cookies);
   expect(await response.headerValue('X-Header-1')).toBe('v1');
   expect(await response.headerValue('X-Header-2')).toBe('v2');

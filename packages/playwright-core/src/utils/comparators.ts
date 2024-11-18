@@ -16,9 +16,10 @@
  */
 
 import { colors, jpegjs } from '../utilsBundle';
-const pixelmatch = require('../third_party/pixelmatch');
+// @ts-ignore
+import pixelmatch from '../third_party/pixelmatch';
 import { compare } from '../image_tools/compare';
-const { diff_match_patch, DIFF_INSERT, DIFF_DELETE, DIFF_EQUAL } = require('../third_party/diff_match_patch');
+import { diff } from '../utilsBundle';
 import { PNG } from '../utilsBundle';
 
 export type ImageComparatorOptions = { threshold?: number, maxDiffPixels?: number, maxDiffPixelRatio?: number, comparator?: string };
@@ -111,33 +112,23 @@ function compareText(actual: Buffer | string, expectedBuffer: Buffer): Comparato
   const expected = expectedBuffer.toString('utf-8');
   if (expected === actual)
     return null;
-  const dmp = new diff_match_patch();
-  const d = dmp.diff_main(expected, actual);
-  dmp.diff_cleanupSemantic(d);
+  const diffs = diff.diffChars(expected, actual);
   return {
-    errorMessage: diff_prettyTerminal(d)
+    errorMessage: diff_prettyTerminal(diffs),
   };
 }
 
-function diff_prettyTerminal(diffs: [number, string][]) {
-  const html = [];
-  for (let x = 0; x < diffs.length; x++) {
-    const op = diffs[x][0];    // Operation (insert, delete, equal)
-    const data = diffs[x][1];  // Text of change.
-    const text = data;
-    switch (op) {
-      case DIFF_INSERT:
-        html[x] = colors.green(text);
-        break;
-      case DIFF_DELETE:
-        html[x] = colors.reset(colors.strikethrough(colors.red(text)));
-        break;
-      case DIFF_EQUAL:
-        html[x] = text;
-        break;
-    }
-  }
-  return html.join('');
+function diff_prettyTerminal(diffs: Diff.Change[]): string {
+  const result = diffs.map(part => {
+    const text = part.value;
+    if (part.added)
+      return colors.green(text);
+    else if (part.removed)
+      return colors.reset(colors.strikethrough(colors.red(text)));
+    else
+      return text;
+  });
+  return result.join('');
 }
 
 function resizeImage(image: ImageData, size: { width: number, height: number }): ImageData {

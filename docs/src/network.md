@@ -10,7 +10,7 @@ Playwright provides APIs to **monitor** and **modify** browser network traffic, 
 
 ## Mock APIs
 
-Check out our [API mocking guide](./mock.md) to learn more on how to 
+Check out our [API mocking guide](./mock.md) to learn more on how to
 - mock API requests and never hit the API
 - perform the API request and modify the response
 - use HAR files to mock network requests.
@@ -146,8 +146,8 @@ const browser = await chromium.launch({
 ```java
 Browser browser = chromium.launch(new BrowserType.LaunchOptions()
   .setProxy(new Proxy("http://myproxy.com:3128")
-  .setUsername('usr')
-  .setPassword('pwd')));
+  .setUsername("usr")
+  .setPassword("pwd")));
 ```
 
 ```python async
@@ -627,7 +627,7 @@ page.route("**/title.html", route -> {
   String body = response.text();
   body = body.replace("<title>", "<title>My prefix:");
   Map<String, String> headers = response.headers();
-  headers.put("content-type": "text/html");
+  headers.put("content-type", "text/html");
   route.fulfill(new Route.FulfillOptions()
     // Pass all fields from the response.
     .setResponse(response)
@@ -723,7 +723,9 @@ Important notes:
 
 ## WebSockets
 
-Playwright supports [WebSockets](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API) inspection out of the box. Every time a WebSocket is created, the [`event: Page.webSocket`] event is fired. This event contains the [WebSocket] instance for further web socket frames inspection:
+Playwright supports [WebSockets](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API) inspection, mocking and modifying out of the box. See our [API mocking guide](./mock.md#mock-websockets) to learn how to mock WebSockets.
+
+Every time a WebSocket is created, the [`event: Page.webSocket`] event is fired. This event contains the [WebSocket] instance for further web socket frames inspection:
 
 ```js
 page.on('websocket', ws => {

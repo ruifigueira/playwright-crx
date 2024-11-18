@@ -106,7 +106,6 @@ await page.CloseAsync();`);
   });
 
   test('should upload a single file', async ({ openRecorder, browserName, asset, isLinux }) => {
-    test.fixme(browserName === 'firefox' && isLinux, 'https://bugzilla.mozilla.org/show_bug.cgi?id=1827551');
     const { page, recorder } = await openRecorder();
     await recorder.setContentAndWait(`
     <form>
@@ -137,7 +136,6 @@ await page.GetByRole(AriaRole.Textbox).SetInputFilesAsync(new[] { \"file-to-uplo
   });
 
   test('should upload multiple files', async ({ openRecorder, browserName, asset, isLinux }) => {
-    test.fixme(browserName === 'firefox' && isLinux, 'https://bugzilla.mozilla.org/show_bug.cgi?id=1827551');
     const { page, recorder } = await openRecorder();
     await recorder.setContentAndWait(`
     <form>
@@ -168,7 +166,6 @@ await page.GetByRole(AriaRole.Textbox).SetInputFilesAsync(new[] { \"file-to-uplo
   });
 
   test('should clear files', async ({ openRecorder, browserName, asset, isLinux }) => {
-    test.fixme(browserName === 'firefox' && isLinux, 'https://bugzilla.mozilla.org/show_bug.cgi?id=1827551');
     const { page, recorder } = await openRecorder();
     await recorder.setContentAndWait(`
     <form>
@@ -403,17 +400,6 @@ await page1.GotoAsync("about:blank?foo");`);
       recorder.waitForOutput('JavaScript', '.click(')
     ]);
     await expect.poll(() => messages).toEqual(['mousedown', 'mouseup', 'click']);
-  });
-
-  test('should update hover model on action', async ({ openRecorder }) => {
-    const { page, recorder } = await openRecorder();
-
-    await recorder.setContentAndWait(`<input id="checkbox" type="checkbox" name="accept" onchange="checkbox.name='updated'"></input>`);
-    const [models] = await Promise.all([
-      recorder.waitForActionPerformed(),
-      page.click('input')
-    ]);
-    expect(models.hovered).toBe('#checkbox');
   });
 
   test('should reset hover model on action when element detaches', async ({ openRecorder }) => {
