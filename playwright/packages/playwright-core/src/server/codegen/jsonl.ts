@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { asLocator } from '../../utils';
+import { asLocator } from '../../utils/isomorphic/locatorGenerators';
 import type * as actions from '@recorder/actions';
 import type { Language, LanguageGenerator, LanguageGeneratorOptions } from './types';
 

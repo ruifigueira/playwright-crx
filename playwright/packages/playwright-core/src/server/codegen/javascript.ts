@@ -19,7 +19,8 @@ import type { Language, LanguageGenerator, LanguageGeneratorOptions } from './ty
 import type * as actions from '@recorder/actions';
 import { sanitizeDeviceOptions, toSignalMap, toKeyboardModifiers, toClickOptionsForSourceCode } from './language';
 import { deviceDescriptors } from '../deviceDescriptors';
-import { escapeWithQuotes, asLocator } from '../../utils';
+import { asLocator } from '../../utils/isomorphic/locatorGenerators';
+import { escapeWithQuotes } from '../../utils/isomorphic/stringUtils';
 
 export class JavaScriptLanguageGenerator implements LanguageGenerator {
   id: string;

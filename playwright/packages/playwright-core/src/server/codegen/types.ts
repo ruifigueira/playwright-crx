@@ -16,8 +16,8 @@
 
 import type { BrowserContextOptions, LaunchOptions } from '../../../types/types';
 import type * as actions from '@recorder/actions';
-import type { Language } from '../../utils';
-export type { Language } from '../../utils';
+import type { Language } from '../../utils/isomorphic/locatorGenerators';
+export type { Language } from '../../utils/isomorphic/locatorGenerators';
 
 export type LanguageGeneratorOptions = {
   browserName: string;

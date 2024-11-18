@@ -18,7 +18,8 @@ import type { BrowserContextOptions } from '../../../types/types';
 import type { Language, LanguageGenerator, LanguageGeneratorOptions } from './types';
 import type * as actions from '@recorder/actions';
 import { sanitizeDeviceOptions, toSignalMap, toKeyboardModifiers, toClickOptionsForSourceCode } from './language';
-import { escapeWithQuotes, toSnakeCase, asLocator } from '../../utils';
+import { asLocator } from '../../utils/isomorphic/locatorGenerators';
+import { escapeWithQuotes, toSnakeCase } from '../../utils/isomorphic/stringUtils';
 import { deviceDescriptors } from '../deviceDescriptors';
 
 export class PythonLanguageGenerator implements LanguageGenerator {
