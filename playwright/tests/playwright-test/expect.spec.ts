@@ -511,13 +511,13 @@ test('should support toHaveURL with baseURL from webServer', async ({ runInlineT
       import { test, expect } from '@playwright/test';
 
       test('pass', async ({ page }) => {
-        await page.goto('/foobar');
-        await expect(page).toHaveURL('/foobar');
-        await expect(page).toHaveURL('http://localhost:${port}/foobar');
+        await page.goto('/hello');
+        await expect(page).toHaveURL('/hello');
+        await expect(page).toHaveURL('http://localhost:${port}/hello');
       });
 
       test('fail', async ({ page }) => {
-        await page.goto('/foobar');
+        await page.goto('/hello');
         await expect(page).toHaveURL('/kek', { timeout: 1000 });
       });
       `,
@@ -614,6 +614,33 @@ test('should print pending operations for toHaveText', async ({ runInlineTest })
   expect(output).toContain('Expected string: "Text"');
   expect(output).toContain('Received: <element(s) not found>');
   expect(output).toContain('waiting for locator(\'no-such-thing\')');
+});
+
+test('should only highlight unmatched regex in diff message for toHaveText with array', async ({ runInlineTest }) => {
+  const result = await runInlineTest({
+    'a.spec.ts': `
+      import { test, expect } from '@playwright/test';
+
+      test('toHaveText with mixed strings and regexes (array)', async ({ page }) => {
+        await page.setContent(\`
+          <ul>
+            <li>Coffee</li>
+            <li>Tea</li>
+            <li>Milk</li>
+          </ul>
+        \`);
+
+        const items = page.locator('li');
+        await expect(items).toHaveText(['Coffee', /\\d+/, /Milk/]);
+      });
+    `,
+  });
+  expect(result.exitCode).toBe(1);
+  const output = result.output;
+  expect(output).toContain('-   /\\d+/,');
+  expect(output).toContain('+   "Tea",');
+  expect(output).not.toContain('-   /Milk/,');
+  expect(output).not.toContain('-   "Coffee",');
 });
 
 test('should print expected/received on Ctrl+C', async ({ interactWithTestRunner }) => {

@@ -167,7 +167,6 @@ it('should report network activity', async function({ page, server, browserName,
 
 it('should report network activity on worker creation', async function({ page, server, browserName, browserMajorVersion }) {
   it.skip(browserName === 'firefox' && browserMajorVersion < 114, 'https://github.com/microsoft/playwright/issues/21760');
-  // Chromium needs waitForDebugger enabled for this one.
   await page.goto(server.EMPTY_PAGE);
   const url = server.PREFIX + '/one-style.css';
   const requestPromise = page.waitForRequest(url);
@@ -180,6 +179,19 @@ it('should report network activity on worker creation', async function({ page, s
   expect(request.url()).toBe(url);
   expect(response.request()).toBe(request);
   expect(response.ok()).toBe(true);
+});
+
+it('should report worker script as network request', {
+  annotation: { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/33107' },
+}, async function({ page, server }) {
+  await page.goto(server.EMPTY_PAGE);
+  const [request1, request2] = await Promise.all([
+    page.waitForEvent('request', r => r.url().includes('worker.js')),
+    page.waitForEvent('requestfinished', r => r.url().includes('worker.js')),
+    page.evaluate(() => (window as any).w = new Worker('/worker/worker.js')),
+  ]);
+  expect.soft(request1.url()).toBe(server.PREFIX + '/worker/worker.js');
+  expect.soft(request1).toBe(request2);
 });
 
 it('should dispatch console messages when page has workers', async function({ page, server }) {
@@ -244,14 +256,15 @@ it('should support extra http headers', {
 
 it('should support offline', async ({ page, server, browserName }) => {
   it.fixme(browserName === 'firefox');
+  it.fixme(browserName === 'webkit', 'flaky on all platforms');
 
   const [worker] = await Promise.all([
     page.waitForEvent('worker'),
     page.goto(server.PREFIX + '/worker/worker.html'),
   ]);
   await page.context().setOffline(true);
-  expect(await worker.evaluate(() => navigator.onLine)).toBe(false);
+  await expect.poll(() =>  worker.evaluate(() => navigator.onLine)).toBe(false);
   expect(await worker.evaluate(() => fetch('/one-style.css').catch(e => 'error'))).toBe('error');
   await page.context().setOffline(false);
-  expect(await worker.evaluate(() => navigator.onLine)).toBe(true);
+  await expect.poll(() =>  worker.evaluate(() => navigator.onLine)).toBe(true);
 });

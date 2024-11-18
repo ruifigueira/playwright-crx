@@ -20,7 +20,7 @@ import type { Page } from '../page';
 import { ProgressController } from '../progress';
 import { EventEmitter } from 'events';
 import { serverSideCallMetadata } from '../instrumentation';
-import type { CallLog, Mode, Source } from '@recorder/recorderTypes';
+import type { CallLog, ElementInfo, Mode, Source } from '@recorder/recorderTypes';
 import { isUnderTest } from '../../utils';
 import { mime } from '../../utilsBundle';
 import { syncLocalStorageWithSettings } from '../launchApp';
@@ -34,8 +34,8 @@ export class EmptyRecorderApp extends EventEmitter implements IRecorderApp {
   async close(): Promise<void> {}
   async setPaused(paused: boolean): Promise<void> {}
   async setMode(mode: Mode): Promise<void> {}
-  async setFile(file: string): Promise<void> {}
-  async setSelector(selector: string, userGesture?: boolean): Promise<void> {}
+  async setRunningFile(file: string | undefined): Promise<void> {}
+  async elementPicked(elementInfo: ElementInfo, userGesture?: boolean): Promise<void> {}
   async updateCallLogs(callLogs: CallLog[]): Promise<void> {}
   async setSources(sources: Source[]): Promise<void> {}
   async setActions(actions: actions.ActionInContext[], sources: Source[]): Promise<void> {}
@@ -111,7 +111,7 @@ export class RecorderApp extends EventEmitter implements IRecorderApp {
         noDefaultViewport: true,
         headless: !!process.env.PWTEST_CLI_HEADLESS || (isUnderTest() && !headed),
         useWebSocket: isUnderTest(),
-        handleSIGINT: false,
+        handleSIGINT: recorder.handleSIGINT,
         executablePath: inspectedContext._browser.options.isChromium ? inspectedContext._browser.options.customExecutablePath : undefined,
       }
     });
@@ -131,9 +131,9 @@ export class RecorderApp extends EventEmitter implements IRecorderApp {
     }).toString(), { isFunction: true }, mode).catch(() => {});
   }
 
-  async setFile(file: string): Promise<void> {
+  async setRunningFile(file: string | undefined): Promise<void> {
     await this._page.mainFrame().evaluateExpression(((file: string) => {
-      window.playwrightSetFile(file);
+      window.playwrightSetRunningFile(file);
     }).toString(), { isFunction: true }, file).catch(() => {});
   }
 
@@ -158,18 +158,12 @@ export class RecorderApp extends EventEmitter implements IRecorderApp {
   async setActions(actions: actions.ActionInContext[], sources: Source[]): Promise<void> {
   }
 
-  async setSelector(selector: string, userGesture?: boolean): Promise<void> {
-    if (userGesture) {
-      if (this._recorder?.mode() === 'inspecting') {
-        this._recorder.setMode('standby');
-        this._page.bringToFront();
-      } else {
-        this._recorder?.setMode('recording');
-      }
-    }
-    await this._page.mainFrame().evaluateExpression(((data: { selector: string, userGesture?: boolean }) => {
-      window.playwrightSetSelector(data.selector, data.userGesture);
-    }).toString(), { isFunction: true }, { selector, userGesture }).catch(() => {});
+  async elementPicked(elementInfo: ElementInfo, userGesture?: boolean): Promise<void> {
+    if (userGesture)
+      this._page.bringToFront();
+    await this._page.mainFrame().evaluateExpression(((param: { elementInfo: ElementInfo, userGesture?: boolean }) => {
+      window.playwrightElementPicked(param.elementInfo, param.userGesture);
+    }).toString(), { isFunction: true }, { elementInfo, userGesture }).catch(() => {});
   }
 
   async updateCallLogs(callLogs: CallLog[]): Promise<void> {

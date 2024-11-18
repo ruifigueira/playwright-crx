@@ -61,7 +61,8 @@ import {
 } from '../common/expectBundle';
 import { zones } from 'playwright-core/lib/utils';
 import { TestInfoImpl } from '../worker/testInfo';
-import { ExpectError, isExpectError } from './matcherHint';
+import { ExpectError, isJestError } from './matcherHint';
+import { toMatchAriaSnapshot } from './toMatchAriaSnapshot';
 
 // #region
 // Mirrored from https://github.com/facebook/jest/blob/f13abff8df9a0e1148baf3584bcde6d1b479edc7/packages/expect/src/print.ts
@@ -236,6 +237,7 @@ const customAsyncMatchers = {
   toHaveValue,
   toHaveValues,
   toHaveScreenshot,
+  toMatchAriaSnapshot,
   toPass,
 };
 
@@ -321,8 +323,13 @@ class ExpectMetaInfoProxyHandler implements ProxyHandler<any> {
 
       const step = testInfo._addStep(stepInfo);
 
-      const reportStepError = (jestError: Error | unknown) => {
-        const error = isExpectError(jestError) ? new ExpectError(jestError, customMessage, stackFrames) : jestError;
+      const reportStepError = (e: Error | unknown) => {
+        const jestError = isJestError(e) ? e : null;
+        const error = jestError ? new ExpectError(jestError, customMessage, stackFrames) : e;
+        if (jestError?.matcherResult.suggestedRebaseline) {
+          step.complete({ suggestedRebaseline: jestError?.matcherResult.suggestedRebaseline });
+          return;
+        }
         step.complete({ error });
         if (this._info.isSoft)
           testInfo._failWithError(error);

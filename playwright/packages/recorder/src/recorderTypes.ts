@@ -15,6 +15,7 @@
 */
 
 import type { Language } from '../../playwright-core/src/utils/isomorphic/locatorGenerators';
+import type { ParsedYaml } from '@isomorphic/ariaSnapshot';
 
 export type Point = { x: number; y: number };
 
@@ -26,7 +27,13 @@ export type Mode =
   | 'recording-inspecting'
   | 'standby'
   | 'assertingVisibility'
-  | 'assertingValue';
+  | 'assertingValue'
+  | 'assertingSnapshot';
+
+export type ElementInfo = {
+  selector: string;
+  ariaSnapshot: string;
+};
 
 export type EventData = {
   event:
@@ -35,7 +42,7 @@ export type EventData = {
     | 'step'
     | 'pause'
     | 'setMode'
-    | 'selectorUpdated'
+    | 'highlightRequested'
     | 'fileChanged';
   params: any;
 };
@@ -48,6 +55,7 @@ export type UIState = {
   mode: Mode;
   actionPoint?: Point;
   actionSelector?: string;
+  ariaTemplate?: ParsedYaml;
   language: Language;
   testIdAttributeName: string;
   overlay: OverlayState;
@@ -97,8 +105,8 @@ declare global {
     playwrightSetSources: (sources: Source[]) => void;
     playwrightSetOverlayVisible: (visible: boolean) => void;
     playwrightUpdateLogs: (callLogs: CallLog[]) => void;
-    playwrightSetFile: (file: string) => void;
-    playwrightSetSelector: (selector: string, focus?: boolean) => void;
+    playwrightSetRunningFile: (file: string | undefined) => void;
+    playwrightElementPicked: (elementInfo: ElementInfo, userGesture?: boolean) => void;
     playwrightSourcesEchoForTest: Source[];
     dispatch(data: any): Promise<void>;
   }

@@ -188,7 +188,7 @@ page.setViewportSize(1600, 1200);
 // Emulate high-DPI
 BrowserContext context = browser.newContext(new Browser.NewContextOptions()
   .setViewportSize(2560, 1440)
-  .setDeviceScaleFactor(2);
+  .setDeviceScaleFactor(2));
 ```
 
 ```python async
@@ -378,7 +378,7 @@ const context = await browser.newContext({
 
 ```java
 BrowserContext context = browser.newContext(new Browser.NewContextOptions()
-  .setPermissions(Arrays.asList("notifications"));
+  .setPermissions(Arrays.asList("notifications")));
 ```
 
 ```python async
@@ -558,7 +558,7 @@ await context.SetGeolocationAsync(new Geolocation() { Longitude = 48.858455, Lat
 **Note** you can only change geolocation for all pages in the context.
 ## Color Scheme and Media
 
-Emulate the users `"colorScheme"`. Supported values are 'light', 'dark', 'no-preference'. You can also emulate the media type with [`method: Page.emulateMedia`].
+Emulate the users `"colorScheme"`. Supported values are 'light' and 'dark'. You can also emulate the media type with [`method: Page.emulateMedia`].
 
 ```js title="playwright.config.ts"
 import { defineConfig } from '@playwright/test';

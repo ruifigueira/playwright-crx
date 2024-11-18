@@ -363,7 +363,7 @@ Target URL.
 
 ## js-fetch-option-params
 * langs: js
-- `params` <[Object]<[string], [string]|[number]|[boolean]>|[URLSearchParams]|[string]>
+- `params` <[Object]<[string], [string]|[float]|[boolean]>|[URLSearchParams]|[string]>
 
 Query parameters to be sent with the URL.
 
@@ -639,14 +639,14 @@ If no origin is specified, the username and password are sent to any servers upo
 * langs: js, java
 - `colorScheme` <null|[ColorScheme]<"light"|"dark"|"no-preference">>
 
-Emulates `'prefers-colors-scheme'` media feature, supported values are `'light'`, `'dark'`, `'no-preference'`. See
+Emulates [prefers-colors-scheme](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme) media feature, supported values are `'light'` and `'dark'`. See
 [`method: Page.emulateMedia`] for more details. Passing `null` resets emulation to system defaults. Defaults to `'light'`.
 
 ## context-option-colorscheme-csharp-python
 * langs: csharp, python
 - `colorScheme` <[ColorScheme]<"light"|"dark"|"no-preference"|"null">>
 
-Emulates `'prefers-colors-scheme'` media feature, supported values are `'light'`, `'dark'`, `'no-preference'`. See
+Emulates [prefers-colors-scheme](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme) media feature, supported values are `'light'` and `'dark'`. See
 [`method: Page.emulateMedia`] for more details. Passing `'null'` resets emulation to system defaults. Defaults to `'light'`.
 
 ## context-option-reducedMotion
@@ -1488,19 +1488,19 @@ page.get_by_text(re.compile("^hello$", re.IGNORECASE))
 
 ```java
 // Matches <span>
-page.getByText("world")
+page.getByText("world");
 
 // Matches first <div>
-page.getByText("Hello world")
+page.getByText("Hello world");
 
 // Matches second <div>
-page.getByText("Hello", new Page.GetByTextOptions().setExact(true))
+page.getByText("Hello", new Page.GetByTextOptions().setExact(true));
 
 // Matches both <div>s
-page.getByText(Pattern.compile("Hello"))
+page.getByText(Pattern.compile("Hello"));
 
 // Matches second <div>
-page.getByText(Pattern.compile("^hello$", Pattern.CASE_INSENSITIVE))
+page.getByText(Pattern.compile("^hello$", Pattern.CASE_INSENSITIVE));
 ```
 
 ```csharp

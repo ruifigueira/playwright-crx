@@ -169,14 +169,17 @@ for (const kind of ['launchServer', 'run-server'] as const) {
       await browser.close();
     });
 
-    test('should ignore page.pause when headed', async ({ connect, startRemoteServer, browserType }) => {
+    test('should ignore page.pause when headed', async ({ connect, startRemoteServer, browserType, channel }) => {
+      test.skip(channel === 'chromium-headless-shell', 'shell is never headed');
+
       const headless = (browserType as any)._defaultLaunchOptions.headless;
       (browserType as any)._defaultLaunchOptions.headless = false;
       const remoteServer = await startRemoteServer(kind);
       const browser = await connect(remoteServer.wsEndpoint());
       const browserContext = await browser.newContext();
       const page = await browserContext.newPage();
-      await page.pause();
+      // @ts-ignore
+      await page.pause({ __testHookKeepTestTimeout: true });
       await browser.close();
       (browserType as any)._defaultLaunchOptions.headless = headless;
     });
@@ -761,7 +764,6 @@ for (const kind of ['launchServer', 'run-server'] as const) {
     });
 
     test.describe('socks proxy', () => {
-      test.fixme(({ platform, browserName }) => browserName === 'webkit' && platform === 'win32');
       test.skip(({ mode }) => mode !== 'default');
       test.skip(kind === 'launchServer', 'not supported yet');
 

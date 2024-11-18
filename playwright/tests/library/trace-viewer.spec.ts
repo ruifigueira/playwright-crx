@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+// DO NOT TOUCH THIS LINE
+// It is used in the tracing.group test.
+
 import type { TraceViewerFixtures } from '../config/traceViewerFixtures';
 import { traceViewerFixtures } from '../config/traceViewerFixtures';
 import fs from 'fs';
@@ -21,6 +24,7 @@ import path from 'path';
 import { pathToFileURL } from 'url';
 import { expect, playwrightTest } from '../config/browserTest';
 import type { FrameLocator } from '@playwright/test';
+import { rafraf } from 'tests/page/pageTest';
 
 const test = playwrightTest.extend<TraceViewerFixtures>(traceViewerFixtures);
 
@@ -100,6 +104,46 @@ test('should open trace viewer on specific host', async ({ showTraceViewer }, te
   const traceViewer = await showTraceViewer([testInfo.outputPath()], { host: '127.0.0.1' });
   await expect(traceViewer.page).toHaveTitle('Playwright Trace Viewer');
   await expect(traceViewer.page).toHaveURL(/127.0.0.1/);
+});
+
+test('should show tracing.group in the action list with location', async ({ runAndTrace, page, context }) => {
+  const traceViewer = await test.step('create trace with groups', async () => {
+    await page.context().tracing.group('ignored group');
+    return await runAndTrace(async () => {
+      await context.tracing.group('outer group');
+      await page.goto(`data:text/html,<!DOCTYPE html><body><div>Hello world</div></body>`);
+      await context.tracing.group('inner group 1', { location: { file: __filename, line: 17, column: 1 } });
+      await page.locator('body').click();
+      await context.tracing.groupEnd();
+      await context.tracing.group('inner group 2');
+      await expect(page.getByText('Hello')).toBeVisible();
+      await context.tracing.groupEnd();
+      await context.tracing.groupEnd();
+    });
+  });
+
+  await expect(traceViewer.actionTitles).toHaveText([
+    /outer group/,
+    /page.goto/,
+    /inner group 1/,
+    /inner group 2/,
+    /expect.toBeVisible/,
+  ]);
+
+  await traceViewer.selectAction('inner group 1');
+  await traceViewer.expandAction('inner group 1');
+  await expect(traceViewer.actionTitles).toHaveText([
+    /outer group/,
+    /page.goto/,
+    /inner group 1/,
+    /locator.click/,
+    /inner group 2/,
+  ]);
+  await traceViewer.showSourceTab();
+  await expect(traceViewer.sourceCodeTab.locator('.source-line-running')).toHaveText(/DO NOT TOUCH THIS LINE/);
+
+  await traceViewer.selectAction('inner group 2');
+  await expect(traceViewer.sourceCodeTab.locator('.source-line-running')).toContainText("await context.tracing.group('inner group 2');");
 });
 
 test('should open simple trace viewer', async ({ showTraceViewer }) => {
@@ -261,7 +305,7 @@ test('should have network requests', async ({ showTraceViewer }) => {
   await expect(traceViewer.networkRequests).toContainText([/style.cssGET200text\/css/]);
   await expect(traceViewer.networkRequests).toContainText([/404GET404text\/plain/]);
   await expect(traceViewer.networkRequests).toContainText([/script.jsGET200application\/javascript/]);
-  await expect(traceViewer.networkRequests.filter({ hasText: '404' })).toHaveCSS('background-color', 'rgb(242, 222, 222)');
+  await expect(traceViewer.networkRequests.filter({ hasText: '404GET404text' })).toHaveCSS('background-color', 'rgb(242, 222, 222)');
 });
 
 test('should filter network requests by resource type', async ({ page, runAndTrace, server }) => {
@@ -431,7 +475,7 @@ test('should capture data-url svg iframe', async ({ page, server, runAndTrace })
 
   // Render snapshot, check expectations.
   const snapshotFrame = await traceViewer.snapshotFrame('page.evaluate', 0, true);
-  await expect(snapshotFrame.frameLocator('iframe').locator('svg')).toBeVisible();
+  await expect(snapshotFrame.frameLocator('iframe').locator('> body > svg')).toBeVisible();
   const content = await snapshotFrame.frameLocator('iframe').locator(':root').innerHTML();
   expect(content).toContain(`d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"`);
 });
@@ -761,7 +805,7 @@ test('should highlight target elements', async ({ page, runAndTrace, browserName
     await page.setContent(`
       <div>t1</div>
       <div>t2</div>
-      <div>t3</div>
+      <div id=div3>t3</div>
       <div>t4</div>
       <div>t5</div>
       <div>t6</div>
@@ -776,6 +820,13 @@ test('should highlight target elements', async ({ page, runAndTrace, browserName
     await expect(page.locator('text=t6')).toHaveText(/t6/i);
     await expect(page.locator('text=multi')).toHaveText(['a', 'b'], { timeout: 1000 }).catch(() => {});
     await page.mouse.move(123, 234);
+    await page.getByText(/^t\d$/).click().catch(() => {});
+    await expect(page.getByText(/t3|t4/)).toBeVisible().catch(() => {});
+
+    const expectPromise = expect(page.getByText(/t3|t4/)).toHaveText(['t4']);
+    await page.waitForTimeout(1000);
+    await page.evaluate(() => document.querySelector('#div3').textContent = 'changed');
+    await expectPromise;
   });
 
   async function highlightedDivs(frameLocator: FrameLocator) {
@@ -817,6 +868,15 @@ test('should highlight target elements', async ({ page, runAndTrace, browserName
 
   const frameMouseMove = await traceViewer.snapshotFrame('mouse.move');
   await expect(frameMouseMove.locator('x-pw-pointer')).toBeVisible();
+
+  const frameClickStrictViolation = await traceViewer.snapshotFrame('locator.click');
+  await expect.poll(() => highlightedDivs(frameClickStrictViolation)).toEqual(['t1', 't2', 't3', 't4', 't5', 't6']);
+
+  const frameExpectStrictViolation = await traceViewer.snapshotFrame('expect.toBeVisible');
+  await expect.poll(() => highlightedDivs(frameExpectStrictViolation)).toEqual(['t3', 't4']);
+
+  const frameUpdatedListOfTargets = await traceViewer.snapshotFrame('expect.toHaveText', 2);
+  await expect.poll(() => highlightedDivs(frameUpdatedListOfTargets)).toEqual(['t4']);
 });
 
 test('should highlight target element in shadow dom', async ({ page, server, runAndTrace }) => {
@@ -856,6 +916,9 @@ test('should show action source', async ({ showTraceViewer }) => {
   await page.click('text=Source');
   await expect(page.locator('.source-line-running')).toContainText('await page.getByText(\'Click\').click()');
   await expect(page.getByTestId('stack-trace-list').locator('.list-view-entry.selected')).toHaveText(/doClick.*trace-viewer\.spec\.ts:[\d]+/);
+
+  await traceViewer.hoverAction('page.waitForNavigation');
+  await expect(page.locator('.source-line-running')).toContainText('page.waitForNavigation()');
 });
 
 test('should follow redirects', async ({ page, runAndTrace, server, asset }) => {
@@ -1390,6 +1453,44 @@ test('should show baseURL in metadata pane', {
   await expect(traceViewer.metadataTab).toContainText('baseURL:https://example.com');
 });
 
+test('should not leak recorders', {
+  annotation: { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/33086' },
+}, async ({ showTraceViewer }) => {
+  const traceViewer = await showTraceViewer([traceFile]);
+
+  const aliveCount = async () => {
+    return await traceViewer.page.evaluate(() => {
+      const weakSet = (window as any)._weakRecordersForTest || new Set();
+      const weakList = [...weakSet];
+      const aliveList = weakList.filter(r => !!r.deref());
+      return aliveList.length;
+    });
+  };
+
+  await expect(traceViewer.snapshotContainer.contentFrame().locator('body')).toContainText(`Hi, I'm frame`);
+
+  const frame1 = await traceViewer.snapshotFrame('page.goto');
+  await expect(frame1.locator('body')).toContainText('Hello world');
+
+  const frame2 = await traceViewer.snapshotFrame('page.evaluate');
+  await expect(frame2.locator('button')).toBeVisible();
+
+  await traceViewer.page.requestGC();
+  await expect.poll(() => aliveCount()).toBeLessThanOrEqual(2); // two snapshot iframes
+
+  const frame3 = await traceViewer.snapshotFrame('page.setViewportSize');
+  await expect(frame3.locator('body')).toContainText(`Hi, I'm frame`);
+
+  const frame4 = await traceViewer.snapshotFrame('page.goto');
+  await expect(frame4.locator('body')).toContainText('Hello world');
+
+  const frame5 = await traceViewer.snapshotFrame('page.evaluate');
+  await expect(frame5.locator('button')).toBeVisible();
+
+  await traceViewer.page.requestGC();
+  await expect.poll(() => aliveCount()).toBeLessThanOrEqual(2); // two snapshot iframes
+});
+
 test('should serve css without content-type', async ({ page, runAndTrace, server }) => {
   server.setRoute('/one-style.css', (req, res) => {
     res.writeHead(200);
@@ -1402,49 +1503,45 @@ test('should serve css without content-type', async ({ page, runAndTrace, server
   await expect(snapshotFrame.locator('body')).toHaveCSS('background-color', 'rgb(255, 0, 0)', { timeout: 0 });
 });
 
-test.skip('should allow showing screenshots instead of snapshots', async ({ runAndTrace, page, server }) => {
+test('canvas clipping', async ({ runAndTrace, page, server }) => {
   const traceViewer = await runAndTrace(async () => {
-    await page.goto(server.PREFIX + '/one-style.html');
-    await page.waitForTimeout(1000); // ensure we could take a screenshot
+    await page.goto(server.PREFIX + '/screenshots/canvas.html#canvas-on-edge');
+    await rafraf(page, 5);
   });
 
-  const screenshot = traceViewer.page.getByAltText(`Screenshot of page.goto`);
-  const snapshot = (await traceViewer.snapshotFrame('page.goto')).owner();
-  await expect(snapshot).toBeVisible();
-  await expect(screenshot).not.toBeVisible();
+  const msg = await traceViewer.page.waitForEvent('console', { predicate: msg => msg.text().startsWith('canvas drawn:') });
+  expect(msg.text()).toEqual('canvas drawn: [0,91,11,20]');
 
-  await traceViewer.page.getByTitle('Settings').click();
-  await traceViewer.page.getByText('Show screenshot instead of snapshot').setChecked(true);
-
-  await expect(snapshot).not.toBeVisible();
-  await expect(screenshot).toBeVisible();
+  const snapshot = await traceViewer.snapshotFrame('page.goto');
+  await expect(snapshot.locator('canvas')).toHaveAttribute('title', `Playwright couldn't capture full canvas contents because it's located partially outside the viewport.`);
 });
 
-test.skip('should handle case where neither snapshots nor screenshots exist', async ({ runAndTrace, page, server }) => {
+test('canvas clipping in iframe', async ({ runAndTrace, page, server }) => {
   const traceViewer = await runAndTrace(async () => {
-    await page.goto(server.PREFIX + '/one-style.html');
-  }, { snapshots: false, screenshots: false });
+    await page.setContent(`
+      <iframe src="${server.PREFIX}/screenshots/canvas.html#canvas-on-edge"></iframe>
+    `);
+    await rafraf(page, 5);
+  });
 
-  await traceViewer.page.getByTitle('Settings').click();
-  await traceViewer.page.getByText('Show screenshot instead of snapshot').setChecked(true);
-
-  const screenshot = traceViewer.page.getByAltText(`Screenshot of page.goto > Action`);
-  await expect(screenshot).not.toBeVisible();
+  const snapshot = await traceViewer.snapshotFrame('page.evaluate');
+  const canvas = snapshot.locator('iframe').contentFrame().locator('canvas');
+  await expect(canvas).toHaveAttribute('title', `Playwright displays canvas contents on a best-effort basis. It doesn't support canvas elements inside an iframe yet. If this impacts your workflow, please open an issue so we can prioritize.`);
 });
 
 test('should show only one pointer with multilevel iframes', async ({ page, runAndTrace, server, browserName }) => {
-  test.fixme(browserName !== 'chromium', 'Elements in iframe are not marked');
+  test.fixme(browserName === 'firefox', 'Elements in iframe are not marked');
 
   server.setRoute('/level-0.html', (req, res) => {
-    res.writeHead(200);
+    res.writeHead(200, { 'Content-Type': 'text/html' });
     res.end(`<iframe src="/level-1.html" style="position: absolute; left: 100px"></iframe>`);
   });
   server.setRoute('/level-1.html', (req, res) => {
-    res.writeHead(200);
+    res.writeHead(200, { 'Content-Type': 'text/html' });
     res.end(`<iframe src="/level-2.html"></iframe>`);
   });
   server.setRoute('/level-2.html', (req, res) => {
-    res.writeHead(200);
+    res.writeHead(200, { 'Content-Type': 'text/html' });
     res.end(`<button>Click me</button>`);
   });
 

@@ -23,7 +23,7 @@ import type * as reporterTypes from '../../types/testReporter';
 import { affectedTestFiles, collectAffectedTestFiles, dependenciesForTestFile } from '../transform/compilationCache';
 import type { ConfigLocation, FullConfigInternal } from '../common/config';
 import { createErrorCollectingReporter, createReporterForTestServer, createReporters } from './reporters';
-import { TestRun, runTasks, createLoadTask, createRunTestsTasks, createReportBeginTask, createListFilesTask, runTasksDeferCleanup, createClearCacheTask, createGlobalSetupTasks, createStartDevServerTask } from './tasks';
+import { TestRun, runTasks, createLoadTask, createRunTestsTasks, createReportBeginTask, createListFilesTask, runTasksDeferCleanup, createClearCacheTask, createGlobalSetupTasks, createStartDevServerTask, createApplyRebaselinesTask } from './tasks';
 import { open } from 'playwright-core/lib/utilsBundle';
 import ListReporter from '../reporters/list';
 import { SigIntWatcher } from './sigIntWatcher';
@@ -302,10 +302,11 @@ export class TestServerDispatcher implements TestServerInterface {
       preserveOutputDir: true,
       reporter: params.reporters ? params.reporters.map(r => [r]) : undefined,
       use: {
-        ...(this._configCLIOverrides.use || {}),
-        trace: params.trace === 'on' ? { mode: 'on', sources: false, _live: true } : (params.trace === 'off' ? 'off' : undefined),
-        video: params.video === 'on' ? 'on' : (params.video === 'off' ? 'off' : undefined),
-        headless: params.headed ? false : undefined,
+        ...this._configCLIOverrides.use,
+        ...(params.trace === 'on' ? { trace: { mode: 'on', sources: false, _live: true } } : {}),
+        ...(params.trace === 'off' ? { trace: 'off' } : {}),
+        ...(params.video === 'on' || params.video === 'off' ? { video: params.video } : {}),
+        ...(params.headed !== undefined ? { headless: !params.headed } : {}),
         _optionContextReuseMode: params.reuseContext ? 'when-possible' : undefined,
         _optionConnectOptions: params.connectWsEndpoint ? { wsEndpoint: params.connectWsEndpoint } : undefined,
       },
@@ -335,6 +336,7 @@ export class TestServerDispatcher implements TestServerInterface {
     const reporter = new InternalReporter([...configReporters, wireReporter]);
     const stop = new ManualPromise();
     const tasks = [
+      createApplyRebaselinesTask(),
       createLoadTask('out-of-process', { filterOnly: true, failOnLoadErrors: false, doNotRunDepsOutsideProjectFilter: true }),
       ...createRunTestsTasks(config),
     ];

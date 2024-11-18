@@ -29,7 +29,7 @@ import * as types from './types';
 import { BrowserContext } from './browserContext';
 import type { Progress } from './progress';
 import { ProgressController } from './progress';
-import { LongStandingScope, assert, constructURLBasedOnBaseURL, makeWaitForNextTask, monotonicTime, asLocator } from '../utils';
+import { LongStandingScope, assert, constructURLBasedOnBaseURL, makeWaitForNextTask, monotonicTime, asLocator, compressCallLog } from '../utils';
 import { ManualPromise } from '../utils/manualPromise';
 import { debugLogger } from '../utils/debugLogger';
 import type { CallMetadata } from './instrumentation';
@@ -248,6 +248,11 @@ export class FrameManager {
     const frame = this._frames.get(frameId);
     if (!frame)
       return;
+    const pending = frame.pendingDocument();
+    if (pending && pending.documentId === undefined && pending.request === undefined) {
+      // WebKit has notified about the same-document navigation being requested, so clear it.
+      frame.setPendingDocument(undefined);
+    }
     frame._url = url;
     const navigationEvent: NavigationEvent = { url, name: frame._name, isPublic: true };
     this._fireInternalFrameNavigation(frame, navigationEvent);
@@ -786,11 +791,11 @@ export class Frame extends SdkObject {
     }, this._page._timeoutSettings.timeout(options));
   }
 
-  async waitForSelectorInternal(progress: Progress, selector: string, performLocatorHandlersCheckpoint: boolean, options: types.WaitForElementOptions, scope?: dom.ElementHandle): Promise<dom.ElementHandle<Element> | null> {
+  async waitForSelectorInternal(progress: Progress, selector: string, performActionPreChecks: boolean, options: types.WaitForElementOptions, scope?: dom.ElementHandle): Promise<dom.ElementHandle<Element> | null> {
     const { state = 'visible' } = options;
     const promise = this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async continuePolling => {
-      if (performLocatorHandlersCheckpoint)
-        await this._page.performLocatorHandlersCheckpoint(progress);
+      if (performActionPreChecks)
+        await this._page.performActionPreChecks(progress);
 
       const resolved = await this.selectors.resolveInjectedForSelector(selector, options, scope);
       progress.throwIfAborted();
@@ -800,6 +805,8 @@ export class Frame extends SdkObject {
         return continuePolling;
       }
       const result = await resolved.injected.evaluateHandle((injected, { info, root }) => {
+        if (root && !root.isConnected)
+          throw injected.createStacklessError('Element is not attached to the DOM');
         const elements = injected.querySelectorAll(info.parsed, root || document);
         const element: Element | undefined  = elements[0];
         const visible = element ? injected.utils.isElementVisible(element) : false;
@@ -1113,19 +1120,21 @@ export class Frame extends SdkObject {
     progress: Progress,
     selector: string,
     strict: boolean | undefined,
-    performLocatorHandlersCheckpoint: boolean,
+    performActionPreChecks: boolean,
     action: (handle: dom.ElementHandle<Element>) => Promise<R | 'error:notconnected'>): Promise<R> {
     progress.log(`waiting for ${this._asLocator(selector)}`);
     return this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async continuePolling => {
-      if (performLocatorHandlersCheckpoint)
-        await this._page.performLocatorHandlersCheckpoint(progress);
+      if (performActionPreChecks)
+        await this._page.performActionPreChecks(progress);
 
       const resolved = await this.selectors.resolveInjectedForSelector(selector, { strict });
       progress.throwIfAborted();
       if (!resolved)
         return continuePolling;
-      const result = await resolved.injected.evaluateHandle((injected, { info }) => {
+      const result = await resolved.injected.evaluateHandle((injected, { info, callId }) => {
         const elements = injected.querySelectorAll(info.parsed, document);
+        if (callId)
+          injected.markTargetElements(new Set(elements), callId);
         const element = elements[0] as Element | undefined;
         let log = '';
         if (elements.length > 1) {
@@ -1136,7 +1145,7 @@ export class Frame extends SdkObject {
           log = `  locator resolved to ${injected.previewNode(element)}`;
         }
         return { log, success: !!element, element };
-      }, { info: resolved.info });
+      }, { info: resolved.info, callId: progress.metadata.id });
       const { log, success } = await result.evaluate(r => ({ log: r.log, success: r.success }));
       if (log)
         progress.log(log);
@@ -1160,7 +1169,7 @@ export class Frame extends SdkObject {
   }
 
   async rafrafTimeoutScreenshotElementWithProgress(progress: Progress, selector: string, timeout: number, options: ScreenshotOptions): Promise<Buffer> {
-    return await this._retryWithProgressIfNotConnected(progress, selector, true /* strict */, true /* performLocatorHandlersCheckpoint */, async handle => {
+    return await this._retryWithProgressIfNotConnected(progress, selector, true /* strict */, true /* performActionPreChecks */, async handle => {
       await handle._frame.rafrafTimeout(timeout);
       return await this._page._screenshotter.screenshotElement(progress, handle, options);
     });
@@ -1169,21 +1178,21 @@ export class Frame extends SdkObject {
   async click(metadata: CallMetadata, selector: string, options: { noWaitAfter?: boolean } & types.MouseClickOptions & types.PointerActionWaitOptions) {
     const controller = new ProgressController(metadata, this);
     return controller.run(async progress => {
-      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performLocatorHandlersCheckpoint */, handle => handle._click(progress, { ...options, waitAfter: !options.noWaitAfter })));
+      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performActionPreChecks */, handle => handle._click(progress, { ...options, waitAfter: !options.noWaitAfter })));
     }, this._page._timeoutSettings.timeout(options));
   }
 
   async dblclick(metadata: CallMetadata, selector: string, options: types.MouseMultiClickOptions & types.PointerActionWaitOptions = {}) {
     const controller = new ProgressController(metadata, this);
     return controller.run(async progress => {
-      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performLocatorHandlersCheckpoint */, handle => handle._dblclick(progress, options)));
+      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performActionPreChecks */, handle => handle._dblclick(progress, options)));
     }, this._page._timeoutSettings.timeout(options));
   }
 
   async dragAndDrop(metadata: CallMetadata, source: string, target: string, options: types.DragActionOptions & types.PointerActionWaitOptions = {}) {
     const controller = new ProgressController(metadata, this);
     await controller.run(async progress => {
-      dom.assertDone(await this._retryWithProgressIfNotConnected(progress, source, options.strict, !options.force /* performLocatorHandlersCheckpoint */, async handle => {
+      dom.assertDone(await this._retryWithProgressIfNotConnected(progress, source, options.strict, !options.force /* performActionPreChecks */, async handle => {
         return handle._retryPointerAction(progress, 'move and down', false, async point => {
           await this._page.mouse.move(point.x, point.y);
           await this._page.mouse.down();
@@ -1195,7 +1204,7 @@ export class Frame extends SdkObject {
         });
       }));
       // Note: do not perform locator handlers checkpoint to avoid moving the mouse in the middle of a drag operation.
-      dom.assertDone(await this._retryWithProgressIfNotConnected(progress, target, options.strict, false /* performLocatorHandlersCheckpoint */, async handle => {
+      dom.assertDone(await this._retryWithProgressIfNotConnected(progress, target, options.strict, false /* performActionPreChecks */, async handle => {
         return handle._retryPointerAction(progress, 'move and up', false, async point => {
           await this._page.mouse.move(point.x, point.y);
           await this._page.mouse.up();
@@ -1214,28 +1223,28 @@ export class Frame extends SdkObject {
       throw new Error('The page does not support tap. Use hasTouch context option to enable touch support.');
     const controller = new ProgressController(metadata, this);
     return controller.run(async progress => {
-      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performLocatorHandlersCheckpoint */, handle => handle._tap(progress, options)));
+      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performActionPreChecks */, handle => handle._tap(progress, options)));
     }, this._page._timeoutSettings.timeout(options));
   }
 
   async fill(metadata: CallMetadata, selector: string, value: string, options: types.TimeoutOptions & types.StrictOptions & { force?: boolean }) {
     const controller = new ProgressController(metadata, this);
     return controller.run(async progress => {
-      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performLocatorHandlersCheckpoint */, handle => handle._fill(progress, value, options)));
+      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performActionPreChecks */, handle => handle._fill(progress, value, options)));
     }, this._page._timeoutSettings.timeout(options));
   }
 
   async focus(metadata: CallMetadata, selector: string, options: types.TimeoutOptions & types.StrictOptions = {}) {
     const controller = new ProgressController(metadata, this);
     await controller.run(async progress => {
-      dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, true /* performLocatorHandlersCheckpoint */, handle => handle._focus(progress)));
+      dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, true /* performActionPreChecks */, handle => handle._focus(progress)));
     }, this._page._timeoutSettings.timeout(options));
   }
 
   async blur(metadata: CallMetadata, selector: string, options: types.TimeoutOptions & types.StrictOptions = {}) {
     const controller = new ProgressController(metadata, this);
     await controller.run(async progress => {
-      dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, true /* performLocatorHandlersCheckpoint */, handle => handle._blur(progress)));
+      dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, true /* performActionPreChecks */, handle => handle._blur(progress)));
     }, this._page._timeoutSettings.timeout(options));
   }
 
@@ -1342,14 +1351,14 @@ export class Frame extends SdkObject {
   async hover(metadata: CallMetadata, selector: string, options: types.PointerActionOptions & types.PointerActionWaitOptions = {}) {
     const controller = new ProgressController(metadata, this);
     return controller.run(async progress => {
-      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performLocatorHandlersCheckpoint */, handle => handle._hover(progress, options)));
+      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performActionPreChecks */, handle => handle._hover(progress, options)));
     }, this._page._timeoutSettings.timeout(options));
   }
 
   async selectOption(metadata: CallMetadata, selector: string, elements: dom.ElementHandle[], values: types.SelectOption[], options: types.CommonActionOptions = {}): Promise<string[]> {
     const controller = new ProgressController(metadata, this);
     return controller.run(async progress => {
-      return await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performLocatorHandlersCheckpoint */, handle => handle._selectOption(progress, elements, values, options));
+      return await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performActionPreChecks */, handle => handle._selectOption(progress, elements, values, options));
     }, this._page._timeoutSettings.timeout(options));
   }
 
@@ -1357,35 +1366,35 @@ export class Frame extends SdkObject {
     const inputFileItems = await prepareFilesForUpload(this, params);
     const controller = new ProgressController(metadata, this);
     return controller.run(async progress => {
-      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, params.strict, true /* performLocatorHandlersCheckpoint */, handle => handle._setInputFiles(progress, inputFileItems)));
+      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, params.strict, true /* performActionPreChecks */, handle => handle._setInputFiles(progress, inputFileItems)));
     }, this._page._timeoutSettings.timeout(params));
   }
 
   async type(metadata: CallMetadata, selector: string, text: string, options: { delay?: number } & types.TimeoutOptions & types.StrictOptions = {}) {
     const controller = new ProgressController(metadata, this);
     return controller.run(async progress => {
-      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, true /* performLocatorHandlersCheckpoint */, handle => handle._type(progress, text, options)));
+      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, true /* performActionPreChecks */, handle => handle._type(progress, text, options)));
     }, this._page._timeoutSettings.timeout(options));
   }
 
   async press(metadata: CallMetadata, selector: string, key: string, options: { delay?: number, noWaitAfter?: boolean } & types.TimeoutOptions & types.StrictOptions = {}) {
     const controller = new ProgressController(metadata, this);
     return controller.run(async progress => {
-      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, true /* performLocatorHandlersCheckpoint */, handle => handle._press(progress, key, options)));
+      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, true /* performActionPreChecks */, handle => handle._press(progress, key, options)));
     }, this._page._timeoutSettings.timeout(options));
   }
 
   async check(metadata: CallMetadata, selector: string, options: types.PointerActionWaitOptions = {}) {
     const controller = new ProgressController(metadata, this);
     return controller.run(async progress => {
-      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performLocatorHandlersCheckpoint */, handle => handle._setChecked(progress, true, options)));
+      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performActionPreChecks */, handle => handle._setChecked(progress, true, options)));
     }, this._page._timeoutSettings.timeout(options));
   }
 
   async uncheck(metadata: CallMetadata, selector: string, options: types.PointerActionWaitOptions = {}) {
     const controller = new ProgressController(metadata, this);
     return controller.run(async progress => {
-      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performLocatorHandlersCheckpoint */, handle => handle._setChecked(progress, false, options)));
+      return dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, options.strict, !options.force /* performActionPreChecks */, handle => handle._setChecked(progress, false, options)));
     }, this._page._timeoutSettings.timeout(options));
   }
 
@@ -1394,6 +1403,13 @@ export class Frame extends SdkObject {
     return controller.run(async () => {
       await new Promise(resolve => setTimeout(resolve, timeout));
     });
+  }
+
+  async ariaSnapshot(metadata: CallMetadata, selector: string, options: types.TimeoutOptions = {}): Promise<string> {
+    const controller = new ProgressController(metadata, this);
+    return controller.run(async progress => {
+      return await this._retryWithProgressIfNotConnected(progress, selector, true /* strict */, true /* performActionPreChecks */, handle => handle.ariaSnapshot());
+    }, this._page._timeoutSettings.timeout(options));
   }
 
   async expect(metadata: CallMetadata, selector: string, options: FrameExpectParams): Promise<{ matches: boolean, received?: any, log?: string[], timedOut?: boolean }> {
@@ -1414,7 +1430,7 @@ export class Frame extends SdkObject {
       await (new ProgressController(metadata, this)).run(async progress => {
         progress.log(`${metadata.apiName}${timeout ? ` with timeout ${timeout}ms` : ''}`);
         progress.log(`waiting for ${this._asLocator(selector)}`);
-        await this._page.performLocatorHandlersCheckpoint(progress);
+        await this._page.performActionPreChecks(progress);
       }, timeout);
 
       // Step 2: perform one-shot expect check without a timeout.
@@ -1436,12 +1452,12 @@ export class Frame extends SdkObject {
         timeout -= elapsed;
       }
       if (timeout < 0)
-        return { matches: options.isNot, log: metadata.log, timedOut: true, received: lastIntermediateResult.received };
+        return { matches: options.isNot, log: compressCallLog(metadata.log), timedOut: true, received: lastIntermediateResult.received };
 
       // Step 3: auto-retry expect with increasing timeouts. Bounded by the total remaining time.
       return await (new ProgressController(metadata, this)).run(async progress => {
         return await this.retryWithProgressAndTimeouts(progress, [100, 250, 500, 1000], async continuePolling => {
-          await this._page.performLocatorHandlersCheckpoint(progress);
+          await this._page.performActionPreChecks(progress);
           const { matches, received } = await this._expectInternal(progress, selector, options, lastIntermediateResult);
           if (matches === options.isNot) {
             // Keep waiting in these cases:
@@ -1457,7 +1473,7 @@ export class Frame extends SdkObject {
       // A: We want user to receive a friendly message containing the last intermediate result.
       if (js.isJavaScriptErrorInEvaluate(e) || isInvalidSelectorError(e))
         throw e;
-      const result: { matches: boolean, received?: any, log?: string[], timedOut?: boolean } = { matches: options.isNot, log: metadata.log };
+      const result: { matches: boolean, received?: any, log?: string[], timedOut?: boolean } = { matches: options.isNot, log: compressCallLog(metadata.log) };
       if (lastIntermediateResult.isSet)
         result.received = lastIntermediateResult.received;
       if (e instanceof TimeoutError)
@@ -1478,6 +1494,8 @@ export class Frame extends SdkObject {
 
     const { log, matches, received, missingReceived } = await injected.evaluate(async (injected, { info, options, callId }) => {
       const elements = info ? injected.querySelectorAll(info.parsed, document) : [];
+      if (callId)
+        injected.markTargetElements(new Set(elements), callId);
       const isArray = options.expression === 'to.have.count' || options.expression.endsWith('.array');
       let log = '';
       if (isArray)
@@ -1486,8 +1504,6 @@ export class Frame extends SdkObject {
         throw injected.strictModeViolationError(info!.parsed, elements);
       else if (elements.length)
         log = `  locator resolved to ${injected.previewNode(elements[0])}`;
-      if (callId)
-        injected.markTargetElements(new Set(elements), callId);
       return { log, ...await injected.expect(elements[0], options, elements) };
     }, { info, options, callId: progress.metadata.id });
 
@@ -1812,5 +1828,7 @@ function renderUnexpectedValue(expression: string, received: any): string {
     return received ? 'empty' : 'not empty';
   if (expression === 'to.be.focused')
     return received ? 'focused' : 'not focused';
+  if (expression === 'to.match.aria')
+    return received ? received.raw : received;
   return received;
 }
