@@ -18,7 +18,8 @@ import type { BrowserContextOptions } from '../../../types/types';
 import type { Language, LanguageGenerator, LanguageGeneratorOptions } from './types';
 import type * as actions from '@recorder/actions';
 import { sanitizeDeviceOptions, toClickOptionsForSourceCode, toKeyboardModifiers, toSignalMap } from './language';
-import { escapeWithQuotes, asLocator } from '../../utils';
+import { asLocator } from '../../utils/isomorphic/locatorGenerators';
+import { escapeWithQuotes } from '../../utils/isomorphic/stringUtils';
 import { deviceDescriptors } from '../deviceDescriptors';
 
 type CSharpLanguageMode = 'library' | 'mstest' | 'nunit';

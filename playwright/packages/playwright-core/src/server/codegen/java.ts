@@ -21,7 +21,8 @@ import type { Language, LanguageGenerator, LanguageGeneratorOptions } from './ty
 import { toClickOptionsForSourceCode, toKeyboardModifiers, toSignalMap } from './language';
 import { deviceDescriptors } from '../deviceDescriptors';
 import { JavaScriptFormatter } from './javascript';
-import { escapeWithQuotes, asLocator } from '../../utils';
+import { asLocator } from '../../utils/isomorphic/locatorGenerators';
+import { escapeWithQuotes } from '../../utils/isomorphic/stringUtils';
 
 type JavaLanguageMode = 'library' | 'junit';
 
