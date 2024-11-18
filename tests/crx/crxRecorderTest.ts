@@ -75,7 +75,7 @@ export const test = crxTest.extend<{
   recorderPage: Page;
   recordAction<T = void>(action: () => Promise<T>): Promise<T>;
   recordAssertion(locator: Locator, type: AssertAction['name']): Promise<void>;
-  configureRecorder: (config: { testIdAttributeName?: string, targetLanguage?: string }) => Promise<void>;
+  configureRecorder: (config: { testIdAttributeName?: string, targetLanguage?: string, experimental?: boolean }) => Promise<void>;
 }>({
   extensionPath: path.join(__dirname, '../../examples/recorder-crx/dist'),
 
@@ -161,7 +161,7 @@ export const test = crxTest.extend<{
   },
 
   configureRecorder: async ({ context, extensionId }, run) => {
-    await run(async ({ testIdAttributeName, targetLanguage }: { testIdAttributeName?: string, targetLanguage?: string }) => {
+    await run(async ({ testIdAttributeName, targetLanguage, experimental }: { testIdAttributeName?: string, targetLanguage?: string, experimental?: boolean }) => {
       const configPage = await context.newPage();
       try {
         await configPage.goto(`chrome-extension://${extensionId}/preferences.html`);
@@ -169,6 +169,8 @@ export const test = crxTest.extend<{
           await configPage.locator('#target-language').selectOption(targetLanguage);
         if (testIdAttributeName)
           await configPage.locator('#test-id').fill(testIdAttributeName);
+        if (experimental !== undefined)
+          await configPage.locator('#experimental').setChecked(experimental);
         await configPage.locator('#submit').click();
       } finally {
         await configPage.close();

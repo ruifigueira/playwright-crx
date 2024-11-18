@@ -362,7 +362,7 @@ const langs = {
 };
 
 for (const [lang, [suggestedName, filename]] of Object.entries(langs)) {
-  test(`should save ${lang} as ${suggestedName}`, async ({ page, attachRecorder, recordAction, baseURL, context }) => {
+  test(`should save ${lang} as ${suggestedName}`, async ({ page, attachRecorder, recordAction, baseURL, context, configureRecorder }) => {
     await context.addInitScript((filename) => {
       // mock showSaveFilePicker
       (window as any).showSaveFilePicker = ({ suggestedName }: { suggestedName: string }) => {
@@ -376,6 +376,8 @@ for (const [lang, [suggestedName, filename]] of Object.entries(langs)) {
         };
       }
     }, filename);
+    
+    await configureRecorder({ experimental: true });
     const recorderPage = await attachRecorder(page);
 
     // this ensures that default language can also be saved
