@@ -146,20 +146,20 @@ export const CrxRecorder: React.FC = ({
     </div>
 
     <div className="recorder">
+      {settings.experimental && <>
       <Toolbar>
         <ToolbarButton icon='save' title='Save' disabled={false} onClick={requestSave}>Save</ToolbarButton>
         <div style={{ flex: 'auto' }}></div>
-        {settings.experimental && <>
           <div className="dropdown">
-            <ToolbarButton icon="beaker" title='Experimental Tools' disabled={false} onClick={() => {}}></ToolbarButton>
+            <ToolbarButton icon="tools" title='Tools' disabled={false} onClick={() => {}}></ToolbarButton>
             <div className="dropdown-content right-align">
               <a href="#" onClick={requestSaveStorageState}>Save storage state</a>
             </div>
           </div>
           <ToolbarSeparator />
-        </>}
         <ToolbarButton icon='settings-gear' title='Preferences' onClick={() => setShowPreferences(true)}></ToolbarButton>
       </Toolbar>
+      </>}
       <Recorder sources={sources} paused={paused} log={log} mode={mode} />
     </div>
   </>;
