@@ -16,9 +16,10 @@ const subtitle = searchParams.get('subtitle') ?? defaultTitles[method]?.subtitle
 
 (async () => {
   ReactDOM.createRoot(document.querySelector('#root')!).render(
-    <div className='fs' onClick={() => clientRequestFs()}>
+    <div className='fs'>
       <div className='title'>{title}</div>
       {subtitle && <div>{subtitle}</div>}
+      <button onClick={() => clientRequestFs()}>Go!</button>
     </div>
   );
 })();
