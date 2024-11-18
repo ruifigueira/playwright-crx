@@ -192,12 +192,19 @@ export async function saveFile(options: Omit<FsPageOptions, 'method'>): Promise<
   return await requestFs({ method: 'showSaveFilePicker', ...options }) as FileSystemFileHandle;
 }
 
-export async function requestVirtualFs(key: string, mode: FileSystemPermissionMode) {
+export async function getVirtualFs(key: string, mode: FileSystemPermissionMode) {
   let directory = await keyval.get(key) as FileSystemDirectoryHandle;
-  if (directory)
+  const permission = await directory.queryPermission({ mode });
+  if (permission === 'granted')
     return new FileSystemApiVirtualFs(directory);
+}
+
+export async function requestVirtualFs(key: string, mode: FileSystemPermissionMode) {
+  let fs = await getVirtualFs(key, mode);
+  if (fs)
+    return fs;
   await requestFs({ title: 'Select a project folder', key, method: 'showDirectoryPicker', params: { mode } });
-  directory = await keyval.get(key) as FileSystemDirectoryHandle;
+  const directory = await keyval.get(key) as FileSystemDirectoryHandle;
   if (!directory)
     throw new Error(`No directory was picked`);
   const permission = await directory.queryPermission({ mode });

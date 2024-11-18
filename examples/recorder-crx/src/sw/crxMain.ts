@@ -18,8 +18,10 @@ import { splitProgress } from '@trace-viewer/sw/progress';
 import { unwrapPopoutUrl } from '@trace-viewer/sw/snapshotRenderer';
 import { SnapshotServer } from '@trace-viewer/sw/snapshotServer';
 import { TraceModel } from '@trace-viewer/sw/traceModel';
-import { FetchTraceModelBackend, ZipTraceModelBackend } from '@trace-viewer/sw/traceModelBackends';
 import { TraceVersionError } from '@trace-viewer/sw/traceModernizer';
+import { ExtendedProjectVirtualFs } from '../utils/project';
+import { getVirtualFs } from '../utils/virtualFs';
+import { CrxZipTraceModelBackend } from './crxTraceModelBackend';
 
 // @ts-ignore
 declare const self: ServiceWorkerGlobalScope;
@@ -38,7 +40,7 @@ const loadedTraces = new Map<string, { traceModel: TraceModel, snapshotServer: S
 
 const clientIdToTraceUrls = new Map<string, { limit: number | undefined, traceUrls: Set<string> }>();
 
-async function loadTrace(traceUrl: string, traceFileName: string | null, clientId: string, limit: number | undefined, progress: (done: number, total: number) => undefined): Promise<TraceModel> {
+export async function loadTrace(traceUrl: string, traceFileName: string | null, clientId: string, limit: number | undefined, progress: (done: number, total: number) => undefined): Promise<TraceModel> {
   await gc();
   let data = clientIdToTraceUrls.get(clientId);
   if (!data) {
@@ -48,10 +50,15 @@ async function loadTrace(traceUrl: string, traceFileName: string | null, clientI
   data.traceUrls.add(traceUrl);
 
   const traceModel = new TraceModel();
+  const virtualFs = await getVirtualFs('ui-mode.project-dir', 'read');
   try {
+    const blob = await virtualFs?.readFile(traceUrl);
+    if (!blob)
+      throw new Error(`Could not find trace ${traceUrl} in the project directory.`);
+    
     // Allow 10% to hop from sw to page.
     const [fetchProgress, unzipProgress] = splitProgress(progress, [0.5, 0.4, 0.1]);
-    const backend = traceUrl.endsWith('json') ? new FetchTraceModelBackend(traceUrl) : new ZipTraceModelBackend(traceUrl, fetchProgress);
+    const backend = new CrxZipTraceModelBackend(traceUrl, blob, fetchProgress);
     await traceModel.load(backend, unzipProgress);
   } catch (error: any) {
     // eslint-disable-next-line no-console
@@ -72,7 +79,7 @@ async function loadTrace(traceUrl: string, traceFileName: string | null, clientI
 // @ts-ignore
 async function doFetch(event: FetchEvent): Promise<Response> {
   // In order to make Accessibility Insights for Web work.
-  if (event.request.url.startsWith('chrome-extension://'))
+  if (event.request.url.startsWith('chrome-extension://') && !event.request.url.startsWith(`chrome-extension://${chrome.runtime.id}`))
     return fetch(event.request);
 
   const request = event.request;
@@ -145,6 +152,21 @@ async function doFetch(event: FetchEvent): Promise<Response> {
         if (blob)
           return new Response(blob, { status: 200, headers: downloadHeaders(url.searchParams) });
       }
+      return new Response(null, { status: 404 });
+    }
+
+    if (relativePath === '/file') {
+      try {
+        const virtualFs = await getVirtualFs('ui-mode.project-dir', 'read');
+        if (virtualFs) {
+          const projectVirtualFs = new ExtendedProjectVirtualFs(virtualFs);
+          const body = await projectVirtualFs.readFile(url.searchParams.get('path')!);
+          return new Response(body, { status: 200, headers: downloadHeaders(url.searchParams) });
+        }
+      } catch (e) {
+        // oh well
+      }
+
       return new Response(null, { status: 404 });
     }
 
