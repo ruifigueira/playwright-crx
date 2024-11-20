@@ -164,10 +164,13 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
     await attach(tab, 'recording');
 });
 
+let testServer: CrxTestServerDispatcher | undefined;
 chrome.runtime.onConnect.addListener(async port => {
   if (port.name !== 'crx-test-server' || !crxAppPromise)
     return;
-  new CrxTestServerDispatcher(crxAppPromise, port);
+  if (!testServer)
+    testServer = new CrxTestServerDispatcher(crxAppPromise);
+  testServer.addPort(port);
 });
 
 // for testing
