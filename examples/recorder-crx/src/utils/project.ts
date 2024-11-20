@@ -21,12 +21,14 @@ export class ExtendedProjectVirtualFs implements VirtualFs {
   }
 
   async getFile(path: string): Promise<VirtualFile | undefined> {
-    const fileOrAlternativePaths = await this._resolvePath(path);
-    if (!fileOrAlternativePaths)
+    const file = await this._wrappedFs.getFile(path);
+    if (file)
+      return file;
+
+    const [zipPath] = this._zipAndJsonPaths(path);
+    if (!zipPath)
       return;
-    if (!Array.isArray(fileOrAlternativePaths))
-      return fileOrAlternativePaths;
-    const [zipPath] = fileOrAlternativePaths;
+
     const zipFile = await this._wrappedFs.getFile(zipPath);
     if (!zipFile)
       return;
@@ -46,13 +48,13 @@ export class ExtendedProjectVirtualFs implements VirtualFs {
 	async readFile(filePath: string, options: { encoding: 'utf-8' }): Promise<string>;
 	async readFile(filePath: string): Promise<Blob>;
 	async readFile(filePath: string, options?: { encoding: 'utf-8' }): Promise<string | Blob> {
-    const fileOrAlternativePaths = await this._resolvePath(filePath);
-    if (!fileOrAlternativePaths)
-      throw new Error(`File not found: ${filePath}`);
-    if (!Array.isArray(fileOrAlternativePaths))
+    const file = await this._wrappedFs.getFile(filePath);
+    if (file)
       return options ? this._wrappedFs.readFile(filePath, options) : this._wrappedFs.readFile(filePath);
 
-    const [zipPath, jsonPath] = fileOrAlternativePaths;
+    const [zipPath, jsonPath] = this._zipAndJsonPaths(filePath);
+    if (!zipPath)
+      throw new Error(`File not found: ${filePath}`);
 
     let title = 'test';
     if (jsonPath) {
@@ -75,13 +77,11 @@ export class ExtendedProjectVirtualFs implements VirtualFs {
     throw new Error('ProjectVirtualFs does not support write operations');
   }
 
-  async _resolvePath(path: string): Promise<VirtualFile | [string, string] | undefined> {
+  _zipAndJsonPaths(path: string): [string, string] | [] {
     if (/\.(js|ts)$/.test(path)) {
-      const file = await this._wrappedFs.getFile(path);
-      return file ?? [path.replace(/\.(js|ts)$/, '.zip'), path.replace(/\.(js|ts)$/, '.json')];
+      return [path.replace(/\.(js|ts)$/, '.zip'), path.replace(/\.(js|ts)$/, '.json')];
     }
-
-    return await this._wrappedFs.getFile(path);
+    return [];
   }
 }
 
