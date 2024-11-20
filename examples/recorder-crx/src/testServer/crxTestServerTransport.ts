@@ -1,5 +1,7 @@
 import type { Language } from '@isomorphic/locatorGenerators';
 import { TestServerConnection, type TestServerTransport } from '@testIsomorphic/testServerConnection';
+import * as events from '@testIsomorphic/events';
+import { SourceLocation } from '@trace-viewer/ui/modelUtil';
 
 export interface CrxTestServerExtension {
   saveScript(params: { code: string, language: Language; suggestedName: string }): Promise<void>;
@@ -8,9 +10,21 @@ export interface CrxTestServerExtension {
 }
 
 export class CrxTestServerConnection extends TestServerConnection implements CrxTestServerExtension {
+  readonly onItemSelected: events.Event<SourceLocation>;
+
+  private _onItemSelectedEmitter = new events.EventEmitter<SourceLocation>();
+
   constructor() {
     const port = chrome.runtime.connect({ name: 'crx-test-server' });
     super(new CrxTestServerTransport(port));
+    this.onItemSelected = this._onItemSelectedEmitter.event;
+  }
+
+  protected _dispatchEvent(method: string, params?: any) {
+    if (method === 'itemSelected')
+      this._onItemSelectedEmitter.fire(params);
+    else
+      super._dispatchEvent(method, params);
   }
 
   async saveScript(params: { code: string; language: Language; suggestedName: string; }) {
@@ -23,6 +37,10 @@ export class CrxTestServerConnection extends TestServerConnection implements Crx
 
   async openUiMode() {
     await this._sendMessage('openUiMode');
+  }
+
+  itemSelectedNoReply(location?: SourceLocation) {
+    this._sendMessageNoReply('itemSelected', { location});
   }
 }
 

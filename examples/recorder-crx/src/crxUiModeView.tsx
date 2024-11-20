@@ -391,6 +391,11 @@ export const CrxUiModeView: React.FC<{}> = ({
     });
   }, [closeInstallDialog, testServerConnection]);
 
+  // Load tests on startup.
+  React.useEffect(() => {
+    testServerConnection?.itemSelectedNoReply(selectedItem.testFile);
+  }, [testServerConnection, selectedItem]);
+
   return <div className='vbox ui-mode'>
     {!hasBrowsers && <dialog ref={dialogRef}>
       <div className='title'><span className='codicon codicon-lightbulb'></span>Install browsers</div>

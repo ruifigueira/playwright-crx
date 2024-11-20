@@ -5,21 +5,40 @@ import { filterCookies } from "../utils/network";
 import { ExtendedProjectVirtualFs, readReport } from "../utils/project";
 import { requestVirtualFs, saveFile, VirtualFs } from "../utils/virtualFs";
 import { CrxTestServerExtension } from "./crxTestServerTransport";
+import { SourceLocation } from "@trace-viewer/ui/modelUtil";
 
 export class CrxTestServerDispatcher implements Partial<TestServerInterface>, CrxTestServerExtension {
   private _crxAppPromise: Promise<CrxApplication>;
   private _virtualFsPromise: Promise<VirtualFs> | undefined;
 
-  constructor(crxAppPromise: Promise<CrxApplication>, port: chrome.runtime.Port) {
+  private _ports: Set<chrome.runtime.Port> = new Set();
+
+  private _broadcastEvents = new Set(['itemSelected']);
+
+  constructor(crxAppPromise: Promise<CrxApplication>) {
     this._crxAppPromise = crxAppPromise;
+  }
+  
+  addPort(port: chrome.runtime.Port) {
+    this._ports.add(port);
     port.onMessage.addListener(async ({ id, method, params }) => {
       try {
-        const result = await (this as any)[method]?.(params);
+        let result: any;
+        if (this._broadcastEvents.has(method)) {
+          for (const p of this._ports) {
+            // we don't want to send the message back to the sender
+            if (p !== port)
+              p.postMessage({ method, params });
+          }
+        } else {
+          result = await (this as any)[method]?.(params);
+        }
         port.postMessage({ id, method, params, result });
       } catch (error) {
         port.postMessage({ id, method, params, error });
       }
     });
+    port.onDisconnect.addListener(() => this._ports.delete(port));
   }
 
   async initialize() {
