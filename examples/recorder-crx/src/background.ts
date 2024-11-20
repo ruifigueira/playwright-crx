@@ -78,7 +78,7 @@ async function getCrxApp() {
       });
       crxApp.addListener('attached', async ({ tabId }) => {
         attachedTabIds.add(tabId);
-        await changeAction(tabId, crxApp.recorder.mode);
+        await changeAction(tabId, crxApp.recorder.mode());
       });
       crxApp.addListener('detached', async tabId => {
         attachedTabIds.delete(tabId);
@@ -171,7 +171,7 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
 
 async function doSave(params: { body: string, suggestedName: string }) {
   const crxApp = await getCrxApp();
-  const currMode = crxApp.recorder.mode;
+  const currMode = crxApp.recorder.mode();
   await crxApp.recorder.setMode('none');
 
   // to avoid playwright from interfering too much, we use chrome tabs api to open and wait for the tab to close

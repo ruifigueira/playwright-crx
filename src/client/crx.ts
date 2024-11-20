@@ -81,7 +81,7 @@ export class CrxRecorder extends EventEmitter {
     });
   }
 
-  get mode() {
+  mode() {
     return this._mode;
   }
 
