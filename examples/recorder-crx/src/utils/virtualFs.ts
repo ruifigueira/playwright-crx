@@ -98,6 +98,7 @@ class FileSystemApiVirtualFs implements VirtualFs{
 		const fileHandle = await getFileHandleByPath(this._dirHandle, filePath, { create: true });
 		const writable = await fileHandle.createWritable();
 		await writable.write(content);
+    await writable.close();
 	}
 }
 
