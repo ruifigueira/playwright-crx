@@ -33,6 +33,7 @@ import type * as reporterTypes from 'playwright/types/testReporter';
 import * as React from 'react';
 import './crxUiModeView.css';
 import { CrxTestServerConnection } from './testServer/crxTestServerTransport';
+import { TestCaseFormDialog } from './testCaseFormDialog';
 
 let xtermSize = { cols: 80, rows: 24 };
 const xtermDataSource: XtermDataSource = {
@@ -100,6 +101,8 @@ export const CrxUiModeView: React.FC<{}> = ({
   const [darkMode, setDarkMode] = useDarkModeSetting();
 
   const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const [showTestCaseFormDialog, setShowTestCaseFormDialog] = React.useState(false);
 
   const reloadTests = React.useCallback(() => {
     setTestServerConnection(prevConnection => {
@@ -396,6 +399,18 @@ export const CrxUiModeView: React.FC<{}> = ({
     testServerConnection?.sourceLocationChanged({ sourceLocation: selectedItem.testFile });
   }, [testServerConnection, selectedItem]);
 
+  const testCaseFormDialogRef = React.useRef<typeof TestCaseFormDialog>(null);
+
+  const createTestCase = React.useCallback((data: { name: string, title: string }) => {
+    setShowTestCaseFormDialog(false);
+    const code = `import { test, expect } from '@playwright/test';
+
+test('${data.title}', async ({ page }) => {
+});`;
+
+    testServerConnection?.saveScript({ code, language: 'javascript', path: `${data.name}.spec.ts` }).then(() => reloadTests());
+  }, [testServerConnection, selectedItem]);
+
   return <div className='vbox ui-mode'>
     {!hasBrowsers && <dialog ref={dialogRef}>
       <div className='title'><span className='codicon codicon-lightbulb'></span>Install browsers</div>
@@ -412,9 +427,7 @@ export const CrxUiModeView: React.FC<{}> = ({
       <div className='title'>UI Mode disconnected</div>
       <div><a href='#' onClick={() => window.location.href = '/'}>Reload the page</a> to reconnect</div>
     </div>}
-    <Toolbar>
-      <ToolbarButton icon='save' title='Save' disabled={false} onClick={() => {}}>Save</ToolbarButton>
-    </Toolbar>
+    <TestCaseFormDialog show={showTestCaseFormDialog} onCreate={createTestCase} onClose={() => setShowTestCaseFormDialog(false)} />
     <SplitView
       sidebarSize={250}
       minSidebarSize={150}
@@ -445,6 +458,8 @@ export const CrxUiModeView: React.FC<{}> = ({
         <Toolbar noShadow={true} noMinHeight={true}>
           <img src='playwright-logo.svg' alt='Playwright logo' />
           <div className='section-title'>Playwright</div>
+          <ToolbarButton icon='folder' title='Change project' onClick={() => changeProject(true)} disabled={isRunningTest || isLoading}></ToolbarButton>
+          <ToolbarButton icon='add' title='Create Test Case' onClick={() => setShowTestCaseFormDialog(true)} disabled={isRunningTest || isLoading}></ToolbarButton>
           <ToolbarButton icon='refresh' title='Reload' onClick={() => reloadTests()} disabled={isRunningTest || isLoading}></ToolbarButton>
           <div style={{ position: 'relative' }}>
             <ToolbarButton icon={'terminal'} title={'Toggle output — ' + (isMac ? '⌃`' : 'Ctrl + `')} toggled={isShowingOutput} onClick={() => { setIsShowingOutput(!isShowingOutput); }} />

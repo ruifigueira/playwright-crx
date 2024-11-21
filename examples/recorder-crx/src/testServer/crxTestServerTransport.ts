@@ -4,7 +4,7 @@ import * as events from '@testIsomorphic/events';
 import { SourceLocation } from '@trace-viewer/ui/modelUtil';
 
 export interface CrxTestServerExtension {
-  saveScript(params: { code: string, language: Language; suggestedName: string }): Promise<void>;
+  saveScript(params: { code: string, language: Language; suggestedName?: string, path?: string }): Promise<void>;
   saveStorageState(): Promise<void>;
   openUiMode(): Promise<void>;
 }
@@ -27,7 +27,7 @@ export class CrxTestServerConnection extends TestServerConnection implements Crx
       super._dispatchEvent(method, params);
   }
 
-  async saveScript(params: { code: string; language: Language; suggestedName: string; }) {
+  async saveScript(params: { code: string; language: Language; suggestedName?: string; path?: string }) {
     await this._sendMessage('saveScript', params);
   }
 

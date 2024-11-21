@@ -1,4 +1,3 @@
-import './preferencesForm.css';
 import React from "react";
 import { CrxSettings, defaultSettings, loadSettings, storeSettings } from './settings';
 
