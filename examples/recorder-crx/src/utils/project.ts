@@ -1,7 +1,7 @@
 import type { JsonConfig, JsonProject, JsonSuite, TeleReporterReceiver } from '@testIsomorphic/teleReceiver';
 import { sha1 } from './sha1';
 import { VirtualDirectory, VirtualFile, VirtualFs } from '../utils/virtualFs';
-import { parse } from './parser';
+import { parse } from '../../../../src/server/recorder/parser';
 import { extractTestScript, scriptToCode } from './script';
 import { loadTrace } from '../sw/crxMain';
 
@@ -149,19 +149,19 @@ async function getSuitesRecursively(fs: VirtualFs, directory: VirtualFile = fs.r
   
   const jsEntries = await Promise.all(jsFiles.map(async jsFile => {
     const code = await fs.readFile(jsFile.path, { encoding: 'utf-8' });
-    const parsed = parse(code, jsFile.path, 'data-testid');
+    const { title } = parse(code)!;
     return {
       title: jsFile.path,
       location: { file: jsFile.path, column: 0, line: 0 },
-      entries: parsed.tests.map(({ title, location }) => ({
-        testId: generateTestId(jsFile.path, title),
-        title,
-        location: { ...location, column: 0, line: location.line ?? 0 },
+      entries: [{
+        testId: generateTestId(jsFile.path, title!),
+        title: title!,
+        location: { file: jsFile.path, column: 0, line: 3 }, // TODO: get real location
         retries: 0,
         tags: [],
         repeatEachIndex: 0,
         annotations: []
-      })),
+      }],
     } satisfies JsonSuite;
   }));
   

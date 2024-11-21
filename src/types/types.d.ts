@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
+import { ActionInContext } from '@recorder/actions';
 import { Page, BrowserContext } from '../../playwright/packages/playwright-core/types/types';
 import { IFs } from 'memfs';
+import { Source } from '@recorder/recorderTypes';
 export * from '../../playwright/packages/playwright-core/types/types';
 
 export type CrxFs = IFs;

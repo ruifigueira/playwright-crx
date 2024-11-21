@@ -13,8 +13,6 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Cr
 
   private _ports: Set<chrome.runtime.Port> = new Set();
 
-  private _broadcastEvents = new Set(['itemSelected']);
-
   constructor(crxAppPromise: Promise<CrxApplication>) {
     this._crxAppPromise = crxAppPromise;
   }
@@ -23,16 +21,7 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Cr
     this._ports.add(port);
     port.onMessage.addListener(async ({ id, method, params }) => {
       try {
-        let result: any;
-        if (this._broadcastEvents.has(method)) {
-          for (const p of this._ports) {
-            // we don't want to send the message back to the sender
-            if (p !== port)
-              p.postMessage({ method, params });
-          }
-        } else {
-          result = await (this as any)[method]?.(params);
-        }
+        const result = await (this as any)[method]?.(params);
         port.postMessage({ id, method, params, result });
       } catch (error) {
         port.postMessage({ id, method, params, error });
@@ -42,7 +31,7 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Cr
   }
 
   async initialize() {
-    this._virtualFsPromise = requestVirtualFs('ui-mode.project-dir', 'readwrite');
+    this._virtualFsPromise = requestVirtualFs('ui-mode.project-dir', 'readwrite').then(fs => new ExtendedProjectVirtualFs(fs));
     await this._virtualFsPromise;
   }
 
@@ -54,7 +43,7 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Cr
   
   async listTests(_: Parameters<TestServerInterface['listTests']>[0]): ReturnType<TestServerInterface['listTests']> {
     const virtualFs = await this._virtualFsPromise;
-    const report = virtualFs ? await readReport(new ExtendedProjectVirtualFs(virtualFs)) : [];
+    const report = virtualFs ? await readReport(virtualFs) : [];
     return { report, status: 'passed' };
   }
 
@@ -108,5 +97,15 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Cr
 
   async openUiMode() {
     await chrome.windows.create({ url: chrome.runtime.getURL('uiMode.html') });
+  }
+
+  async sourceLocationChanged(params: { sourceLocation: SourceLocation }) {
+    const file = params.sourceLocation.file;
+    if (!file || !this._virtualFsPromise)
+      return;
+
+    const [crxApp, fs] = await Promise.all([this._crxAppPromise, this._virtualFsPromise]);
+    const content = await fs.readFile(file, { encoding: 'utf-8' });
+    await crxApp.recorder.reset(content);
   }
 }

@@ -52,7 +52,10 @@ dispatcherConnection.onmessage = message => setImmediate(() => clientConnection.
 clientConnection.onmessage = message => setImmediate(() => dispatcherConnection.dispatch(message));
 
 clientConnection.toImpl = (x: any) => x ? dispatcherConnection._dispatchers.get(x._guid)!._object : dispatcherConnection._dispatchers.get('');
-(playwrightAPI as any)._toImpl = clientConnection.toImpl;
 
 export const { _crx: crx, selectors } = playwrightAPI;
+
+(playwrightAPI as any)._toImpl = clientConnection.toImpl;
+(crx as any)._toImpl = clientConnection.toImpl;
+
 export default playwrightAPI;
