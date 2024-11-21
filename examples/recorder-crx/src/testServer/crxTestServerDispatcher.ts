@@ -10,13 +10,13 @@ import { SourceLocation } from "@trace-viewer/ui/modelUtil";
 export class CrxTestServerDispatcher implements Partial<TestServerInterface>, CrxTestServerExtension {
   private _crxAppPromise: Promise<CrxApplication>;
   private _virtualFsPromise: Promise<VirtualFs> | undefined;
-
   private _ports: Set<chrome.runtime.Port> = new Set();
+  private _currentSourceLocation?: SourceLocation;
 
   constructor(crxAppPromise: Promise<CrxApplication>) {
     this._crxAppPromise = crxAppPromise;
   }
-  
+
   addPort(port: chrome.runtime.Port) {
     this._ports.add(port);
     port.onMessage.addListener(async ({ id, method, params }) => {
@@ -47,30 +47,14 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Cr
     return { report, status: 'passed' };
   }
 
-  async saveScript(params: { code: string, language: Language, suggestedName: string }) {
-    let acceptTypes: FilePickerAcceptType[] = []; 
-    switch (params.language) {
-      case 'javascript': acceptTypes = [
-        { description: 'Typescript file', accept: { 'text/x-typescript': ['.ts'] } },
-        { description: 'Javascript file', accept: { 'application/javascript': ['.js'] } },
-      ]; break;
-      case 'java': acceptTypes = [{ description: 'Java file', accept: { 'text/x-java-source': ['.java'] } }]; break;
-      case 'python': acceptTypes = [{ description: 'Python file', accept: { 'text/x-python': ['.py'] } }]; break;
-      case 'csharp': acceptTypes = [{ description: 'C# file', accept: { 'text/x-csharp': ['.cs'] } }]; break;
-      case 'jsonl': acceptTypes = [{ description: 'JSON Lines file', accept: { 'text/jsonl': ['.jsonl'] } }]; break;
-    };
-
-    const handle = await saveFile({
-      params: {
-        types: acceptTypes,
-        suggestedName: params.suggestedName,
-      }
-    });
-    if (handle) {
-      const writable = await handle.createWritable();
-      await writable.write(params.code);
-      await writable.close();
-    }
+  async saveScript(params: { code: string, language: Language, suggestedName?: string, path?: string }) {
+    const fs = await this._virtualFsPromise;
+    if (!fs)
+      return;
+    const path = params.path ?? this._currentSourceLocation?.file;
+    if (!path)
+      return;
+    await fs.writeFile(path, params.code);
   }
   
   async saveStorageState() {
@@ -100,6 +84,8 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Cr
   }
 
   async sourceLocationChanged(params: { sourceLocation: SourceLocation }) {
+    this._currentSourceLocation = params.sourceLocation;
+    
     const file = params.sourceLocation.file;
     if (!file || !this._virtualFsPromise)
       return;

@@ -19,6 +19,7 @@ import { applyTheme } from '@web/theme';
 import '@web/third_party/vscode/codicon.css';
 import * as ReactDOM from 'react-dom/client';
 import { CrxUiModeView } from './crxUiModeView';
+import './base.css';
 
 (async () => {
   applyTheme();

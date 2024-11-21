@@ -73,8 +73,8 @@ export class ExtendedProjectVirtualFs implements VirtualFs {
     return code;
   }
 
-  async writeFile() {
-    throw new Error('ProjectVirtualFs does not support write operations');
+  async writeFile(filePath: string, content: string | Blob) {
+    return await this._wrappedFs.writeFile(filePath, content);
   }
 
   _zipAndJsonPaths(path: string): [string, string] | [] {
