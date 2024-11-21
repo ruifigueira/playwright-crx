@@ -39,8 +39,8 @@ export class CrxTestServerConnection extends TestServerConnection implements Crx
     await this._sendMessage('openUiMode');
   }
 
-  itemSelectedNoReply(location?: SourceLocation) {
-    this._sendMessageNoReply('itemSelected', { location});
+  sourceLocationChanged(params: { sourceLocation?: SourceLocation }) {
+    this._sendMessageNoReply('sourceLocationChanged', params);
   }
 }
 

@@ -393,7 +393,7 @@ export const CrxUiModeView: React.FC<{}> = ({
 
   // Load tests on startup.
   React.useEffect(() => {
-    testServerConnection?.itemSelectedNoReply(selectedItem.testFile);
+    testServerConnection?.sourceLocationChanged({ sourceLocation: selectedItem.testFile });
   }, [testServerConnection, selectedItem]);
 
   return <div className='vbox ui-mode'>
