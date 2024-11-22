@@ -9,5 +9,8 @@
   "action": {
     "default_title": "Playwright CRX - TodoMVC"
   },
-  "permissions": ["debugger", "tabs"]
+  "permissions": ["debugger", "tabs"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'"
+  }
 }

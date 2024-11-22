@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
-import { crx } from 'playwright-crx';
+import { crx, registerSourceMap } from 'playwright-crx';
 import { createTodos } from './todos';
+
+registerSourceMap().catch(() => {});
 
 chrome.action.onClicked.addListener(async ({ id: tabId }) => {
   await chrome.action.disable();
@@ -24,7 +26,23 @@ chrome.action.onClicked.addListener(async ({ id: tabId }) => {
   const page = await crxApp.attach(tabId!).catch(() => crxApp.newPage());
 
   try {
+    await page.context().tracing.start({ screenshots: true, snapshots: true });
     await createTodos(page);
+    await page.context().tracing.stop({ path: '/tmp/trace.zip' });
+    const data = crx.fs.readFileSync('/tmp/trace.zip');
+
+    const tracePage = await crxApp.newPage();
+    await tracePage.goto('https://trace.playwright.dev');
+    const [filechooser] = await Promise.all([
+      tracePage.waitForEvent('filechooser'),
+      tracePage.getByRole('button', { name: 'Select file(s)' }).click(),
+    ]);
+    await filechooser.setFiles({
+      name: 'trace.zip',
+      mimeType: 'application/zip',
+      buffer: Buffer.from(data),
+    });
+    await crxApp.detach(tracePage);
   } finally {
     await crxApp.close();
     await chrome.action.enable();
