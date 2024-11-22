@@ -12,13 +12,13 @@ export type VirtualDirectory = {
 	path: string;
 }
 
-async function getDirectoryHandleByPath(dirHandle: FileSystemDirectoryHandle, path: string = '') {
+async function getDirectoryHandleByPath(dirHandle: FileSystemDirectoryHandle, path: string = '', options?: FileSystemGetDirectoryOptions) {
 	const parts = path.split('/').filter(Boolean);
 	if (parts.length === 0)
 		return dirHandle;
 	let handle = dirHandle;
 	for (const part of parts) {
-		handle = await handle.getDirectoryHandle(part);
+		handle = await handle.getDirectoryHandle(part, options);
 	}
 	return handle;
 }
@@ -29,7 +29,7 @@ async function getFileHandleByPath(dirHandle: FileSystemDirectoryHandle, path: s
 		throw new Error('Invalid path');
 	const filename = parts[parts.length - 1];
 	const dirPath = parts.slice(0, -1).join('/');
-	const handle = await getDirectoryHandleByPath(dirHandle, dirPath);
+	const handle = await getDirectoryHandleByPath(dirHandle, dirPath, options);
 	return handle.getFileHandle(filename, options);
 }
 
@@ -204,7 +204,7 @@ export async function saveFile(options: Omit<FsPageOptions, 'method'>): Promise<
 
 export async function getVirtualFs(key: string, mode: FileSystemPermissionMode) {
   let directory = await keyval.get(key) as FileSystemDirectoryHandle;
-  const permission = await directory.queryPermission({ mode });
+  const permission = await directory?.queryPermission({ mode });
   if (permission === 'granted')
     return new FileSystemApiVirtualFs(directory);
 }
@@ -228,4 +228,8 @@ export async function requestVirtualFs(key: string, mode: FileSystemPermissionMo
     };
   }
   return new FileSystemApiVirtualFs(directory);
+}
+
+export async function releaseVirtualFs(key: string) {
+  await keyval.del(key);
 }
