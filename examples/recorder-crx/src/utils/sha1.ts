@@ -6,6 +6,8 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
+import { createGuid } from "@playwright-core/utils";
+
 /**
  * Compute the SHA1 of the given string
  *

@@ -137,7 +137,7 @@ function generateHexString(length: number = 32) {
 
 function generateTestId(testFilepath: string, title: string) {
   const fileId = sha1(testFilepath).slice(0, 20);
-  const testIdExpression = `[project=]${testFilepath}\x1e${title}`;
+  const testIdExpression = `[project=${testFilepath}\x1e${title}`;
   const testId = fileId + '-' + sha1(testIdExpression).slice(0, 20);
   return testId;
 }
@@ -205,15 +205,5 @@ export async function readReport(fs: VirtualFs): Promise<TeleReporter> {
   return [
     { method: 'onConfigure', params: { config } },
     { method: 'onProject', params: { project } },
-    { method: 'onBegin', params: {} },
-    {
-      method: 'onEnd', params: {
-        result: {
-          status: 'passed',
-          startTime,
-          duration: new Date().getTime() - startTime,
-        }
-      }
-    },
   ];
 }

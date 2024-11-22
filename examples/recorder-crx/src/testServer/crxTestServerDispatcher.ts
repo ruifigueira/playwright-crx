@@ -1,13 +1,14 @@
 import type { Language } from "@isomorphic/locatorGenerators";
-import type { TestServerInterface } from "@testIsomorphic/testServerInterface";
-import type { CrxApplication } from "playwright-crx/test";
+import type { ReportEntry, TestServerInterface, TestServerInterfaceEventEmitters } from "@testIsomorphic/testServerInterface";
+import type { CrxApplication, Page } from "playwright-crx/test";
 import { filterCookies } from "../utils/network";
-import { ExtendedProjectVirtualFs, readReport } from "../utils/project";
-import { requestVirtualFs, saveFile, VirtualFs } from "../utils/virtualFs";
+import { ExtendedProjectVirtualFs, readReport, TeleReporter } from "../utils/project";
+import { releaseVirtualFs, requestVirtualFs, saveFile, VirtualFs } from "../utils/virtualFs";
 import { CrxTestServerExtension } from "./crxTestServerTransport";
 import { SourceLocation } from "@trace-viewer/ui/modelUtil";
+import { JsonTestCase } from "@testIsomorphic/teleReceiver";
 
-export class CrxTestServerDispatcher implements Partial<TestServerInterface>, CrxTestServerExtension {
+export class CrxTestServerDispatcher implements Partial<TestServerInterface>, TestServerInterfaceEventEmitters, CrxTestServerExtension {
   private _crxAppPromise: Promise<CrxApplication>;
   private _virtualFsPromise: Promise<VirtualFs> | undefined;
   private _ports: Set<chrome.runtime.Port> = new Set();
@@ -30,6 +31,15 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Cr
     port.onDisconnect.addListener(() => this._ports.delete(port));
   }
 
+  dispatchEvent(event: 'report', params: ReportEntry): void;
+  dispatchEvent(event: 'stdio', params: { type: 'stdout' | 'stderr'; text?: string; buffer?: string; }): void;
+  dispatchEvent(event: 'testFilesChanged', params: { testFiles: string[]; }): void;
+  dispatchEvent(event: 'loadTraceRequested', params: { traceUrl: string; }): void;
+  dispatchEvent(event: string, params: any): void {
+    for (const port of this._ports)
+      port.postMessage({ method: event, params });
+  }
+
   async initialize() {
     this._virtualFsPromise = requestVirtualFs('ui-mode.project-dir', 'readwrite').then(fs => new ExtendedProjectVirtualFs(fs));
     await this._virtualFsPromise;
@@ -42,9 +52,42 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Cr
   async runGlobalTeardown(_: Parameters<TestServerInterface['runGlobalTeardown']>[0]): ReturnType<TestServerInterface['runGlobalTeardown']> { return { report: [], status: 'passed' } }
   
   async listTests(_: Parameters<TestServerInterface['listTests']>[0]): ReturnType<TestServerInterface['listTests']> {
-    const virtualFs = await this._virtualFsPromise;
-    const report = virtualFs ? await readReport(virtualFs) : [];
+    const fs = await this._virtualFsPromise;
+    const report = fs ? [
+      ...await readReport(fs),
+      { method: 'onBegin', params: {} },
+      { method: 'onEnd', params: { result: { status: 'passed', startTime: new Date().getTime(), duration: 0 } } },
+    ] : [];
     return { report, status: 'passed' };
+  }
+
+  async runTests({ testIds }: Parameters<TestServerInterface['runTests']>[0]): ReturnType<TestServerInterface['runTests']> {
+    const [crxApp, fs] = await Promise.all([this._crxAppPromise, this._virtualFsPromise]);
+    if (!fs || !crxApp)
+      return { status: 'failed' };
+
+    const report = await readReport(fs);
+    const project = report?.find(e => e.method === 'onProject')?.params.project;
+    if (!project)
+      return { status: 'passed' }; 
+
+    const tests: [JsonTestCase, TestCode][] = [];
+    for (const entry of project.suites.flatMap(s => s.entries)) {
+      if (testIds?.includes((entry as JsonTestCase).testId) && !!entry.location) {
+        const { file, line } = entry.location;
+        const code = await fs.readFile(file, { encoding: 'utf-8' });
+        const testSource = parse(code, file, 'data-testid');
+        tests.push([entry as JsonTestCase, testSource.tests.find(t => t.location.line === line)!]);
+      };
+    }
+
+    for (const reportEntry of report)
+      this.dispatchEvent('report', reportEntry);
+
+    const testRunner = new TestRunner(fs, reportEntry => this.dispatchEvent('report', reportEntry));     
+    await testRunner.runTests(tests.map(([testCase, test]) => ({ testId: testCase.testId, test })));
+
+    return { status: 'passed' };
   }
 
   async changeProject(): Promise<void> {
@@ -86,7 +129,7 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Cr
   }
 
   async openUiMode() {
-    await chrome.windows.create({ url: chrome.runtime.getURL('uiMode.html') });
+    await chrome.windows.create({ url: chrome.runtime.getURL('uiMode.html'), type: 'popup', focused: false });
   }
 
   async sourceLocationChanged(params: { sourceLocation: SourceLocation }) {

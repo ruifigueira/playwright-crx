@@ -399,8 +399,6 @@ export const CrxUiModeView: React.FC<{}> = ({
     testServerConnection?.sourceLocationChanged({ sourceLocation: selectedItem.testFile });
   }, [testServerConnection, selectedItem]);
 
-  const testCaseFormDialogRef = React.useRef<typeof TestCaseFormDialog>(null);
-
   const createTestCase = React.useCallback((data: { name: string, title: string }) => {
     setShowTestCaseFormDialog(false);
     const code = `import { test, expect } from '@playwright/test';
