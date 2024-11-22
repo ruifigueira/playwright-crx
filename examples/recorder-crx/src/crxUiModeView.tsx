@@ -409,7 +409,11 @@ test('${data.title}', async ({ page }) => {
 });`;
 
     testServerConnection?.saveScript({ code, language: 'javascript', path: `${data.name}.spec.ts` }).then(() => reloadTests());
-  }, [testServerConnection, selectedItem]);
+  }, [testServerConnection, reloadTests]);
+
+  const changeProject = React.useCallback(() => {
+    testServerConnection?.changeProject().then(() => reloadTests());
+  }, [testServerConnection, reloadTests]);
 
   return <div className='vbox ui-mode'>
     {!hasBrowsers && <dialog ref={dialogRef}>
@@ -458,7 +462,7 @@ test('${data.title}', async ({ page }) => {
         <Toolbar noShadow={true} noMinHeight={true}>
           <img src='playwright-logo.svg' alt='Playwright logo' />
           <div className='section-title'>Playwright</div>
-          <ToolbarButton icon='folder' title='Change project' onClick={() => changeProject(true)} disabled={isRunningTest || isLoading}></ToolbarButton>
+          <ToolbarButton icon='folder' title='Change project' onClick={() => changeProject()} disabled={isRunningTest || isLoading}></ToolbarButton>
           <ToolbarButton icon='add' title='Create Test Case' onClick={() => setShowTestCaseFormDialog(true)} disabled={isRunningTest || isLoading}></ToolbarButton>
           <ToolbarButton icon='refresh' title='Reload' onClick={() => reloadTests()} disabled={isRunningTest || isLoading}></ToolbarButton>
           <div style={{ position: 'relative' }}>

@@ -47,6 +47,12 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Cr
     return { report, status: 'passed' };
   }
 
+  async changeProject(): Promise<void> {
+    await releaseVirtualFs('ui-mode.project-dir');
+    this._virtualFsPromise = undefined;
+    await this.initialize();
+  }
+
   async saveScript(params: { code: string, language: Language, suggestedName?: string, path?: string }) {
     const fs = await this._virtualFsPromise;
     if (!fs)
