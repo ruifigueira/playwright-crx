@@ -16,13 +16,17 @@
 
 import path from 'path';
 import { defineConfig } from 'vite';
+import sourcemaps from 'rollup-plugin-sourcemaps';
 
 // https://vitejs.dev/config/
 export default defineConfig({
   build: {
     // playwright-crx cannot be obfuscated
     minify: false,
+    sourcemap: true,
     rollupOptions: {
+      // @ts-ignore
+      plugins: [sourcemaps()],
       input: {
         'background': path.resolve(__dirname, 'src/background.ts'),
       },
