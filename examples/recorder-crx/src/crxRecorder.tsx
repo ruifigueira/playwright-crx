@@ -61,6 +61,7 @@ export const CrxRecorder: React.FC = ({
     const testServer = new CrxTestServerConnection();
     testServer.onItemSelected(location => console.log('itemSelected', location));
     setTestServer(testServer);
+    testServer.openUiMode().catch(() => {});
     return () => testServer.close();
   }, []);
 

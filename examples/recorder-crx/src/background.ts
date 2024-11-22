@@ -144,7 +144,11 @@ async function setTestIdAttributeName(testIdAttributeName: string) {
   playwright.selectors.setTestIdAttribute(testIdAttributeName);
 }
 
-chrome.action.onClicked.addListener(attach);
+chrome.action.onClicked.addListener(() => {
+  getCrxApp()
+    .then(() => chrome.windows.create({ url: chrome.runtime.getURL('uiMode.html'), focused: true, type: 'popup' }))
+    .catch(() => {});
+});
 
 chrome.contextMenus.create({
   id: 'pw-recorder',
