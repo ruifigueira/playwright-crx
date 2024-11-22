@@ -21,7 +21,7 @@ import { TraceModel } from '@trace-viewer/sw/traceModel';
 import { TraceVersionError } from '@trace-viewer/sw/traceModernizer';
 import { ExtendedProjectVirtualFs } from '../utils/project';
 import { getVirtualFs } from '../utils/virtualFs';
-import { CrxZipTraceModelBackend } from './crxTraceModelBackend';
+import { CrxFetchTraceModelBackend, CrxZipTraceModelBackend } from './crxTraceModelBackend';
 
 // @ts-ignore
 declare const self: ServiceWorkerGlobalScope;
@@ -48,17 +48,19 @@ export async function loadTrace(traceUrl: string, traceFileName: string | null, 
     clientIdToTraceUrls.set(clientId, data);
   }
   data.traceUrls.add(traceUrl);
-
   const traceModel = new TraceModel();
-  const virtualFs = await getVirtualFs('ui-mode.project-dir', 'read');
   try {
-    const blob = await virtualFs?.readFile(traceUrl);
-    if (!blob)
-      throw new Error(`Could not find trace ${traceUrl} in the project directory.`);
+    const virtualFs = await getVirtualFs('ui-mode.project-dir', 'read');
+    let blob: Blob | undefined;
+    if (!traceUrl.endsWith('json')) {
+      blob = await virtualFs?.readFile(traceUrl);
+      if (!blob)
+        throw new Error(`Could not find trace ${traceUrl} in the project directory.`);
+    }
     
     // Allow 10% to hop from sw to page.
     const [fetchProgress, unzipProgress] = splitProgress(progress, [0.5, 0.4, 0.1]);
-    const backend = new CrxZipTraceModelBackend(traceUrl, blob, fetchProgress);
+    const backend = blob ? new CrxZipTraceModelBackend(traceUrl, blob, fetchProgress) : new CrxFetchTraceModelBackend(traceUrl);
     await traceModel.load(backend, unzipProgress);
   } catch (error: any) {
     // eslint-disable-next-line no-console
