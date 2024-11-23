@@ -20,7 +20,7 @@ registerSourceMap().catch(() => {});
 
 const _crxAppPromise = crx.start();
 
-async function _runTest(fn: (params: any) => Promise<void>, params: any) {
+async function _runTest(fn: (fixtures: any, arg: any) => Promise<void>, otherFixtures: any, arg: any) {
   const fs = crx.fs;
   const [crxApp, [ tab ]] = await Promise.all([_crxAppPromise, chrome.tabs.query({ active: true })]);
   const context = crxApp.context();
@@ -28,7 +28,7 @@ async function _runTest(fn: (params: any) => Promise<void>, params: any) {
   const page = await crxApp.attach(tab?.id!);
 
   try {
-    return await fn({ expect, page, context, crx, fs, crxApp, _debug, ...params });
+    return await fn({ expect, page, context, crx, fs, crxApp, _debug, ...otherFixtures }, arg);
   } catch (e: any) {
     debugger;
     throw e instanceof Error ? e : new Error(e?.message);
