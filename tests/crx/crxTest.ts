@@ -22,6 +22,7 @@ import path from 'path';
 import type { CrxFs, Crx, CrxApplication, BrowserContext as CrxBrowserContext, Page as CrxPage } from 'playwright-crx';
 import type * as CrxTests from 'playwright-crx/test';
 import { rimraf } from 'rimraf';
+import { parseTraceRaw } from './utils';
 
 type CrxServer = {
   EMPTY_PAGE: string;
@@ -45,7 +46,7 @@ type Debug = {
   disable(): Promise<void>;
 }
 
-type CrxTest<T> = (fixtures: CrxFixtures) => Promise<T>;
+type CrxTest<T, Arg = undefined> = (fixtures: CrxFixtures, arg: Arg) => Promise<T>;
 
 declare const serviceWorker: ServiceWorker;
 
@@ -59,7 +60,9 @@ export const test = base.extend<{
   extensionServiceWorker: Worker;
   extensionId: string;
   server: CrxServer;
-  runCrxTest: <T>(testFn: CrxTest<T>) => Promise<T>;
+  runCrxTest<T>(testFn: CrxTest<T>): Promise<T>;
+  runCrxTest<T, Arg = undefined>(testFn: CrxTest<T, Arg>, arg: Arg): Promise<T>;
+  runCrxTestAndParseTraceRaw: (testFn: CrxTest<string | void>) => ReturnType<typeof parseTraceRaw>;
   mockPaths: (paths: Record<string, string | { body: string, contentType?: string }>) => Promise<void>;
   _extensionServiceWorkerDevtools: void;
   _debug: Debug;
@@ -95,6 +98,9 @@ export const test = base.extend<{
         `--load-extension=${extensionPath}`,
       ],
     });
+    // prevents playwright from handling alerts, prompts, etc., and leave it to playwright-crx
+    // see: https://playwright.dev/docs/dialogs#alert-confirm-prompt-dialogs
+    context.on('dialog', () => {});
     await use(context);
     await context.close();
   },
@@ -134,9 +140,23 @@ export const test = base.extend<{
     });
   },
 
-  runCrxTest: async ({ extensionServiceWorker, server }, use) => {
+  runCrxTest: async ({ extensionServiceWorker, server, context }, use) => {
     const params = { server };
-    use((fn) => extensionServiceWorker.evaluate(`_runTest(${fn.toString()}, ${JSON.stringify(params)})`));
+    // @ts-ignore
+    await use((fn, arg) => extensionServiceWorker.evaluate(`_runTest(${fn.toString()}, ${JSON.stringify(params)}, ${arg === undefined ? 'undefined' : JSON.stringify(arg)})`));
+  },
+
+  runCrxTestAndParseTraceRaw: async ({ runCrxTest }, use, testInfo) => {
+    await use(async fn => {
+      const tracePath = await runCrxTest(fn) ?? 'trace.zip';
+      const base64Trace = await runCrxTest(async ({ fs }, tracePath) => {
+        const traceFile = await fs.promises.readFile(tracePath);
+        return traceFile.toString('base64');
+      }, tracePath);
+      const testTracePath = testInfo.outputPath('trace.zip');
+      fs.writeFileSync(testTracePath, base64Trace, { encoding: 'base64' });
+      return await parseTraceRaw(testTracePath);
+    });
   },
 
   mockPaths: async ({ context, baseURL }, run) => {
