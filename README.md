@@ -71,6 +71,47 @@ chrome.action.onClicked.addListener(async ({ id: tabId }) => {
 
 A more complete example can be found in `examples/todomvc-crx`.
 
+### Tracing
+
+Playwright CRX also supports [tracing](https://playwright.dev/docs/api/class-tracing), compatible with [Playwright Trace Viewer](https://trace.playwright.dev).
+
+For it to work properly, some additional steps are required:
+
+- ensure vite generates source maps with [rollup-plugin-sourcemaps](https://www.npmjs.com/package/rollup-plugin-sourcemaps)  and doesn't minify the code:
+
+```js
+import { defineConfig } from 'vite';
+import sourcemaps from 'rollup-plugin-sourcemaps';
+
+export default defineConfig({
+  build: {
+    minify: false,
+    sourcemap: true,
+    rollupOptions: {
+      plugins: [sourcemaps()],
+      // other configurations
+    },
+  },
+});
+```
+- add the following CSP to your extension `manifest.json`:
+
+```json
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'"
+  }
+```
+
+- on the extension service worker script, register the application source map as soon as possible:
+
+```js
+import { crx, registerSourceMap } from 'playwright-crx';
+
+registerSourceMap().catch(() => {});
+```
+
+A complete example can be found in `examples/todomvc-crx`.
+
 ## Build
 
 To build `playwright-crx`:
