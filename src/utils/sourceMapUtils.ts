@@ -7,7 +7,7 @@ const regex = /^ +at.+\((.*):([0-9]+):([0-9]+)/;
 const mapForUri = new Map<string, SourceMapConsumer | undefined>();
 
 function origName(origLine: string) {
-  const [, name] = / +at +([^ ]*).*/.exec(origLine) ?? [];
+  const [, name] = / +at +(?:async +)?([^ ]*).*/.exec(origLine) ?? [];
   return name;
 }
 
@@ -77,11 +77,21 @@ export function processStackTraceLine(line: string) {
       // we think we have a map for that uri. call source-map library
       var origPos = map.originalPositionFor({ line: lineNumber, column });
       if (origPos.source && origPos.line && origPos.column) {
+        let name = origPos.name;
+        if (!name) {
+          // esbuild can modify class names and include numbered suffixes
+          // so just remove them
+          name = origName(line);
+          if (/playwright\/packages\/playwright-core\/src\/client\/\w+\.ts$/.test(origPos.source)) {
+            name = name.replace(/\d+\./, '.');
+          }
+        }
+
         return formatOriginalPosition(
           origPos.source,
           origPos.line,
           origPos.column,
-          origPos.name || origName(line)
+          name,
         );
       }
     } else {
