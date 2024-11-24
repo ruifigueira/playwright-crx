@@ -31,21 +31,31 @@ export class Crx extends ChannelOwner<channels.CrxChannel> implements api.Crx {
 
   readonly fs: api.CrxFs = fs;
 
-  private _crxApplication?: CrxApplication;
-  
+  private _crxAppPromise?: Promise<CrxApplication>;
+  private _incognitoCrxPromise?: Promise<CrxApplication>;
+
   static from(crx: channels.CrxChannel): Crx {
     return (crx as any)._object;
   }
-
+  
   async start(options?: channels.CrxStartOptions) {
-    if (!this._crxApplication) {
-      this._crxApplication = from<CrxApplication>((await this._channel.start(options ?? {})).crxApplication);
-      this._crxApplication.on('close', () => {
-        this._crxApplication = undefined;
-      });
+    if (options?.incognito) {
+      if (this._incognitoCrxPromise)
+        throw new Error(`incognito crxApplication is already started`);
+      this._incognitoCrxPromise = this._start(options, () => this._incognitoCrxPromise = undefined);
+      return this._incognitoCrxPromise;
+    } else {
+      if (this._crxAppPromise)
+        throw new Error(`crxApplication is already started`);
+      this._crxAppPromise = this._start(options ?? {}, () => this._crxAppPromise = undefined);
+      return await this._crxAppPromise;
     }
+  }
 
-    return this._crxApplication;
+  private async _start(options: channels.CrxStartOptions, onClose: () => void) {
+    const crxApp = from<CrxApplication>((await this._channel.start(options ?? {})).crxApplication);
+    crxApp.on('close', onClose);
+    return crxApp;
   }
 }
 

@@ -36,6 +36,11 @@ export interface Crx {
      * on.
      */
     slowMo?: number;
+
+    /**
+     * Starts an incognito mode application.
+     */
+    incognito?: boolean;
   }): Promise<CrxApplication>;
 }
 
