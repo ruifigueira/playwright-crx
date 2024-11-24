@@ -143,7 +143,15 @@ export const test = base.extend<{
   runCrxTest: async ({ extensionServiceWorker, server, context }, use) => {
     const params = { server };
     // @ts-ignore
-    await use((fn, arg) => extensionServiceWorker.evaluate(`_runTest(${fn.toString()}, ${JSON.stringify(params)}, ${arg === undefined ? 'undefined' : JSON.stringify(arg)})`));
+    await use(async (fn, arg) => {
+      const { error, result } = await extensionServiceWorker.evaluate(`
+        _runTest(${fn.toString()}, ${JSON.stringify(params)}, ${arg === undefined ? 'undefined' : JSON.stringify(arg)})
+          .then(result => ({ result }))
+          .catch(error => ({ error }))
+      `) as any;
+      if (error) throw error;
+      return result;
+    });
   },
 
   runCrxTestAndParseTraceRaw: async ({ runCrxTest }, use, testInfo) => {
