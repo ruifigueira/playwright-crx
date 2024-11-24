@@ -46,7 +46,6 @@ export class Crx extends SdkObject {
   }
 
   async start(options?: crxchannels.CrxStartOptions): Promise<CrxApplication> {
-    const transport = new CrxTransport();
     const browserLogsCollector = new RecentLogsCollector();
     const browserProcess: BrowserProcess = {
       onclose: undefined,
@@ -72,8 +71,9 @@ export class Crx extends SdkObject {
       tracesDir: '/tmp/traces',
       ...options
     };
+    const transport = new CrxTransport();
     const browser = await CRBrowser.connect(this.attribution.playwright, transport, browserOptions);
-    return new CrxApplication(browser, transport);
+    return new CrxApplication(browser._defaultContext!, transport);
   }
 
 }
@@ -87,22 +87,22 @@ export class CrxApplication extends SdkObject {
     ModeChanged: 'modeChanged',
   };
 
-  private _browser: CRBrowser;
+  readonly _context: BrowserContext;
   private _transport: CrxTransport;
   private _recorderApp?: CrxRecorderApp;
   private _player: CrxPlayer;
 
-  constructor(browser: CRBrowser, transport: CrxTransport) {
-    super(browser, 'crxApplication');
+  constructor(context: BrowserContext, transport: CrxTransport) {
+    super(context, 'crxApplication');
     this.instrumentation.addListener({
       onPageClose: page => {
         page.hideHighlight();
       },
     }, null);
-    this._browser = browser;
+    this._context = context;
     this._transport = transport;
-    this._player = new CrxPlayer(this._context());
-    this._context().on(BrowserContext.Events.Page, (page: Page) => {
+    this._player = new CrxPlayer(context);
+    context.on(BrowserContext.Events.Page, (page: Page) => {
       const tabId = this.tabIdForPage(page);
       if (!tabId) return;
 
@@ -115,16 +115,16 @@ export class CrxApplication extends SdkObject {
     });
   }
 
-  _context() {
-    return this._browser._defaultContext!;
+  _browser() {
+    return this._context._browser as CRBrowser;
   }
 
   _crPages() {
-    return [...this._browser._crPages.values()];
+    return [...this._browser()._crPages.values()];
   }
 
   _crPageByTargetId(targetId: string) {
-    return this._browser._crPages.get(targetId);
+    return this._browser()._crPages.get(targetId);
   }
 
   tabIdForPage(page: Page) {
@@ -142,7 +142,7 @@ export class CrxApplication extends SdkObject {
         mode: mode === 'none' ? undefined : mode,
         ...otherOptions
       };
-      Recorder.show('actions', this._context(), this._createRecorderApp.bind(this), recorderParams);
+      Recorder.show('actions', this._context, this._createRecorderApp.bind(this), recorderParams);
     }
 
     await this._recorderApp!.open(options);
@@ -200,7 +200,7 @@ export class CrxApplication extends SdkObject {
   async close() {
     await Promise.all(this._crPages().map(crPage => this._doDetach(crPage._targetId)));
     await this._transport.closeAndWait();
-    await this._browser.close({});
+    await this._browser().close({});
   }
 
   private async _createRecorderApp(recorder: IRecorder) {

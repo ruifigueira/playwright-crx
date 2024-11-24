@@ -33,12 +33,14 @@ export type CrxStartParams = {
   artifactsDir?: string,
   downloadsPath?: string,
   tracesDir?: string,
+  incognito?: boolean,
 };
 export type CrxStartOptions = {
   slowMo?: number,
   artifactsDir?: string,
   downloadsPath?: string,
   tracesDir?: string,
+  incognito?: boolean,
 };
 export type CrxStartResult = {
   crxApplication: CrxApplicationChannel,
@@ -150,6 +152,7 @@ export type CrxApplicationNewPageParams = {
   windowId?: number,
   active?: boolean,
   selected?: boolean,
+  incognito?: boolean,
 };
 export type CrxApplicationNewPageOptions = {
   index?: number,
@@ -159,6 +162,7 @@ export type CrxApplicationNewPageOptions = {
   windowId?: number,
   active?: boolean,
   selected?: boolean,
+  incognito?: boolean,
 };
 export type CrxApplicationNewPageResult = {
   page: PageChannel,

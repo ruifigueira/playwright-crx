@@ -38,6 +38,7 @@ scheme.PlaywrightInitializer = tObject({
 scheme.CrxInitializer = tOptional(tObject({}));
 scheme.CrxStartParams = tObject({
   slowMo: tOptional(tNumber),
+  incognito: tOptional(tBoolean),
 });
 scheme.CrxStartResult = tObject({
   crxApplication: tChannel(['CrxApplication']),

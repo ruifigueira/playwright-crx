@@ -41,23 +41,24 @@ export class CrxApplicationDispatcher extends Dispatcher<CrxApplication, channel
   private _context: BrowserContextDispatcher;
 
   constructor(scope: CrxDispatcher, crxApplication: CrxApplication) {
-    const context = new BrowserContextDispatcher(scope, crxApplication._context());
+    const context = new BrowserContextDispatcher(scope, crxApplication._context);
     super(scope, crxApplication, 'CrxApplication', { context });
     this._context = context;
+    const dispatchEvent = (this._dispatchEvent as any).bind(this);
     this.addObjectListener(CrxApplication.Events.RecorderHide, () => {
-      (this._dispatchEvent as any)('hide');
+      dispatchEvent('hide');
     });
     this.addObjectListener(CrxApplication.Events.RecorderShow, () => {
-      (this._dispatchEvent as any)('show');
+      dispatchEvent('show');
     });
     this.addObjectListener(CrxApplication.Events.Attached, ({ tabId, page }) => {
-      this._dispatchEvent('attached', { tabId, page: PageDispatcher.from(this._context, page) });
+      dispatchEvent('attached', { tabId, page: PageDispatcher.from(this._context, page) });
     });
     this.addObjectListener(CrxApplication.Events.Detached, ({ tabId }) => {
-      this._dispatchEvent('detached', { tabId });
+      dispatchEvent('detached', { tabId });
     });
     this.addObjectListener(CrxApplication.Events.ModeChanged, event => {
-      (this._dispatchEvent as any)('modeChanged', event);
+      dispatchEvent('modeChanged', event);
     });
   }
 
