@@ -129,3 +129,16 @@ test('should not detach normal pages when incognito crxApp is closed', async ({ 
     expect(page.isClosed()).toBe(false);
   });
 });
+
+test('should create pages in corresponding contexts', async ({ runCrxTest }) => {
+  await runCrxTest(async ({ crx, crxApp, expect }) => {
+    const incognitoApp = await crx.start({ incognito: true });
+    const page = await crxApp.context().newPage();
+    const incognitoPage = await incognitoApp.context().newPage();
+    expect(crxApp.pages()).toContain(page);
+    expect(crxApp.pages()).not.toContain(incognitoPage);
+    expect(incognitoApp.pages()).not.toContain(page);
+    expect(incognitoApp.pages()).toContain(incognitoPage);
+    await incognitoApp.close();
+  });
+});

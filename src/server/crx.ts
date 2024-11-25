@@ -32,6 +32,7 @@ import { BrowserContext } from 'playwright-core/lib/server/browserContext';
 import { IRecorder } from 'playwright-core/lib/server/recorder/recorderFrontend';
 import { Mode } from '@recorder/recorderTypes';
 import CrxPlayer from './recorder/crxPlayer';
+import { createTab } from './utils';
 
 const kTabIdSymbol = Symbol('kTabIdSymbol');
 
@@ -254,26 +255,10 @@ export class CrxApplication extends SdkObject {
   }
 
   async newPage(params: crxchannels.CrxApplicationNewPageParams) {
-    const windows = (await chrome.windows.getAll()).filter(w => w.incognito === this.isIncognito());
-    const windowId = windows.find(w => !params.windowId || w.id === params.windowId)?.id;
-    if (!windowId && params.windowId)
-      throw new Error(`Window with id ${params.windowId} not found or bound to a different context`);
-    const [tab] = await Promise.all([
-      new Promise<chrome.tabs.Tab>(resolve => {
-        const tabCreated = (tab: chrome.tabs.Tab) => {
-          if (tab.incognito !== this.isIncognito())
-            return;
-          chrome.tabs.onCreated.removeListener(tabCreated);
-          resolve(tab);
-        };
-        chrome.tabs.onCreated.addListener(tabCreated);
-      }),
-      windowId ?
-        chrome.tabs.create({ url: 'about:blank', ...params, windowId }) :
-        chrome.windows.create({ incognito: this.isIncognito(), url: 'about:blank' }),
-    ]);
-    if (!tab?.id) throw new Error(`No ID found for tab`);
-    return await this.attach(tab.id);
+    const tabId = await createTab({ incognito: this.isIncognito(), ...params });
+    if (!tabId)
+      throw new Error(`No ID found for tab`);
+    return await this.attach(tabId);
   }
 
   async close() {

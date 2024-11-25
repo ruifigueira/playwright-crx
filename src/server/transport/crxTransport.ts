@@ -18,6 +18,7 @@ import { LogName, debugLogger } from 'playwright-core/lib/utils/debugLogger';
 import type { Protocol } from 'playwright-core/lib/server/chromium/protocol';
 import type { Progress } from 'playwright-core/lib/server/progress';
 import type { ConnectionTransport, ProtocolRequest, ProtocolResponse } from 'playwright-core/lib/server/transport';
+import { createTab } from '../utils';
 
 type Tab = chrome.tabs.Tab;
 
@@ -102,8 +103,9 @@ export class CrxTransport implements ConnectionTransport {
         // See CRBrowser.connect
         result = await Promise.resolve();
       } else if (message.method === 'Target.createTarget') {
-        const { id: tabId } = await chrome.tabs.create({ url: 'about:blank' });
-        if (!tabId) throw new Error(`New tab has no id`);
+        const { browserContextId } = message.params;
+        const incognito = !!browserContextId && browserContextId !== this._defaultBrowserContextId;
+        const tabId = await createTab({ incognito });
         const { targetId } = await this.attach(tabId);
         result = { targetId };
       } else if (message.method === 'Target.closeTarget') {
@@ -223,6 +225,7 @@ export class CrxTransport implements ConnectionTransport {
     chrome.tabs.onDetached.removeListener(this._onRemoved);
     this._progress?.log(`<chrome debugger disconnected>`);
   }
+
 
   private async _send<T extends keyof Protocol.CommandParameters>(
     debuggee: DebuggerSession,
