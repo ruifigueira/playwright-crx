@@ -47,6 +47,14 @@ export class CrxTransport implements ConnectionTransport {
     chrome.tabs.onCreated.addListener(this._onPopupCreated);
   }
 
+  isIncognito(tabIdOrTargetId: number | string | undefined) {
+    if (typeof tabIdOrTargetId === 'string')
+      tabIdOrTargetId = this.getTabId(tabIdOrTargetId);
+    if (!tabIdOrTargetId)
+      return;
+    return this._tabToTarget.get(tabIdOrTargetId)?.browserContextId !== this._defaultBrowserContextId;
+  }
+
   getTargetId(tabId: number) {
     return this._tabToTarget.get(tabId)?.targetId;
   }
@@ -100,8 +108,13 @@ export class CrxTransport implements ConnectionTransport {
         result = { targetId };
       } else if (message.method === 'Target.closeTarget') {
         const { targetId } = message.params;
-        await this.detach(targetId);
-        result = true;
+        const tabId = this._targetToTab.get(targetId);
+        if (tabId) {
+          await chrome.tabs.remove(tabId);
+          result = true;
+        } else {
+          result = false;
+        }
       } else if (message.method === 'Target.disposeBrowserContext') {
         // do nothing...
         result = await Promise.resolve();
@@ -150,7 +163,7 @@ export class CrxTransport implements ConnectionTransport {
     }
   }
 
-  async attach(tabId: number) {
+  async attach(tabId: number, onBeforeEmitAttachedToTarget?: (targetInfo: Protocol.Target.TargetInfo) => any) {
     let targetInfo = this._tabToTarget.get(tabId);
 
     if (!targetInfo) {
@@ -160,11 +173,14 @@ export class CrxTransport implements ConnectionTransport {
       // we don't create a new browser context, just return the current one
       const response = await this._send(debuggee, 'Target.getTargetInfo');
       targetInfo = response.targetInfo;
+
       if (!this._defaultBrowserContextId) {
         const tab = await chrome.tabs.get(tabId);
         if (!tab.incognito) 
           this._defaultBrowserContextId = targetInfo.browserContextId;
       }
+
+      await onBeforeEmitAttachedToTarget?.(targetInfo!);
 
       // force browser to create a page
       this._emitAttachedToTarget(tabId, targetInfo);

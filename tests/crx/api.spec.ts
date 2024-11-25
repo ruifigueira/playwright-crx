@@ -40,12 +40,13 @@ test('should add attached page to context', async ({ runCrxTest }) => {
   });
 });
 
-test('should remove detached page from context', async ({ runCrxTest }) => {
+test('should remove detached page from context but keep tab', async ({ runCrxTest }) => {
   await runCrxTest(async ({ expect, crxApp }) => {
     const tab = await chrome.tabs.create({ url: 'about:blank' });
     const page = await crxApp.attach(tab.id!);
     await crxApp.detach(tab.id!);
     expect(crxApp.pages()).not.toContain(page);
+    expect(await chrome.tabs.get(tab.id!)).toBeTruthy();
   });
 });
 
@@ -58,7 +59,7 @@ test('should detach with page', async ({ runCrxTest }) => {
   });
 });
 
-test('should create new page', async ({ runCrxTest }) => {
+test('should create new page in window', async ({ runCrxTest }) => {
   await runCrxTest(async ({ expect, crxApp, server }) => {
     const windowTabPromise = new Promise<Tab>(x => chrome.tabs.onCreated.addListener(x));
     const window = await chrome.windows.create();
@@ -78,6 +79,18 @@ test('should create new page', async ({ runCrxTest }) => {
     const tab = await chrome.tabs.get(tabId!);
     expect(tab.url).toBe(server.EMPTY_PAGE);
     expect(tab.windowId).toBe(window.id);
+  });
+});
+
+test('should close page', async ({ runCrxTest }) => {
+  await runCrxTest(async ({ expect, crxApp, server }) => {
+    const tabPromise = new Promise<Tab>(x => chrome.tabs.onCreated.addListener(x));
+    const page = await crxApp.newPage({ url: server.EMPTY_PAGE });
+    expect(crxApp.pages()).toContain(page);
+    expect(page.url()).toBe(server.EMPTY_PAGE);
+    const { id: tabId } = await tabPromise;
+    await page.close();
+    await expect(chrome.tabs.get(tabId!)).rejects.toThrow();
   });
 });
 

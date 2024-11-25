@@ -41,43 +41,50 @@ export function tabIdFromPage(page: Page): number | undefined {
 
 export class Crx extends SdkObject {
 
+  private _transport!: CrxTransport;
+  private _browserPromise!: Promise<CRBrowser>;
+
   constructor(playwright: Playwright) {
     super(playwright, 'crx');
   }
 
   async start(options?: crxchannels.CrxStartOptions): Promise<CrxApplication> {
-    const browserLogsCollector = new RecentLogsCollector();
-    const browserProcess: BrowserProcess = {
-      onclose: undefined,
-      process: undefined,
-      close: () => Promise.resolve(),
-      kill: () => Promise.resolve(),
-    };
-    const contextOptions: channels.BrowserNewContextParams = {
-      noDefaultViewport: true,
-      viewport: undefined,
-    };
-    const browserOptions: BrowserOptions = {
-      name: 'chromium',
-      isChromium: true,
-      headful: true,
-      persistent: contextOptions,
-      browserProcess,
-      protocolLogger: helper.debugProtocolLogger(),
-      browserLogsCollector,
-      originalLaunchOptions: {},
-      artifactsDir: '/tmp/artifacts',
-      downloadsPath: '/tmp/downloads',
-      tracesDir: '/tmp/traces',
-      ...options
-    };
-    const transport = new CrxTransport();
-    const browser = await CRBrowser.connect(this.attribution.playwright, transport, browserOptions);
-    const context = options?.incognito ? await this._startIncognitoBrowserContext(browser, transport, options) : browser._defaultContext as CRBrowserContext;
-    return new CrxApplication(context, transport);
+    if (!this._transport && !this._browserPromise) {
+      const browserLogsCollector = new RecentLogsCollector();
+      const browserProcess: BrowserProcess = {
+        onclose: undefined,
+        process: undefined,
+        close: () => Promise.resolve(),
+        kill: () => Promise.resolve(),
+      };
+      const contextOptions: channels.BrowserNewContextParams = {
+        noDefaultViewport: true,
+        viewport: undefined,
+      };
+      const browserOptions: BrowserOptions = {
+        name: 'chromium',
+        isChromium: true,
+        headful: true,
+        persistent: contextOptions,
+        browserProcess,
+        protocolLogger: helper.debugProtocolLogger(),
+        browserLogsCollector,
+        originalLaunchOptions: {},
+        artifactsDir: '/tmp/artifacts',
+        downloadsPath: '/tmp/downloads',
+        tracesDir: '/tmp/traces',
+        ...options
+      };
+      this._transport = new CrxTransport();
+      this._browserPromise = CRBrowser.connect(this.attribution.playwright, this._transport, browserOptions);
+    }
+    const browser = await this._browserPromise;
+    return options?.incognito ?
+      await this._startIncognitoCrxApplication(browser, this._transport, options) :
+      new CrxApplication(this, browser._defaultContext as CRBrowserContext, this._transport);
   }
 
-  private async _startIncognitoBrowserContext(browser: CRBrowser, transport: CrxTransport, options?: crxchannels.CrxStartOptions) {
+  private async _startIncognitoCrxApplication(browser: CRBrowser, transport: CrxTransport, options?: crxchannels.CrxStartOptions) {
     const windows = await chrome.windows.getAll().catch(e => console.error(e)) ?? [];
     const windowId = windows.find(window => window.incognito)?.id;
     const incognitoTabIdPromise = new Promise<number>(resolve => {
@@ -95,14 +102,25 @@ export class Crx extends SdkObject {
       chrome.tabs.create({ url: 'about:blank', windowId });
     }
     const incognitoTabId = await incognitoTabIdPromise;
-    const { targetId, browserContextId } = await transport.attach(incognitoTabId);
-    assert(browserContextId);
-    const crPage = browser._crPages.get(targetId);
-    assert(crPage);
-    const context = new CRBrowserContext(browser, browserContextId, {});
-    await context._initialize();
-    browser._contexts.set(browserContextId, context);
-    return context;
+    let context!: CRBrowserContext;
+    await transport.attach(incognitoTabId, async ({ targetId, browserContextId }) => {
+      // ensure we create and initialize the new context before the Target.attachedToTarget event is emitted 
+      assert(browserContextId);
+      context = new CRBrowserContext(browser, browserContextId, {});
+      await context._initialize();
+      browser._contexts.set(browserContextId, context);
+    });
+    
+    const crxApp = new CrxApplication(this, context, this._transport);
+    await crxApp.attach(incognitoTabId);
+    return crxApp;
+  }
+
+  async closeAndWait() {
+    if (this._browserPromise)
+      await this._browserPromise.then(browser => browser.close({}));
+    if (this._transport)
+      await this._transport.closeAndWait();
   }
 }
 
@@ -115,18 +133,20 @@ export class CrxApplication extends SdkObject {
     ModeChanged: 'modeChanged',
   };
 
+  private _crx: Crx;
   readonly _context: CRBrowserContext;
   private _transport: CrxTransport;
   private _recorderApp?: CrxRecorderApp;
   private _player: CrxPlayer;
 
-  constructor(context: CRBrowserContext, transport: CrxTransport) {
+  constructor(crx: Crx, context: CRBrowserContext, transport: CrxTransport) {
     super(context, 'crxApplication');
     this.instrumentation.addListener({
       onPageClose: page => {
         page.hideHighlight();
       },
     }, null);
+    this._crx = crx;
     this._context = context;
     this._transport = transport;
     this._player = new CrxPlayer(context);
@@ -141,6 +161,7 @@ export class CrxApplication extends SdkObject {
       });
       this.emit(CrxApplication.Events.Attached, { page, tabId });
     });
+    context.on(BrowserContext.Events.Close, () => this.close().catch(() => {}));
     chrome.windows.onRemoved.addListener(this.onWindowRemoved);
   }
 
@@ -148,16 +169,18 @@ export class CrxApplication extends SdkObject {
     return this._context._browser as CRBrowser;
   }
 
-  _incognito() {
+  isIncognito() {
     return this._context._browser._defaultContext !== this._context;
   }
 
   _crPages() {
-    return [...this._browser()._crPages.values()];
+    return [...this._browser()._crPages.values()].filter(p => this._transport.isIncognito(p._targetId) === this.isIncognito());
   }
 
   _crPageByTargetId(targetId: string) {
-    return this._browser()._crPages.get(targetId);
+    const crPage = this._browser()._crPages.get(targetId);
+    if (crPage && this._transport.isIncognito(crPage._targetId) === this.isIncognito())
+      return crPage;
   }
 
   tabIdForPage(page: Page) {
@@ -193,7 +216,7 @@ export class CrxApplication extends SdkObject {
     const { targetId, browserContextId } = await this._transport.attach(tabId);
     const tab = await chrome.tabs.get(tabId);
 
-    if (tab.incognito !== this._incognito() || (this._context._browserContextId && browserContextId !== this._context._browserContextId)) {
+    if (tab.incognito !== this.isIncognito() || (this._context._browserContextId && browserContextId !== this._context._browserContextId)) {
       await this._transport.detach(targetId);
       throw new Error('Tab is not in the expected browser context');
     }
@@ -208,7 +231,7 @@ export class CrxApplication extends SdkObject {
     const tabs = await chrome.tabs.query(params);
     const pages = await Promise.all(tabs.map(async tab => {
       const baseUrl = chrome.runtime.getURL('');
-      if (tab.id && !tab.url?.startsWith(baseUrl))
+      if (tab.incognito === this.isIncognito() && tab.id && !tab.url?.startsWith(baseUrl))
         return await this.attach(tab.id).catch(() => {});
     }));
     return pages.filter(Boolean) as Page[];
@@ -225,20 +248,20 @@ export class CrxApplication extends SdkObject {
   async detachAll() {
     const tabs = await chrome.tabs.query({});
     await Promise.all(tabs.map(async tab => {
-      if (tab.id)
+      if (tab.id && tab.incognito === this.isIncognito())
         await this.detach(tab.id).catch(() => {});
     }));
   }
 
   async newPage(params: crxchannels.CrxApplicationNewPageParams) {
-    const windows = (await chrome.windows.getAll()).filter(w => w.incognito === this._incognito());
+    const windows = (await chrome.windows.getAll()).filter(w => w.incognito === this.isIncognito());
     const windowId = windows.find(w => !params.windowId || w.id === params.windowId)?.id;
     if (!windowId && params.windowId)
       throw new Error(`Window with id ${params.windowId} not found or bound to a different context`);
     const [tab] = await Promise.all([
       new Promise<chrome.tabs.Tab>(resolve => {
         const tabCreated = (tab: chrome.tabs.Tab) => {
-          if (tab.incognito !== this._incognito())
+          if (tab.incognito !== this.isIncognito())
             return;
           chrome.tabs.onCreated.removeListener(tabCreated);
           resolve(tab);
@@ -247,7 +270,7 @@ export class CrxApplication extends SdkObject {
       }),
       windowId ?
         chrome.tabs.create({ url: 'about:blank', ...params, windowId }) :
-        chrome.windows.create({ incognito: this._incognito(), url: 'about:blank' }),
+        chrome.windows.create({ incognito: this.isIncognito(), url: 'about:blank' }),
     ]);
     if (!tab?.id) throw new Error(`No ID found for tab`);
     return await this.attach(tab.id);
@@ -256,9 +279,8 @@ export class CrxApplication extends SdkObject {
   async close() {
     chrome.windows.onRemoved.removeListener(this.onWindowRemoved);
     await Promise.all(this._crPages().map(crPage => this._doDetach(crPage._targetId)));
-    if (!this._incognito()) {
-      await this._transport.closeAndWait();
-      await this._browser().close({});
+    if (!this.isIncognito()) {
+      await this._crx.closeAndWait();
     }
   }
 
@@ -282,6 +304,9 @@ export class CrxApplication extends SdkObject {
 
   private async _doDetach(targetId?: string) {
     if (!targetId) return;
+
+    if (this._transport.isIncognito(targetId) !== this.isIncognito())
+      throw new Error('Tab is not in the expected browser context');
 
     const crPage = this._crPageByTargetId(targetId);
     if (!crPage) return;
