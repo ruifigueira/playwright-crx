@@ -152,7 +152,6 @@ export type CrxApplicationNewPageParams = {
   windowId?: number,
   active?: boolean,
   selected?: boolean,
-  incognito?: boolean,
 };
 export type CrxApplicationNewPageOptions = {
   index?: number,
@@ -162,7 +161,6 @@ export type CrxApplicationNewPageOptions = {
   windowId?: number,
   active?: boolean,
   selected?: boolean,
-  incognito?: boolean,
 };
 export type CrxApplicationNewPageResult = {
   page: PageChannel,

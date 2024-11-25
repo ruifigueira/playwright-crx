@@ -17,7 +17,7 @@
 import type * as channels from '@protocol/channels';
 import { RecentLogsCollector } from 'playwright-core/lib/utils/debugLogger';
 import type { BrowserOptions, BrowserProcess } from 'playwright-core/lib/server/browser';
-import { CRBrowser } from 'playwright-core/lib/server/chromium/crBrowser';
+import { CRBrowser, CRBrowserContext } from 'playwright-core/lib/server/chromium/crBrowser';
 import type { CRPage } from 'playwright-core/lib/server/chromium/crPage';
 import { helper } from 'playwright-core/lib/server/helper';
 import { SdkObject } from 'playwright-core/lib/server/instrumentation';
@@ -73,9 +73,37 @@ export class Crx extends SdkObject {
     };
     const transport = new CrxTransport();
     const browser = await CRBrowser.connect(this.attribution.playwright, transport, browserOptions);
-    return new CrxApplication(browser._defaultContext!, transport);
+    const context = options?.incognito ? await this._startIncognitoBrowserContext(browser, transport, options) : browser._defaultContext as CRBrowserContext;
+    return new CrxApplication(context, transport);
   }
 
+  private async _startIncognitoBrowserContext(browser: CRBrowser, transport: CrxTransport, options?: crxchannels.CrxStartOptions) {
+    const windows = await chrome.windows.getAll().catch(e => console.error(e)) ?? [];
+    const windowId = windows.find(window => window.incognito)?.id;
+    const incognitoTabIdPromise = new Promise<number>(resolve => {
+      const tabCreated = (tab: chrome.tabs.Tab) => {
+        if (!tab.incognito || !tab.id)
+          return;
+        chrome.tabs.onCreated.removeListener(tabCreated);
+        resolve(tab.id);
+      };
+      chrome.tabs.onCreated.addListener(tabCreated);
+    });
+    if (!windowId) {
+      chrome.windows.create({ incognito: true, url: 'about:blank' });
+    } else {
+      chrome.tabs.create({ url: 'about:blank', windowId });
+    }
+    const incognitoTabId = await incognitoTabIdPromise;
+    const { targetId, browserContextId } = await transport.attach(incognitoTabId);
+    assert(browserContextId);
+    const crPage = browser._crPages.get(targetId);
+    assert(crPage);
+    const context = new CRBrowserContext(browser, browserContextId, {});
+    await context._initialize();
+    browser._contexts.set(browserContextId, context);
+    return context;
+  }
 }
 
 export class CrxApplication extends SdkObject {
@@ -87,12 +115,12 @@ export class CrxApplication extends SdkObject {
     ModeChanged: 'modeChanged',
   };
 
-  readonly _context: BrowserContext;
+  readonly _context: CRBrowserContext;
   private _transport: CrxTransport;
   private _recorderApp?: CrxRecorderApp;
   private _player: CrxPlayer;
 
-  constructor(context: BrowserContext, transport: CrxTransport) {
+  constructor(context: CRBrowserContext, transport: CrxTransport) {
     super(context, 'crxApplication');
     this.instrumentation.addListener({
       onPageClose: page => {
@@ -113,10 +141,15 @@ export class CrxApplication extends SdkObject {
       });
       this.emit(CrxApplication.Events.Attached, { page, tabId });
     });
+    chrome.windows.onRemoved.addListener(this.onWindowRemoved);
   }
 
   _browser() {
     return this._context._browser as CRBrowser;
+  }
+
+  _incognito() {
+    return this._context._browser._defaultContext !== this._context;
   }
 
   _crPages() {
@@ -157,7 +190,13 @@ export class CrxApplication extends SdkObject {
   }
 
   async attach(tabId: number): Promise<Page> {
-    const targetId = await this._transport.attach(tabId);
+    const { targetId, browserContextId } = await this._transport.attach(tabId);
+    const tab = await chrome.tabs.get(tabId);
+
+    if (tab.incognito !== this._incognito() || (this._context._browserContextId && browserContextId !== this._context._browserContextId)) {
+      await this._transport.detach(targetId);
+      throw new Error('Tab is not in the expected browser context');
+    }
     const crPage = this._crPageByTargetId(targetId);
     assert(crPage);
     const pageOrError = await crPage.pageOrError();
@@ -192,15 +231,35 @@ export class CrxApplication extends SdkObject {
   }
 
   async newPage(params: crxchannels.CrxApplicationNewPageParams) {
-    const tab = await chrome.tabs.create({ url: 'about:blank', ...params });
-    if (!tab.id) throw new Error(`No ID found for tab`);
+    const windows = (await chrome.windows.getAll()).filter(w => w.incognito === this._incognito());
+    const windowId = windows.find(w => !params.windowId || w.id === params.windowId)?.id;
+    if (!windowId && params.windowId)
+      throw new Error(`Window with id ${params.windowId} not found or bound to a different context`);
+    const [tab] = await Promise.all([
+      new Promise<chrome.tabs.Tab>(resolve => {
+        const tabCreated = (tab: chrome.tabs.Tab) => {
+          if (tab.incognito !== this._incognito())
+            return;
+          chrome.tabs.onCreated.removeListener(tabCreated);
+          resolve(tab);
+        };
+        chrome.tabs.onCreated.addListener(tabCreated);
+      }),
+      windowId ?
+        chrome.tabs.create({ url: 'about:blank', ...params, windowId }) :
+        chrome.windows.create({ incognito: this._incognito(), url: 'about:blank' }),
+    ]);
+    if (!tab?.id) throw new Error(`No ID found for tab`);
     return await this.attach(tab.id);
   }
 
   async close() {
+    chrome.windows.onRemoved.removeListener(this.onWindowRemoved);
     await Promise.all(this._crPages().map(crPage => this._doDetach(crPage._targetId)));
-    await this._transport.closeAndWait();
-    await this._browser().close({});
+    if (!this._incognito()) {
+      await this._transport.closeAndWait();
+      await this._browser().close({});
+    }
   }
 
   private async _createRecorderApp(recorder: IRecorder) {
@@ -214,6 +273,12 @@ export class CrxApplication extends SdkObject {
     }
     return this._recorderApp;
   }
+
+  private onWindowRemoved = async (windowId: number) => {
+    const windows = await chrome.windows.getAll();
+    if (!windows.some(w => w.incognito))
+      await this._context.close({});
+  };
 
   private async _doDetach(targetId?: string) {
     if (!targetId) return;
