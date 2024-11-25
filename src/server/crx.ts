@@ -31,6 +31,7 @@ import { CrxTransport } from './transport/crxTransport';
 import { BrowserContext } from 'playwright-core/lib/server/browserContext';
 import { IRecorder } from 'playwright-core/lib/server/recorder/recorderFrontend';
 import { Mode } from '@recorder/recorderTypes';
+import CrxPlayer from './recorder/crxPlayer';
 
 const kTabIdSymbol = Symbol('kTabIdSymbol');
 
@@ -89,6 +90,7 @@ export class CrxApplication extends SdkObject {
   private _browser: CRBrowser;
   private _transport: CrxTransport;
   private _recorderApp?: CrxRecorderApp;
+  private _player: CrxPlayer;
 
   constructor(browser: CRBrowser, transport: CrxTransport) {
     super(browser, 'crxApplication');
@@ -99,6 +101,7 @@ export class CrxApplication extends SdkObject {
     }, null);
     this._browser = browser;
     this._transport = transport;
+    this._player = new CrxPlayer(this._context());
     this._context().on(BrowserContext.Events.Page, (page: Page) => {
       const tabId = this.tabIdForPage(page);
       if (!tabId) return;
@@ -202,7 +205,7 @@ export class CrxApplication extends SdkObject {
 
   private async _createRecorderApp(recorder: IRecorder) {
     if (!this._recorderApp) {
-      this._recorderApp = new CrxRecorderApp(recorder as Recorder, this._context());
+      this._recorderApp = new CrxRecorderApp(recorder as Recorder, this._player);
       this._recorderApp.on('show', () => this.emit(CrxApplication.Events.RecorderShow));
       this._recorderApp.on('hide', () => this.emit(CrxApplication.Events.RecorderHide));
       this._recorderApp.on('modeChanged', (event) => {
