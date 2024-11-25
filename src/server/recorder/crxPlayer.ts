@@ -38,7 +38,7 @@ export type PerformAction = ActionInContextWithLocation | {
   location?: Location;
 };
 
-export default class Player extends EventEmitter {
+export default class CrxPlayer extends EventEmitter {
 
   private _currAction?: PerformAction;
   private _stopping?: ManualPromise;

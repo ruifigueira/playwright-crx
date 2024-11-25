@@ -15,11 +15,10 @@
  */
 import type { CallLog, ElementInfo, EventData, Mode, Source } from '@recorder/recorderTypes';
 import { EventEmitter } from 'events';
-import { BrowserContext } from 'playwright-core/lib/server/browserContext';
 import { Page } from 'playwright-core/lib/server/page';
 import type { Recorder } from 'playwright-core/lib/server/recorder';
 import type * as channels from '../../protocol/channels';
-import Player from './crxPlayer';
+import CrxPlayer from './crxPlayer';
 import { Script, toSource } from './script';
 import { LanguageGeneratorOptions } from 'playwright-core/lib/server/codegen/types';
 import { PerformAction } from './crxPlayer';
@@ -53,18 +52,16 @@ export interface RecorderWindow {
 export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   readonly wsEndpointForTest: string | undefined;
   readonly _recorder: Recorder;
-  private _context: BrowserContext;
-  private _player: Player;
+  private _player: CrxPlayer;
   private _filename?: string;
   private _jsonlSource?: Source;
   private _mode: Mode = 'none';
   private _window?: RecorderWindow;
 
-  constructor(recorder: Recorder, context: BrowserContext) {
+  constructor(recorder: Recorder, player: CrxPlayer) {
     super();
     this._recorder = recorder;
-    this._context = context;
-    this._player = new Player(this._context);
+    this._player = player;
     this._player.on('start', () => this._recorder.clearErrors());
   }
 
