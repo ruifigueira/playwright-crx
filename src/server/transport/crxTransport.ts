@@ -120,10 +120,20 @@ export class CrxTransport implements ConnectionTransport {
         // see: https://github.com/ruifigueira/playwright-crx/issues/2
         result = await Promise.resolve();
       } else if (message.method === 'Storage.getCookies') {
-        const tabIds = [...this._tabToTarget.keys()];
-        const tabId = debuggee.tabId ?? tabIds[0];
-        
-        result = await chrome.debugger.sendCommand({ tabId }, 'Storage.getCookies', { ...message.params });
+        const { browserContextId, ...params } = message.params;
+        const debuggees = this._debuggeesFromBrowserContextId(browserContextId);
+        // we need to use Network.getCookies instead because Storage.getCookies always returns the non-incognito cookies
+        // and iterate over all pages to get all cookies
+        const results = await Promise.all(debuggees.map(debuggee => this._send(debuggee, 'Network.getCookies', params)));
+        // remove duplicates
+        const cookies = new Map<string, Protocol.Network.Cookie>(results.flatMap(({ cookies }) => cookies.map(cookie => [JSON.stringify(cookie), cookie])));
+        result = { cookies: [...cookies.values()] };
+      } else if (message.method === 'Storage.setCookies') {
+        const { browserContextId, ...params } = message.params;
+        const debuggees = this._debuggeesFromBrowserContextId(browserContextId);
+        // apply to all pages
+        await Promise.all(debuggees.map(debuggee => this._send(debuggee, 'Network.setCookies', params)));
+        result = {};
       } else {
         result = await this._send(debuggee, message.method as keyof Protocol.CommandParameters, { ...message.params });
       }
@@ -286,5 +296,15 @@ export class CrxTransport implements ConnectionTransport {
         targetId,
       }
     });
+  }
+
+  private _debuggeesFromBrowserContextId(browserContextId?: string) {
+    if (!browserContextId)
+      browserContextId = this._defaultBrowserContextId;
+    if (!browserContextId)
+      throw new Error(`No attached tab found for browserContextId ${browserContextId}`);
+    return [...this._tabToTarget]
+      .filter(([, targetInfo]) => targetInfo.browserContextId === browserContextId)
+      .map(([tabId, targetInfo]) => ({ tabId, targetId: targetInfo?.targetId } satisfies chrome.debugger.Debuggee));
   }
 }
