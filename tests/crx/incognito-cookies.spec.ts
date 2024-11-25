@@ -32,3 +32,20 @@ test('should isolate cookies from incognito', async ({ runCrxTest }) => {
     await incognitoApp.close();
   });
 });
+
+test('should clear cookies if all incognito pages are closed', async ({ runCrxTest }) => {
+  await runCrxTest(async ({ crx, server, expect }) => {
+    const incognitoApp1 = await crx.start({ incognito: true });
+    const [incognitoPage1] = incognitoApp1.pages();
+    await incognitoPage1.goto(server.EMPTY_PAGE);
+    await incognitoApp1.context().addCookies([{ url: server.EMPTY_PAGE, name: 'foo', value: 'bar' }]);
+    expect(await incognitoApp1.context().cookies()).toHaveLength(1);
+    await incognitoPage1.close();
+    await incognitoApp1.close();
+    const incognitoApp2 = await crx.start({ incognito: true });
+    const [incognitoPage2] = incognitoApp2.pages();
+    await incognitoPage2.goto(server.EMPTY_PAGE);
+    expect(await incognitoApp2.context().cookies()).toHaveLength(0);
+    await incognitoApp2.close();
+  });
+});

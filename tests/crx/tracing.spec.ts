@@ -19,7 +19,8 @@ import { test, expect } from './crxTest';
 // adapted from playwright/tests/library/tracing.spec.ts
 
 test('should collect trace with resources, but no js', async ({ runCrxTestAndParseTraceRaw }) => {
-  const { events, actions } = await runCrxTestAndParseTraceRaw(async ({ page, context, server }) => {
+  const { events, actions } = await runCrxTestAndParseTraceRaw(async ({ crxApp, context, server }) => {
+    const page = await crxApp.newPage();
     await context.tracing.start({ screenshots: true, snapshots: true });
     await page.goto(server.PREFIX + '/frames/frame.html');
     await page.setContent('<button>Click</button>');
@@ -59,7 +60,8 @@ test('should collect trace with resources, but no js', async ({ runCrxTestAndPar
 });
 
 test('should not collect snapshots by default', async ({ runCrxTestAndParseTraceRaw }) => {
-  const { events, actions } = await runCrxTestAndParseTraceRaw(async ({ page, context, server }) => {
+  const { events, actions } = await runCrxTestAndParseTraceRaw(async ({ crxApp, context, server }) => {
+    const page = await crxApp.newPage();
     await context.tracing.start();
     await page.goto(server.EMPTY_PAGE);
     await page.setContent('<button>Click</button>');
@@ -113,7 +115,8 @@ test('should not include buffers in the trace', async ({ runCrxTestAndParseTrace
 
 
 test('should exclude internal pages', async ({ runCrxTestAndParseTraceRaw }) => {
-  const trace = await runCrxTestAndParseTraceRaw(async ({ page, context, server }) => {
+  const trace = await runCrxTestAndParseTraceRaw(async ({ crxApp, context, server }) => {
+    const page = await crxApp.newPage();
     await page.goto(server.EMPTY_PAGE);
 
     await context.tracing.start();
@@ -132,7 +135,8 @@ test('should exclude internal pages', async ({ runCrxTestAndParseTraceRaw }) => 
 });
 
 test('should collect two traces', async ({ runCrxTest, runCrxTestAndParseTraceRaw }) => {
-  await runCrxTest(async ({ page, context, server }) => {
+  await runCrxTest(async ({ crxApp, context, server }) => {
+    const page = await crxApp.newPage();
     await context.tracing.start({ screenshots: true, snapshots: true });
     await page.goto(server.EMPTY_PAGE);
     await page.setContent('<button>Click</button>');

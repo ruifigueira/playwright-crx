@@ -120,3 +120,12 @@ test('should fail when create new page in incognito crxApp passing on a normal w
     await expect(incognitoApp.newPage({ windowId: wnd.id! })).rejects.toThrowError();
   });
 });
+
+test('should not detach normal pages when incognito crxApp is closed', async ({ runCrxTest }) => {
+  await runCrxTest(async ({ crx, crxApp, expect }) => {
+    const incognitoApp = await crx.start({ incognito: true });
+    const page = await crxApp.newPage();
+    await incognitoApp.close();
+    expect(page.isClosed()).toBe(false);
+  });
+});

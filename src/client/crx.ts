@@ -43,7 +43,7 @@ export class Crx extends ChannelOwner<channels.CrxChannel> implements api.Crx {
       if (this._incognitoCrxPromise)
         throw new Error(`incognito crxApplication is already started`);
       this._incognitoCrxPromise = this._start(options, () => this._incognitoCrxPromise = undefined);
-      return this._incognitoCrxPromise;
+      return await this._incognitoCrxPromise;
     } else {
       if (this._crxAppPromise)
         throw new Error(`crxApplication is already started`);
