@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
+import { CrxFixtureOptions } from './crx/crxTest';
 
-export default defineConfig({
+export default defineConfig<CrxFixtureOptions>({
   testDir: '.',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
@@ -14,7 +15,10 @@ export default defineConfig({
   projects: [
     {
       name: 'Chrome',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        enabledInIncognito: true,
+      },
     },
   ],
   webServer: {

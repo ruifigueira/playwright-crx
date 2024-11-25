@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
-import { crx, expect, _debug, registerSourceMap } from 'playwright-crx/test';
+import { crx, expect, _debug, registerSourceMap, CrxApplication } from 'playwright-crx/test';
 
 registerSourceMap().catch(() => {});
 
-const _crxAppPromise = crx.start();
+let _crxAppPromise: Promise<CrxApplication> | undefined;
 
 async function _runTest(fn: (fixtures: any, arg: any) => Promise<void>, otherFixtures: any, arg: any) {
+  if (!_crxAppPromise)
+    _crxAppPromise = crx.start();
+
   const fs = crx.fs;
   const [crxApp, [ tab ]] = await Promise.all([_crxAppPromise, chrome.tabs.query({ active: true })]);
   const context = crxApp.context();
@@ -30,7 +33,6 @@ async function _runTest(fn: (fixtures: any, arg: any) => Promise<void>, otherFix
   try {
     return await fn({ expect, page, context, crx, fs, crxApp, _debug, ...otherFixtures }, arg);
   } catch (e: any) {
-    debugger;
     throw e instanceof Error ? e : new Error(e?.message);
   }
 }

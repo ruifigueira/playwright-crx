@@ -24,6 +24,12 @@ import type * as CrxTests from 'playwright-crx/test';
 import { rimraf } from 'rimraf';
 import { parseTraceRaw } from './utils';
 
+export type CrxFixtureOptions = {
+  basePath: string,
+  extensionPath: string;
+  enabledInIncognito: boolean;
+};
+
 type CrxServer = {
   EMPTY_PAGE: string;
   PREFIX: string;
@@ -51,9 +57,7 @@ type CrxTest<T, Arg = undefined> = (fixtures: CrxFixtures, arg: Arg) => Promise<
 declare const serviceWorker: ServiceWorker;
 
 // from https://playwright.dev/docs/chrome-extensions#testing
-export const test = base.extend<{
-  basePath: string,
-  extensionPath: string;
+export const test = base.extend<CrxFixtureOptions & {
   browserVersion: string;
   browserMajorVersion: number;
   createUserDataDir: () => string;
@@ -64,13 +68,16 @@ export const test = base.extend<{
   runCrxTest<T, Arg = undefined>(testFn: CrxTest<T, Arg>, arg: Arg): Promise<T>;
   runCrxTestAndParseTraceRaw: (testFn: CrxTest<string | void>) => ReturnType<typeof parseTraceRaw>;
   mockPaths: (paths: Record<string, string | { body: string, contentType?: string }>) => Promise<void>;
+  _enableInIncognito: void;
   _extensionServiceWorkerDevtools: void;
   _debug: Debug;
 }>({
 
-  basePath: path.join(__dirname, '..', '..', 'playwright', 'tests', 'assets'),
+  basePath: [path.join(__dirname, '..', '..', 'playwright', 'tests', 'assets'), { option: true }],
 
-  extensionPath: path.join(__dirname, '..', 'test-extension', 'dist'),
+  extensionPath: [path.join(__dirname, '..', 'test-extension', 'dist'), { option: true }],
+
+  enabledInIncognito: [false, { option: true }],
 
   browserVersion: async ({ browser }, run) => {
     await run(browser.version());
@@ -105,8 +112,19 @@ export const test = base.extend<{
     await context.close();
   },
 
-  extensionServiceWorker: async ({ context }, use) => {
-    const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
+  extensionServiceWorker: async ({ context, enabledInIncognito }, use) => {
+    let worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
+
+    if (enabledInIncognito) {
+      const incognitoWorker = context.waitForEvent('serviceworker');
+      const extensionId = worker.url().split('/')[2];
+      const page = await context.newPage();
+      await page.goto(`chrome://extensions/?id=${extensionId}`);
+      await page.locator('#allow-incognito').getByRole('button').click();
+      await page.getByRole('button', { name: 'Keep' }).click();
+      await page.close();
+      worker = await incognitoWorker;
+    }
 
     // wait for initialization
     await worker.evaluate(() => new Promise<void>((resolve, reject) => {
@@ -185,7 +203,7 @@ export const test = base.extend<{
     const extensionsPage = await context.newPage();
     await extensionsPage.goto(`chrome://extensions/?id=${extensionId}`);
     await extensionsPage.locator('#devMode').click();
-    await extensionsPage.getByRole('link', { name: /.*service worker.*/ }).click();
+    await extensionsPage.getByRole('link', { name: /.*service worker.*/ }).last().click();
     await extensionsPage.close();
     // ensures devtools is open (it must stop in debugger, and user will take at least 1 sec. to continue)
     while(true) {

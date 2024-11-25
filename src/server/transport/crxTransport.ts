@@ -29,8 +29,9 @@ export class CrxTransport implements ConnectionTransport {
   private _progress?: Progress;
   private _detachedPromise?: Promise<void>;
   private _targetToTab: Map<string, number>;
-  private _tabToTarget: Map<number, string>;
+  private _tabToTarget: Map<number, Protocol.Target.TargetInfo>;
   private _sessions: Map<string, number>;
+  private _defaultBrowserContextId?: string;
 
   onmessage?: (message: ProtocolResponse) => void;
   onclose?: () => void;
@@ -47,7 +48,7 @@ export class CrxTransport implements ConnectionTransport {
   }
 
   getTargetId(tabId: number) {
-    return this._tabToTarget.get(tabId);
+    return this._tabToTarget.get(tabId)?.targetId;
   }
 
   getTabId(targetId: string) {
@@ -95,7 +96,7 @@ export class CrxTransport implements ConnectionTransport {
       } else if (message.method === 'Target.createTarget') {
         const { id: tabId } = await chrome.tabs.create({ url: 'about:blank' });
         if (!tabId) throw new Error(`New tab has no id`);
-        const targetId = await this.attach(tabId);
+        const { targetId } = await this.attach(tabId);
         result = { targetId };
       } else if (message.method === 'Target.closeTarget') {
         const { targetId } = message.params;
@@ -140,35 +141,40 @@ export class CrxTransport implements ConnectionTransport {
   }
 
   async attach(tabId: number) {
-    let targetId = this._tabToTarget.get(tabId);
+    let targetInfo = this._tabToTarget.get(tabId);
 
-    if (!targetId) {
+    if (!targetInfo) {
       const debuggee = { tabId };
       await chrome.debugger.attach(debuggee, '1.3');
       this._progress?.log(`<chrome debugger attached to tab ${tabId}>`);
       // we don't create a new browser context, just return the current one
-      const { targetInfo } = await this._send(debuggee, 'Target.getTargetInfo');
-      targetId = targetInfo.targetId;
+      const response = await this._send(debuggee, 'Target.getTargetInfo');
+      targetInfo = response.targetInfo;
+      if (!this._defaultBrowserContextId) {
+        const tab = await chrome.tabs.get(tabId);
+        if (!tab.incognito) 
+          this._defaultBrowserContextId = targetInfo.browserContextId;
+      }
 
       // force browser to create a page
       this._emitAttachedToTarget(tabId, targetInfo);
 
-      this._tabToTarget.set(tabId, targetId);
-      this._targetToTab.set(targetId, tabId);
+      this._tabToTarget.set(tabId, targetInfo);
+      this._targetToTab.set(targetInfo.targetId, tabId);
     }
 
-    return targetId;
+    return targetInfo;
   }
 
   async detach(tabOrTarget: number | string) {
     const tabId = typeof tabOrTarget === 'number' ? tabOrTarget : this._targetToTab.get(tabOrTarget);
     if (!tabId) return;
 
-    const targetId = this._tabToTarget.get(tabId);
+    const targetInfo = this._tabToTarget.get(tabId);
     this._tabToTarget.delete(tabId);
-    if (targetId) {
-      this._targetToTab.delete(targetId);
-      this._emitDetachedToTarget(tabId, targetId);
+    if (targetInfo) {
+      this._targetToTab.delete(targetInfo.targetId);
+      this._emitDetachedToTarget(tabId, targetInfo.targetId);
     }
     await chrome.debugger.detach({ tabId }).catch(() => {});
     this._progress?.log(`<chrome debugger detached from tab ${tabId}>`);
@@ -220,11 +226,11 @@ export class CrxTransport implements ConnectionTransport {
     const tabId = typeof tabIdOrDebuggee === 'number' ? tabIdOrDebuggee : tabIdOrDebuggee.tabId;
     if (!tabId) return;
 
-    const targetId = this._tabToTarget.get(tabId);
+    const targetInfo = this._tabToTarget.get(tabId);
     this._tabToTarget.delete(tabId);
-    if (targetId) {
-      this._targetToTab.delete(targetId);
-      this._emitDetachedToTarget(tabId, targetId);
+    if (targetInfo) {
+      this._targetToTab.delete(targetInfo.targetId);
+      this._emitDetachedToTarget(tabId, targetInfo.targetId);
     }
   };
 
