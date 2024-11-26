@@ -18,6 +18,22 @@ import 'playwright-core/lib/protocol/validator';
 
 import { scheme, tArray, tBoolean, tChannel, tEnum, tNumber, tObject, tOptional, tString } from 'playwright-core/lib/protocol/validatorPrimitives';
 
+const tBrowserContextOptions = () => tObject({
+  colorScheme: tOptional(tEnum(['dark', 'light', 'no-preference'])),
+  locale: tOptional(tString),
+  timezoneId: tOptional(tString),
+  geolocation: tOptional(tObject({
+    latitude: tNumber,
+    longitude: tNumber,
+  })),
+  viewport: tOptional(tObject({
+    width: tNumber,
+    height: tNumber,
+  })),
+  permissions: tOptional(tArray(tString)),
+  serviceWorkers: tOptional(tEnum(['allow', 'block'])), 
+});
+
 // "override" PlaywrightInitializer, adds _crx
 scheme.PlaywrightInitializer = tObject({
   chromium: tChannel(['BrowserType']),
@@ -38,7 +54,12 @@ scheme.PlaywrightInitializer = tObject({
 scheme.CrxInitializer = tOptional(tObject({}));
 scheme.CrxStartParams = tObject({
   slowMo: tOptional(tNumber),
+  artifactsDir: tOptional(tString),
+  downloadsPath: tOptional(tString),
+  tracesDir: tOptional(tString),
   incognito: tOptional(tBoolean),
+  deviceName: tOptional(tString),
+  contextOptions: tOptional(tBrowserContextOptions()),
 });
 scheme.CrxStartResult = tObject({
   crxApplication: tChannel(['CrxApplication']),
@@ -122,3 +143,29 @@ scheme.CrxApplicationSetModeParams = tObject({
 scheme.CrxApplicationSetModeResult = tOptional(tObject({}));
 scheme.CrxApplicationCloseParams = tOptional(tObject({}));
 scheme.CrxApplicationCloseResult = tOptional(tObject({}));
+scheme.CrxApplicationListParams = tObject({
+  code: tString,
+});
+scheme.CrxApplicationListResult = tObject({
+  tests: tArray(tObject({
+    title: tString,
+    options: tOptional(tObject({
+      deviceName: tOptional(tString),
+      contextOptions: tOptional(tBrowserContextOptions()),
+    })),
+    location: tOptional(tObject({
+      file: tString,
+      line: tOptional(tNumber),
+      column: tOptional(tNumber),
+    })),
+  }))
+});
+scheme.CrxApplicationLoadParams = tObject({
+  code: tString,
+});
+scheme.CrxApplicationLoadResult = tOptional(tObject({}));
+scheme.CrxApplicationRunParams = tObject({
+  page: tOptional(tChannel(['Page'])),
+  code: tString,
+});
+scheme.CrxApplicationRunResult = tOptional(tObject({}));

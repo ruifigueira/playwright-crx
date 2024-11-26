@@ -16,7 +16,7 @@
 
 import { EventEmitter } from 'events';
 import { ChannelOwner } from 'playwright-core/lib/client/channelOwner';
-import type * as api from '../types/types';
+import * as api from '../types/types';
 import type * as channels from '../protocol/channels';
 import { Page } from 'playwright-core/lib/client/page';
 import type { BrowserContext } from 'playwright-core/lib/client/browserContext';
@@ -59,7 +59,7 @@ export class Crx extends ChannelOwner<channels.CrxChannel> implements api.Crx {
   }
 }
 
-export class CrxRecorder extends EventEmitter {
+export class CrxRecorder extends EventEmitter implements api.CrxRecorder {
   private _channel: channels.CrxApplicationChannel;
   private _hidden: boolean = true;
   private _mode: Mode = 'none';
@@ -99,6 +99,19 @@ export class CrxRecorder extends EventEmitter {
 
   async hide() {
     await this._channel.hideRecorder();
+  }
+
+  async list(code: string) {
+    const { tests } = await this._channel.list({ code });
+    return tests;
+  }
+  
+  async load(code: string) {
+    await this._channel.load({ code });
+  }
+
+  async run(code: string, page?: Page): Promise<void> {
+    await this._channel.run({ code, page: page?._channel });
   }
 }
 

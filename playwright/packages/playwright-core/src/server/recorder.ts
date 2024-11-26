@@ -232,6 +232,10 @@ export class Recorder implements InstrumentationListener, IRecorder {
       this._context.pages()[0].bringToFront().catch(() => {});
     this._refreshOverlay();
   }
+  
+  loadScript(actions: actions.ActionInContext[]) {
+    this._contextRecorder.loadScript(actions);
+  }
 
   resume() {
     this._debugger.resume(false);

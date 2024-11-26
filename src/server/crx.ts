@@ -33,6 +33,8 @@ import { IRecorder } from 'playwright-core/lib/server/recorder/recorderFrontend'
 import { Mode } from '@recorder/recorderTypes';
 import CrxPlayer from './recorder/crxPlayer';
 import { createTab } from './utils';
+import { parse } from './recorder/parser';
+import { toSource } from './recorder/script';
 
 const kTabIdSymbol = Symbol('kTabIdSymbol');
 
@@ -50,6 +52,12 @@ export class Crx extends SdkObject {
   }
 
   async start(options?: crxchannels.CrxStartOptions): Promise<CrxApplication> {
+    const { incognito, contextOptions } = options ?? {};
+    const newContextOptions: channels.BrowserNewContextOptions = {
+      noDefaultViewport: !contextOptions?.viewport,
+      viewport: contextOptions?.viewport,
+      ...contextOptions
+    };
     if (!this._transport && !this._browserPromise) {
       const browserLogsCollector = new RecentLogsCollector();
       const browserProcess: BrowserProcess = {
@@ -58,15 +66,11 @@ export class Crx extends SdkObject {
         close: () => Promise.resolve(),
         kill: () => Promise.resolve(),
       };
-      const contextOptions: channels.BrowserNewContextParams = {
-        noDefaultViewport: true,
-        viewport: undefined,
-      };
       const browserOptions: BrowserOptions = {
         name: 'chromium',
         isChromium: true,
         headful: true,
-        persistent: contextOptions,
+        persistent: newContextOptions,
         browserProcess,
         protocolLogger: helper.debugProtocolLogger(),
         browserLogsCollector,
@@ -74,18 +78,18 @@ export class Crx extends SdkObject {
         artifactsDir: '/tmp/artifacts',
         downloadsPath: '/tmp/downloads',
         tracesDir: '/tmp/traces',
-        ...options
+        ...options,
       };
       this._transport = new CrxTransport();
       this._browserPromise = CRBrowser.connect(this.attribution.playwright, this._transport, browserOptions);
     }
     const browser = await this._browserPromise;
-    return options?.incognito ?
-      await this._startIncognitoCrxApplication(browser, this._transport, options) :
+    return incognito ?
+      await this._startIncognitoCrxApplication(browser, this._transport, contextOptions) :
       new CrxApplication(this, browser._defaultContext as CRBrowserContext, this._transport);
   }
 
-  private async _startIncognitoCrxApplication(browser: CRBrowser, transport: CrxTransport, options?: crxchannels.CrxStartOptions) {
+  private async _startIncognitoCrxApplication(browser: CRBrowser, transport: CrxTransport, options?: crxchannels.CrxStartOptions['contextOptions']) {
     const windows = await chrome.windows.getAll().catch(e => console.error(e)) ?? [];
     const windowId = windows.find(window => window.incognito)?.id;
     const incognitoTabIdPromise = new Promise<number>(resolve => {
@@ -104,10 +108,10 @@ export class Crx extends SdkObject {
     }
     const incognitoTabId = await incognitoTabIdPromise;
     let context!: CRBrowserContext;
-    await transport.attach(incognitoTabId, async ({ targetId, browserContextId }) => {
+    await transport.attach(incognitoTabId, async ({ browserContextId }) => {
       // ensure we create and initialize the new context before the Target.attachedToTarget event is emitted 
       assert(browserContextId);
-      context = new CRBrowserContext(browser, browserContextId, {});
+      context = new CRBrowserContext(browser, browserContextId, options ?? {});
       await context._initialize();
       browser._contexts.set(browserContextId, context);
     });
@@ -267,6 +271,33 @@ export class CrxApplication extends SdkObject {
     if (!this.isIncognito()) {
       await this._crx.closeAndWait();
     }
+  }
+
+  list(code: string) {
+    const tests = parse(code);
+    return tests.map(({ title, options, location }) => ({ title, options, location }));
+  }
+
+  load(code: string) {
+    const [{ actions }] = parse(code);
+    this._recorderApp?._recorder.loadScript(actions);
+  }
+
+  async run(code: string, page?: Page) {
+    const [{ actions }] = parse(code);
+    await this._player.run(actions, page);
+  }
+
+  async parseForTest(originCode: string) {
+    const [{ actions, options }] = parse(originCode);
+    const jsTestSource = toSource({ filename: 'playwright-test', options, actions });
+    const source = toSource({ filename: 'test', language: 'jsonl', options, actions });
+    const code = [
+      jsTestSource.header,
+      ...jsTestSource.actions ?? [],
+      jsTestSource.footer,
+    ].join('\n');
+    return { source, code };
   }
 
   private async _createRecorderApp(recorder: IRecorder) {
