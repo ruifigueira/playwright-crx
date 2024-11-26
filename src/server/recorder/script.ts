@@ -20,6 +20,7 @@ import { Source } from "@recorder/recorderTypes";
 import { CSharpLanguageGenerator } from "playwright-core/lib/server/codegen/csharp";
 import { JavaLanguageGenerator } from "playwright-core/lib/server/codegen/java";
 import { JavaScriptLanguageGenerator } from "playwright-core/lib/server/codegen/javascript";
+import { JsonlLanguageGenerator } from "playwright-core/lib/server/codegen/jsonl";
 import { PythonLanguageGenerator } from "playwright-core/lib/server/codegen/python";
 import { Language, LanguageGeneratorOptions } from "playwright-core/lib/server/codegen/types";
 import { monotonicTime } from "playwright-core/lib/utils";
@@ -45,6 +46,7 @@ const languages = new Map([
   new CSharpLanguageGenerator('mstest'),
   new CSharpLanguageGenerator('nunit'),
   new CSharpLanguageGenerator('library'),
+  new JsonlLanguageGenerator(),
 ].map(gen => [gen.id, gen]));
 
 export function toSource(script: Script): Source {

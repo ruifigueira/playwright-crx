@@ -480,4 +480,14 @@ export interface CrxRecorder {
   mode(): "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"|"assertingSnapshot";
 
   setMode(mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"|"assertingSnapshot"): Promise<void>;
+
+  list(code: string): Promise<{
+    title: string,
+    line?: number,
+    column?: number,
+  }[]>;
+
+  load(code: string): Promise<void>;
+
+  run(code: string, page?: Page): Promise<void>;
 }

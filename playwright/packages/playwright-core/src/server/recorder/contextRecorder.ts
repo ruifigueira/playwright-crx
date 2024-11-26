@@ -208,6 +208,12 @@ export class ContextRecorder extends EventEmitter {
     }
   }
 
+  loadScript(actions: actions.ActionInContext[]): void {
+    // hack to update actions by simulating a change event.
+    // this will regenerate recorderSources.
+    this._collection.emit('change', actions);
+  }
+
   private _describeMainFrame(page: Page): actions.FrameDescription {
     return {
       pageAlias: this._pageAliases.get(page)!,

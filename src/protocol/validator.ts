@@ -122,3 +122,22 @@ scheme.CrxApplicationSetModeParams = tObject({
 scheme.CrxApplicationSetModeResult = tOptional(tObject({}));
 scheme.CrxApplicationCloseParams = tOptional(tObject({}));
 scheme.CrxApplicationCloseResult = tOptional(tObject({}));
+scheme.CrxApplicationListParams = tObject({
+  code: tString,
+});
+scheme.CrxApplicationListResult = tObject({
+  tests: tArray(tObject({
+    title: tString,
+    line: tOptional(tNumber),
+    column: tOptional(tNumber),
+  }))
+});
+scheme.CrxApplicationLoadParams = tObject({
+  code: tString,
+});
+scheme.CrxApplicationLoadResult = tOptional(tObject({}));
+scheme.CrxApplicationRunParams = tObject({
+  page: tOptional(tChannel(['Page'])),
+  code: tString,
+});
+scheme.CrxApplicationRunResult = tOptional(tObject({}));

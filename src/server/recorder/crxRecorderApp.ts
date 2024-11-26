@@ -161,7 +161,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
           break;
         case 'resume':
         case 'step':
-          this._player.play(this._getPerformActions()).catch(() => {});
+          this._player.run(this._getPerformActions()).catch(() => {});
           break;
         case 'setMode':
           const { mode } = params;

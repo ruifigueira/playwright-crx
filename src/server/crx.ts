@@ -33,6 +33,8 @@ import { IRecorder } from 'playwright-core/lib/server/recorder/recorderFrontend'
 import { Mode } from '@recorder/recorderTypes';
 import CrxPlayer from './recorder/crxPlayer';
 import { createTab } from './utils';
+import { parse } from './recorder/parser';
+import { toSource } from './recorder/script';
 
 const kTabIdSymbol = Symbol('kTabIdSymbol');
 
@@ -267,6 +269,38 @@ export class CrxApplication extends SdkObject {
     if (!this.isIncognito()) {
       await this._crx.closeAndWait();
     }
+  }
+
+  list(code: string) {
+    const tests = parse(code);
+    return tests.map(({ title, location }) => ({ title, line: location?.line, column: location?.column }));
+  }
+
+  load(code: string) {
+    const [{ actions }] = parse(code);
+    this._recorderApp?._recorder.loadScript(actions);
+  }
+
+  async run(code: string, page?: Page) {
+    const [{ actions }] = parse(code);
+    await this._player.run(actions, page);
+  }
+
+  async parseForTest(originCode: string) {
+    const [{ actions }] = parse(originCode);
+    const header = {
+      browserName: 'chromium',
+      contextOptions: {},
+      launchOptions: {},
+    };
+    const jsTestSource = toSource({ filename: 'playwright-test', header, actions });
+    const source = toSource({ filename: 'test', language: 'jsonl', header, actions });
+    const code = [
+      jsTestSource.header,
+      ...jsTestSource.actions ?? [],
+      jsTestSource.footer,
+    ].join('\n');
+    return { source, code };
   }
 
   private async _createRecorderApp(recorder: IRecorder) {
