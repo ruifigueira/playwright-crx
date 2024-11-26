@@ -15,8 +15,9 @@
  */
 
 import type { BrowserContextChannel, Channel, PageChannel, PlaywrightInitializer } from '@protocol/channels';
-import { Mode } from '@recorder/recorderTypes';
+import type { Mode } from '@recorder/recorderTypes';
 import type { CallMetadata } from 'playwright-core/lib/server/instrumentation';
+import { CrxBrowserContextOptions } from 'src/types/types';
 
 export type CrxPlaywrightInitializer = PlaywrightInitializer & { _crx: CrxChannel };
 
@@ -34,6 +35,7 @@ export type CrxStartParams = {
   downloadsPath?: string,
   tracesDir?: string,
   incognito?: boolean,
+  contextOptions?: CrxBrowserContextOptions,
 };
 export type CrxStartOptions = {
   slowMo?: number,
@@ -41,6 +43,7 @@ export type CrxStartOptions = {
   downloadsPath?: string,
   tracesDir?: string,
   incognito?: boolean,
+  contextOptions?: CrxBrowserContextOptions,
 };
 export type CrxStartResult = {
   crxApplication: CrxApplicationChannel,
@@ -71,6 +74,9 @@ export interface CrxApplicationChannel extends CrxApplicationEventTarget, Channe
   hideRecorder(params?: CrxApplicationHideRecorderParams, metadata?: CallMetadata): Promise<CrxApplicationHideRecorderResult>;
   setMode(params: CrxApplicationSetModeParams, metadata?: CallMetadata): Promise<CrxApplicationSetModeResult>;
   close(params?: CrxApplicationCloseParams, metadata?: CallMetadata): Promise<CrxApplicationCloseResult>;
+  list(params?: CrxApplicationListParams, metadata?: CallMetadata): Promise<CrxApplicationListResult>;
+  load(params?: CrxApplicationLoadParams, metadata?: CallMetadata): Promise<CrxApplicationLoadResult>;
+  run(params?: CrxApplicationRunParams, metadata?: CallMetadata): Promise<CrxApplicationRunResult>;
 }
 export type CrxApplicationHideEvent = {};
 export type CrxApplicationShowEvent = {};
@@ -197,6 +203,28 @@ export type CrxApplicationSetModeResult = void;
 export type CrxApplicationCloseParams = {};
 export type CrxApplicationCloseOptions = {};
 export type CrxApplicationCloseResult = void;
+export type CrxApplicationListParams = { code: string };
+export type CrxApplicationListOptions = { code: string };
+export type CrxApplicationListResult = {
+  tests: {
+    title: string,
+    options?: {
+      deviceName?: string,
+      contextOptions?: CrxBrowserContextOptions,
+    },
+    location?: {
+      file: string,
+      line?: number,
+      column?: number,
+    },
+  }[]
+};
+export type CrxApplicationLoadParams = { code: string };
+export type CrxApplicationLoadOptions = { code: string };
+export type CrxApplicationLoadResult = void;
+export type CrxApplicationRunParams = { page?: PageChannel, code: string };
+export type CrxApplicationRunOptions = { page?: PageChannel, code: string};
+export type CrxApplicationRunResult = void;
 
 export interface CrxApplicationEvents {
   'hide': CrxApplicationHideEvent;

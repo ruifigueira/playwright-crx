@@ -27,6 +27,7 @@ import { ActionInContextWithLocation, Location } from './script';
 import { ActionInContext, FrameDescription } from '@recorder/actions';
 import { toClickOptions } from 'playwright-core/lib/server/recorder/recorderRunner';
 import { parseAriaSnapshot } from 'playwright-core/lib/server/ariaSnapshot';
+import { serverSideCallMetadata } from 'playwright-core/lib/server';
 
 class Stopped extends Error {}
 
@@ -65,13 +66,16 @@ export default class CrxPlayer extends EventEmitter {
     await this._pause;
   }
 
-  async play(actions: PerformAction[]) {
+  async run(actions: PerformAction[], page?: Page) {
     if (this.isPlaying()) return;
+    
+    if (page && !this._context.pages().includes(page))
+      throw new Error('Page does not belong to this player context');
+
+    page = this._context.pages()[0] ?? await this._context.newPage(serverSideCallMetadata());
 
     this._pageAliases.clear();
-    const [page] = this._context.pages();
-    if (!page) return;
-    this._pageAliases.set(page, 'page');
+    this._pageAliases.set(page ?? this._context.pages()[0], 'page');
     this.emit('start');
 
     try {

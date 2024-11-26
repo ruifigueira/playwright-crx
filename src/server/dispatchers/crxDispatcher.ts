@@ -94,12 +94,25 @@ export class CrxApplicationDispatcher extends Dispatcher<CrxApplication, channel
     await this._object.hideRecorder();
   }
 
-  async setMode(params: channels.CrxApplicationSetModeParams, metadata?: CallMetadata): Promise<channels.CrxApplicationSetModeResult> {
+  async setMode(params: channels.CrxApplicationSetModeParams): Promise<channels.CrxApplicationSetModeResult> {
     this._object.setMode(params.mode);
   }
 
   async close(): Promise<void> {
     await this._object.close();
     this._dispose();
+  }
+  
+  async list(params: channels.CrxApplicationListParams): Promise<channels.CrxApplicationListResult> {
+    const tests = this._object.list(params.code);
+    return { tests };
+  }
+
+  async load(params: channels.CrxApplicationLoadParams): Promise<channels.CrxApplicationLoadResult> {
+    this._object.load(params.code);
+  }
+
+  async run(params: channels.CrxApplicationRunParams): Promise<void> {
+    await this._object.run(params.code, (params.page as PageDispatcher)?._object);
   }
 }
