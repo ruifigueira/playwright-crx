@@ -26,6 +26,8 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Te
         const result = await (this as any)[method]?.(params);
         port.postMessage({ id, method, params, result });
       } catch (error) {
+        if (error instanceof Error)
+          error = { message: error.message, stack: error.stack };
         port.postMessage({ id, method, params, error });
       }
     });
