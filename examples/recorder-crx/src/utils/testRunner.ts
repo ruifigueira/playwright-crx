@@ -1,8 +1,7 @@
 import { ReportEntry } from '@testIsomorphic/testServerInterface';
-import { crx, CrxApplication, type Page } from 'playwright-crx';
-import { TestCode } from './parser';
+import { crx } from 'playwright-crx';
 import { VirtualFs } from './virtualFs';
-
+import { JsonTestCase } from '@testIsomorphic/teleReceiver';
 
 function createGuid(): string {
   let guid = '';
@@ -21,13 +20,15 @@ export class TestRunner {
     this._reportEventDispatcher = reportEventDispatcher;
   }
 
-  async runTests(tests: { testId: string, test: TestCode }[]) {
+  async runTests(testCases: JsonTestCase[]) {
     const startTime = new Date().getTime();
 
     this._reportEventDispatcher({ method: 'onBegin', params: {} });
-
-    for (const test of tests) {
-      await this._runTest(test);
+    let status = 'passed';
+    for (const testCase of testCases) {
+      const testStatus = await this._runTest(testCase);
+      if (testStatus === 'failed')
+        status = 'failed';
     }
 
     this._reportEventDispatcher({
@@ -42,10 +43,13 @@ export class TestRunner {
     });
   }
 
-  async _runTest({ testId, test }: { testId: string, test: TestCode }) {
+  async _runTest(testCase: JsonTestCase) {
     const testRunId = createGuid();
     const startTime = new Date().getTime();
     let status = 'passed';
+
+    const testId = testCase.testId;
+    const code = await this._fs.readFile(testCase.location.file, { encoding: 'utf-8' });
 
     this._reportEventDispatcher({
       method: 'onTestBegin',
@@ -71,7 +75,7 @@ export class TestRunner {
         live: true,
       });
       await tracingImpl.startChunk();
-      await crxApp.recorder.playActions(test.actions, page);
+      await crxApp.recorder.run(code, page);
       await crxApp.context().tracing.stop({ path: `/tmp/traces/${testId}.zip` });
       const trace = new Blob([await crx.fs.promises.readFile(`/tmp/traces/${testId}.zip`)]);
       await this._fs.writeFile(`test-results/${testId}/trace.zip`, trace);
@@ -105,5 +109,6 @@ export class TestRunner {
         }
       }
     });
+    return status;
   }
 }
