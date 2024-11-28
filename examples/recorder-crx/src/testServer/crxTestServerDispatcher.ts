@@ -7,6 +7,7 @@ import { releaseVirtualFs, requestVirtualFs, saveFile, VirtualFs } from "../util
 import { CrxTestServerExtension } from "./crxTestServerTransport";
 import { SourceLocation } from "@trace-viewer/ui/modelUtil";
 import { JsonTestCase } from "@testIsomorphic/teleReceiver";
+import { TestRunner } from "../utils/testRunner";
 
 export class CrxTestServerDispatcher implements Partial<TestServerInterface>, TestServerInterfaceEventEmitters, CrxTestServerExtension {
   private _crxAppPromise: Promise<CrxApplication>;
@@ -52,9 +53,9 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Te
   async runGlobalTeardown(_: Parameters<TestServerInterface['runGlobalTeardown']>[0]): ReturnType<TestServerInterface['runGlobalTeardown']> { return { report: [], status: 'passed' } }
   
   async listTests(_: Parameters<TestServerInterface['listTests']>[0]): ReturnType<TestServerInterface['listTests']> {
-    const fs = await this._virtualFsPromise;
+    const [crxApp, fs] = await Promise.all([this._crxAppPromise, this._virtualFsPromise]);
     const report = fs ? [
-      ...await readReport(fs),
+      ...await readReport(crxApp, fs),
       { method: 'onBegin', params: {} },
       { method: 'onEnd', params: { result: { status: 'passed', startTime: new Date().getTime(), duration: 0 } } },
     ] : [];
@@ -66,26 +67,20 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Te
     if (!fs || !crxApp)
       return { status: 'failed' };
 
-    const report = await readReport(fs);
+    const report = await readReport(crxApp, fs);
     const project = report?.find(e => e.method === 'onProject')?.params.project;
     if (!project)
       return { status: 'passed' }; 
 
-    const tests: [JsonTestCase, TestCode][] = [];
-    for (const entry of project.suites.flatMap(s => s.entries)) {
-      if (testIds?.includes((entry as JsonTestCase).testId) && !!entry.location) {
-        const { file, line } = entry.location;
-        const code = await fs.readFile(file, { encoding: 'utf-8' });
-        const testSource = parse(code, file, 'data-testid');
-        tests.push([entry as JsonTestCase, testSource.tests.find(t => t.location.line === line)!]);
-      };
-    }
+    const testsCases = project.suites.flatMap(s => s.entries)
+      .filter(e => testIds?.includes((e as JsonTestCase).testId) && e.location)
+      .map(e => e as JsonTestCase);
 
     for (const reportEntry of report)
       this.dispatchEvent('report', reportEntry);
 
     const testRunner = new TestRunner(fs, reportEntry => this.dispatchEvent('report', reportEntry));     
-    await testRunner.runTests(tests.map(([testCase, test]) => ({ testId: testCase.testId, test })));
+    await testRunner.runTests(testsCases);
 
     return { status: 'passed' };
   }
@@ -132,10 +127,10 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Te
     await chrome.windows.create({ url: chrome.runtime.getURL('uiMode.html'), type: 'popup', focused: false });
   }
 
-  async sourceLocationChanged(params: { sourceLocation: SourceLocation }) {
+  async sourceLocationChanged(params: { sourceLocation?: SourceLocation }) {
     this._currentSourceLocation = params.sourceLocation;
     
-    const file = params.sourceLocation.file;
+    const file = params.sourceLocation?.file;
     if (!file || !this._virtualFsPromise)
       return;
 

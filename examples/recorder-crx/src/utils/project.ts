@@ -1,9 +1,9 @@
 import type { JsonConfig, JsonProject, JsonSuite, TeleReporterReceiver } from '@testIsomorphic/teleReceiver';
 import { sha1 } from './sha1';
 import { VirtualDirectory, VirtualFile, VirtualFs } from '../utils/virtualFs';
-import { parse } from '../../../../src/server/recorder/parser';
 import { extractTestScript, scriptToCode } from './script';
 import { loadTrace } from '../sw/crxMain';
+import type { CrxApplication } from 'playwright-crx';
 
 export class ExtendedProjectVirtualFs implements VirtualFs {
   private _wrappedFs: VirtualFs;
@@ -142,14 +142,14 @@ function generateTestId(testFilepath: string, title: string) {
   return testId;
 }
 
-async function getSuitesRecursively(fs: VirtualFs, directory: VirtualFile = fs.root()): Promise<JsonSuite[]> {
+async function getSuitesRecursively(crxApp: CrxApplication, fs: VirtualFs, directory: VirtualFile = fs.root()): Promise<JsonSuite[]> {
   const children = await fs.listFiles(directory.path);
   const files = children.filter(h => h.kind === 'file');
   const jsFiles = files.filter(f => /\.(ts|js)$/.test(f.name));
   
   const jsEntries = await Promise.all(jsFiles.map(async jsFile => {
     const code = await fs.readFile(jsFile.path, { encoding: 'utf-8' });
-    const { title } = parse(code)!;
+    const [{ title }] = await crxApp.recorder.list(code);
     return {
       title: jsFile.path,
       location: { file: jsFile.path, column: 0, line: 0 },
@@ -166,13 +166,11 @@ async function getSuitesRecursively(fs: VirtualFs, directory: VirtualFile = fs.r
   }));
   
   const directories = children.filter(h => h.kind === 'directory');
-  const directoryEntries = await Promise.all(directories.map(d => getSuitesRecursively(fs, d)));
+  const directoryEntries = await Promise.all(directories.map(d => getSuitesRecursively(crxApp, fs, d)));
   return [...jsEntries, ...directoryEntries.flatMap(e => e)];
 }
 
-export async function readReport(fs: VirtualFs): Promise<TeleReporter> {
-  const startTime = new Date().getTime(); 
-
+export async function readReport(crxApp: CrxApplication, fs: VirtualFs): Promise<TeleReporter> {
   const config = {
     configFile: '../playwright.config.ts',
     globalTimeout: 0,
@@ -183,7 +181,7 @@ export async function readReport(fs: VirtualFs): Promise<TeleReporter> {
     workers: 1
   } satisfies JsonConfig;
 
-  const suites = await getSuitesRecursively(fs);
+  const suites = await getSuitesRecursively(crxApp, fs);
 
   const project: JsonProject = {
     metadata: {},
