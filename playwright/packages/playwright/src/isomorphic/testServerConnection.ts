@@ -61,6 +61,14 @@ export class WebSocketTestServerTransport implements TestServerTransport {
   }
 }
 
+class RemoteException extends Error {
+  constructor(error: string | { message: string; stack?: string }) {
+    const { message, stack } = typeof error === 'string' ? { message: error, stack: undefined } : error;
+    super(message);
+    this.stack = stack;
+  }
+}
+
 export class TestServerConnection implements TestServerInterface, TestServerInterfaceEvents {
   readonly onClose: events.Event<void>;
   readonly onReport: events.Event<any>;
@@ -97,7 +105,7 @@ export class TestServerConnection implements TestServerInterface, TestServerInte
           return;
         this._callbacks.delete(id);
         if (error)
-          callback.reject(new Error(error));
+          callback.reject(new RemoteException(error));
         else
           callback.resolve(result);
       } else {
