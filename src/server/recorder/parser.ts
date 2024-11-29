@@ -104,9 +104,30 @@ function indexToLineColumn(code: string, index: number) {
   return { line: line + 1, column: column + 1 };
 }
 
+export type TestBrowserContextOptions =  {
+  colorScheme?: 'dark' | 'light' | 'no-preference';
+  locale?: string;
+  timezoneId?: string;
+  geolocation?: {
+    latitude: number;
+    longitude: number;
+  };
+  viewport?: {
+    width: number;
+    height: number;
+  };
+  permissions?: string[];
+  serviceWorkers?: 'allow' | 'block'; 
+};
+
+export type TestOptions = {
+  deviceName?: string;
+  contextOptions?: TestBrowserContextOptions;
+};
+
 export type Test = {
   title: string;
-  options: LanguageGeneratorOptions;
+  options?: TestOptions;
   actions: ActionInContextWithLocation[];
   location: Location;
 };
@@ -185,10 +206,8 @@ export function parse(code: string, file: string = 'test.js') {
     };
   }
 
-  type BrowserContextOptions = LanguageGeneratorOptions['contextOptions'];
-
   let deviceName: string | undefined;
-  const contextOptions: BrowserContextOptions = {};
+  const contextOptions: TestBrowserContextOptions = {};
 
   function handleOptions(options: acorn.ObjectExpression) {
     let props = options.properties;
@@ -217,16 +236,16 @@ export function parse(code: string, file: string = 'test.js') {
         const value = prop.value.value as string;
         switch (prop.key.name) {
           case 'colorScheme':
-            contextOptions.colorScheme = value as BrowserContextOptions['colorScheme'];
+            contextOptions.colorScheme = value as TestBrowserContextOptions['colorScheme'];
             break;
           case 'locale':
-            contextOptions.locale = value as BrowserContextOptions['locale'];
+            contextOptions.locale = value as TestBrowserContextOptions['locale'];
             break;
           case 'timezoneId':
-            contextOptions.timezoneId = value as BrowserContextOptions['timezoneId'];
+            contextOptions.timezoneId = value as TestBrowserContextOptions['timezoneId'];
             break;
           case 'serviceWorkers':
-            contextOptions.serviceWorkers = value as BrowserContextOptions['serviceWorkers'];
+            contextOptions.serviceWorkers = value as TestBrowserContextOptions['serviceWorkers'];
             break;
         };
       }
@@ -336,12 +355,10 @@ export function parse(code: string, file: string = 'test.js') {
       tests.push({
         title: title.value as string,
         actions,
-        options: {
-          browserName: 'chromium',
-          launchOptions: {},
+        options: deviceName || (contextOptions && Object.keys(contextOptions).length > 0) ? {
           deviceName,
           contextOptions,
-        },
+        } : undefined,
         location: { file, ...indexToLineColumn(code, callee.start) },
       });      
     },

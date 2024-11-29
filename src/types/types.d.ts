@@ -20,6 +20,22 @@ export * from '../../playwright/packages/playwright-core/types/types';
 
 export type CrxFs = IFs;
 
+export type CrxBrowserContextOptions = {
+  colorScheme?: 'dark' | 'light' | 'no-preference';
+  locale?: string;
+  timezoneId?: string;
+  geolocation?: {
+    latitude: number;
+    longitude: number;
+  };
+  viewport?: {
+    width: number;
+    height: number;
+  };
+  permissions?: string[];
+  serviceWorkers?: 'allow' | 'block'; 
+};
+
 export interface Crx {
   
   /**
@@ -41,6 +57,10 @@ export interface Crx {
      * Starts an incognito mode application.
      */
     incognito?: boolean;
+
+    deviceName?: string;
+
+    contextOptions?: CrxBrowserContextOptions;
   }): Promise<CrxApplication>;
 }
 
@@ -483,6 +503,10 @@ export interface CrxRecorder {
 
   list(code: string): Promise<{
     title: string,
+    options?: {
+      deviceName?: string;
+      contextOptions?: CrxBrowserContextOptions;
+    };
     location?: {
       file: string,
       line?: number,

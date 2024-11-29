@@ -22,8 +22,9 @@ import { JavaLanguageGenerator } from "playwright-core/lib/server/codegen/java";
 import { JavaScriptLanguageGenerator } from "playwright-core/lib/server/codegen/javascript";
 import { JsonlLanguageGenerator } from "playwright-core/lib/server/codegen/jsonl";
 import { PythonLanguageGenerator } from "playwright-core/lib/server/codegen/python";
-import { Language, LanguageGeneratorOptions } from "playwright-core/lib/server/codegen/types";
+import { Language } from "playwright-core/lib/server/codegen/types";
 import { monotonicTime } from "playwright-core/lib/utils";
+import { TestOptions } from "./parser";
 
 export type Location = CallMetadata['location'];
 export type ActionInContextWithLocation = ActionInContext & { location?: Location };
@@ -31,7 +32,7 @@ export type ActionInContextWithLocation = ActionInContext & { location?: Locatio
 export type Script = {
   filename: string;
   language?: Language;
-  options: LanguageGeneratorOptions;
+  options?: TestOptions;
   actions: ActionInContextWithLocation[];
 }
 
@@ -51,7 +52,14 @@ const languages = new Map([
 
 export function toSource(script: Script): Source {
   const langGenerator = languages.get(script.language ?? script.filename) ?? languages.get('javascript')!;
-  const header = langGenerator.generateHeader(script.options);
+  const header = langGenerator.generateHeader({
+    browserName: 'chromium',
+    launchOptions: {},
+    deviceName: script.options?.deviceName,
+    contextOptions: {
+      ...script.options?.contextOptions,
+    }
+  });
   const footer = langGenerator.generateFooter(undefined);
   const actions = script.actions.map(({ frame, action }) => {
     const actionInContext: ActionInContext = {

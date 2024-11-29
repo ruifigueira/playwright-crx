@@ -15,8 +15,9 @@
  */
 
 import type { BrowserContextChannel, Channel, PageChannel, PlaywrightInitializer } from '@protocol/channels';
-import { Mode } from '@recorder/recorderTypes';
+import type { Mode } from '@recorder/recorderTypes';
 import type { CallMetadata } from 'playwright-core/lib/server/instrumentation';
+import { CrxBrowserContextOptions } from 'src/types/types';
 
 export type CrxPlaywrightInitializer = PlaywrightInitializer & { _crx: CrxChannel };
 
@@ -34,6 +35,7 @@ export type CrxStartParams = {
   downloadsPath?: string,
   tracesDir?: string,
   incognito?: boolean,
+  contextOptions?: CrxBrowserContextOptions,
 };
 export type CrxStartOptions = {
   slowMo?: number,
@@ -41,6 +43,7 @@ export type CrxStartOptions = {
   downloadsPath?: string,
   tracesDir?: string,
   incognito?: boolean,
+  contextOptions?: CrxBrowserContextOptions,
 };
 export type CrxStartResult = {
   crxApplication: CrxApplicationChannel,
@@ -205,10 +208,14 @@ export type CrxApplicationListOptions = { code: string };
 export type CrxApplicationListResult = {
   tests: {
     title: string,
+    options?: {
+      deviceName?: string,
+      contextOptions?: CrxBrowserContextOptions,
+    },
     location?: {
       file: string,
-    line?: number,
-    column?: number,
+      line?: number,
+      column?: number,
     },
   }[]
 };
