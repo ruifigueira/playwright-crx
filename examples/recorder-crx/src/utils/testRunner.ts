@@ -1,5 +1,5 @@
 import { ReportEntry } from '@testIsomorphic/testServerInterface';
-import { crx } from 'playwright-crx';
+import { crx, CrxApplication } from 'playwright-crx';
 import { VirtualFs } from './virtualFs';
 import { JsonTestCase } from '@testIsomorphic/teleReceiver';
 
@@ -12,10 +12,12 @@ function createGuid(): string {
 }
 
 export class TestRunner {
+  private _crxApp: CrxApplication;
   private _fs: VirtualFs;
   private _reportEventDispatcher: (params: ReportEntry) => void;
   
-  constructor(fs: VirtualFs, reportEventDispatcher: (params: ReportEntry) => void) {
+  constructor(crxApp: CrxApplication, fs: VirtualFs, reportEventDispatcher: (params: ReportEntry) => void) {
+    this._crxApp = crxApp;
     this._fs = fs;
     this._reportEventDispatcher = reportEventDispatcher;
   }
@@ -50,6 +52,10 @@ export class TestRunner {
 
     const testId = testCase.testId;
     const code = await this._fs.readFile(testCase.location.file, { encoding: 'utf-8' });
+    const tests = await this._crxApp.recorder.list(code);
+    const test = tests.find(t => t.location?.line === testCase.location.line);
+    if (!test)
+      throw new Error(`Test not found: ${testCase.location.file}:${testCase.location.line}`);
 
     this._reportEventDispatcher({
       method: 'onTestBegin',
@@ -64,10 +70,17 @@ export class TestRunner {
         }
       }
     });
-    const crxApp = await crx.start({ incognito: true });
-    const [page] = crxApp.pages();
+    const incognitoCrxApp = await crx.start({
+      incognito: true,
+      deviceName: test.options?.deviceName,
+      contextOptions: {
+        viewport: { width: 1280, height: 720 },
+        ...test.options?.contextOptions
+      }
+    });
+    const [page] = incognitoCrxApp.pages();
     try {
-      const tracingImpl = (crx as any)._toImpl(crxApp.context().tracing);
+      const tracingImpl = (crx as any)._toImpl(incognitoCrxApp.context().tracing);
       await tracingImpl.start({
         name: testId,
         screenshots: true,
@@ -75,8 +88,8 @@ export class TestRunner {
         live: true,
       });
       await tracingImpl.startChunk();
-      await crxApp.recorder.run(code, page);
-      await crxApp.context().tracing.stop({ path: `/tmp/traces/${testId}.zip` });
+      await incognitoCrxApp.recorder.run(code, page);
+      await incognitoCrxApp.context().tracing.stop({ path: `/tmp/traces/${testId}.zip` });
       const trace = new Blob([await crx.fs.promises.readFile(`/tmp/traces/${testId}.zip`)]);
       await this._fs.writeFile(`test-results/${testId}/trace.zip`, trace);
     } catch (e) {
@@ -84,7 +97,7 @@ export class TestRunner {
       status = 'failed';
     }
     await page.close();
-    await crxApp.close();
+    await incognitoCrxApp.close();
     this._reportEventDispatcher({
       method: 'onTestEnd',
       params: {

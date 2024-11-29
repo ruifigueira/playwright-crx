@@ -81,7 +81,7 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Te
     for (const reportEntry of report)
       this.dispatchEvent('report', reportEntry);
 
-    const testRunner = new TestRunner(fs, reportEntry => this.dispatchEvent('report', reportEntry));     
+    const testRunner = new TestRunner(crxApp, fs, reportEntry => this.dispatchEvent('report', reportEntry));     
     await testRunner.runTests(testsCases);
 
     return { status: 'passed' };

@@ -147,24 +147,29 @@ async function getSuitesRecursively(crxApp: CrxApplication, fs: VirtualFs, direc
   const files = children.filter(h => h.kind === 'file');
   const jsFiles = files.filter(f => /\.(ts|js)$/.test(f.name));
   
-  const jsEntries = await Promise.all(jsFiles.map(async jsFile => {
+  const jsEntries: JsonSuite[] = [];
+  for (const jsFile of jsFiles) {
     const code = await fs.readFile(jsFile.path, { encoding: 'utf-8' });
-    const [{ title }] = await crxApp.recorder.list(code);
-    return {
+    const tests = await crxApp.recorder.list(code);
+    jsEntries.push(...tests.map(({ title, location }) => ({
       title: jsFile.path,
       location: { file: jsFile.path, column: 0, line: 0 },
       entries: [{
-        testId: generateTestId(jsFile.path, title!),
-        title: title!,
-        location: { file: jsFile.path, column: 0, line: 3 }, // TODO: get real location
+        testId: generateTestId(jsFile.path, title),
+        title: title,
+        location: {
+          file: jsFile.path,
+          column: location?.column ?? 0,
+          line: location?.line ?? 0
+        },
         retries: 0,
         tags: [],
         repeatEachIndex: 0,
         annotations: []
       }],
-    } satisfies JsonSuite;
-  }));
-  
+    }satisfies JsonSuite)));
+  }
+
   const directories = children.filter(h => h.kind === 'directory');
   const directoryEntries = await Promise.all(directories.map(d => getSuitesRecursively(crxApp, fs, d)));
   return [...jsEntries, ...directoryEntries.flatMap(e => e)];
