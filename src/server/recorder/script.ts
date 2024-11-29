@@ -31,7 +31,7 @@ export type ActionInContextWithLocation = ActionInContext & { location?: Locatio
 export type Script = {
   filename: string;
   language?: Language;
-  header: LanguageGeneratorOptions;
+  options: LanguageGeneratorOptions;
   actions: ActionInContextWithLocation[];
 }
 
@@ -51,7 +51,7 @@ const languages = new Map([
 
 export function toSource(script: Script): Source {
   const langGenerator = languages.get(script.language ?? script.filename) ?? languages.get('javascript')!;
-  const header = langGenerator.generateHeader(script.header);
+  const header = langGenerator.generateHeader(script.options);
   const footer = langGenerator.generateFooter(undefined);
   const actions = script.actions.map(({ frame, action }) => {
     const actionInContext: ActionInContext = {

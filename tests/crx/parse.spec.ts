@@ -17,8 +17,9 @@
 import { test as base, expect } from './crxTest';
 import type { Source } from '../../../playwright/packages/recorder/src/recorderTypes';
 import type { ActionInContext } from '../../../playwright/packages/recorder/src/actions';
+import type { LanguageGeneratorOptions } from '../../../playwright/packages/playwright-core/src/server/codegen/types';
 
-const test = base.extend<{ testParse: (code: string) => Promise<{ actions: ActionInContext[]}> }>({
+const test = base.extend<{ testParse: (code: string) => Promise<{ actions: ActionInContext[], options: LanguageGeneratorOptions }> }>({
   testParse: async ({ runCrxTest }, use) => {
     await use(async code => {
       const { source, code: resultCode } = await runCrxTest(async ({ crxApp }, code) => {
@@ -26,7 +27,9 @@ const test = base.extend<{ testParse: (code: string) => Promise<{ actions: Actio
         return crxAppImpl.parseForTest(code) as { code: string, source: Source };
       }, code);
       expect.soft(code).toEqual(resultCode);
-      return { actions: source.actions?.map(action => JSON.parse(action)) ?? [] };
+      const actions = source.actions?.map(action => JSON.parse(action)) ?? [] as ActionInContext[];
+      const options = source.header ? JSON.parse(source.header) : {} as LanguageGeneratorOptions;
+      return { actions, options };
     });
   },
 });
@@ -100,3 +103,68 @@ test('test', async ({ page }) => {
 });`;
   await expect(() => testParse(code)).rejects.toThrow();
 });
+
+test('should parse options', async ({ testParse }) => {
+  const code = `import { test, expect, devices } from '@playwright/test';
+
+test.use({
+  ...devices['iPhone 11'],
+  colorScheme: 'dark',
+  geolocation: {
+    latitude: 37.819722,
+    longitude: -122.478611
+  },
+  locale: 'pt_PT',
+  permissions: ['geolocation'],
+  serviceWorkers: 'block',
+  timezoneId: 'Europe/Rome',
+  viewport: {
+    height: 728,
+    width: 1024
+  }
+});
+
+test('test', async ({ page }) => {
+});`;
+  const { options } = await testParse(code);
+  expect(options).toMatchObject({
+    deviceName: 'iPhone 11',
+    contextOptions: {
+      colorScheme: 'dark',
+      geolocation: {
+        latitude: 37.819722,
+        longitude: -122.478611
+      },
+      locale: 'pt_PT',
+      permissions: ['geolocation'],
+      serviceWorkers: 'block',
+      timezoneId: 'Europe/Rome',
+      viewport: {
+        height: 728,
+        width: 1024
+      }
+    },
+  });
+});
+
+test('should not parse wrong options', async ({ testParse }) => {
+  const testParseWithOptions = (options: any) => {
+    return testParse(`import { test, expect } from '@playwright/test';
+
+test.use(${typeof options === 'object' ? JSON.stringify(options) : options});
+
+test('test', async ({ page }) => {});`);
+  };
+
+  await expect.soft(() => testParseWithOptions('{ ...devices }')).rejects.toThrow();
+  await expect.soft(() => testParseWithOptions('{ ...devices[1] }')).rejects.toThrow();
+  await expect.soft(() => testParseWithOptions({ colorScheme: 42 })).rejects.toThrow();
+  await expect.soft(() => testParseWithOptions({ timezoneId: 42 })).rejects.toThrow();
+  await expect.soft(() => testParseWithOptions({ locale: 42 })).rejects.toThrow();
+  await expect.soft(() => testParseWithOptions({ serviceWorkers: 42 })).rejects.toThrow();
+  await expect.soft(() => testParseWithOptions({ geolocation: '1,2' })).rejects.toThrow();
+  await expect.soft(() => testParseWithOptions({ viewport: '1,2' })).rejects.toThrow();
+  await expect.soft(() => testParseWithOptions({ viewport: { width: 42 } })).rejects.toThrow();
+  await expect.soft(() => testParseWithOptions({ geolocation: { latitude: 42 } })).rejects.toThrow();
+});
+

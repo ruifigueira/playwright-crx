@@ -287,14 +287,9 @@ export class CrxApplication extends SdkObject {
   }
 
   async parseForTest(originCode: string) {
-    const [{ actions }] = parse(originCode);
-    const header = {
-      browserName: 'chromium',
-      contextOptions: {},
-      launchOptions: {},
-    };
-    const jsTestSource = toSource({ filename: 'playwright-test', header, actions });
-    const source = toSource({ filename: 'test', language: 'jsonl', header, actions });
+    const [{ actions, options }] = parse(originCode);
+    const jsTestSource = toSource({ filename: 'playwright-test', options, actions });
+    const source = toSource({ filename: 'test', language: 'jsonl', options, actions });
     const code = [
       jsTestSource.header,
       ...jsTestSource.actions ?? [],

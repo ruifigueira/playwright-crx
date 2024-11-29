@@ -185,12 +185,129 @@ export function parse(code: string, file: string = 'test.js') {
     };
   }
 
+  type BrowserContextOptions = LanguageGeneratorOptions['contextOptions'];
+
+  let deviceName: string | undefined;
+  const contextOptions: BrowserContextOptions = {};
+
+  function handleOptions(options: acorn.ObjectExpression) {
+    let props = options.properties;
+    const [first] = options.properties;
+
+    if (first?.type === 'SpreadElement') {
+      const deviceProp = first as acorn.SpreadElement;
+      if (
+        deviceProp.argument.type !== 'MemberExpression' ||
+        deviceProp.argument.object.type !== 'Identifier' ||
+        deviceProp.argument.object.name !== 'devices' ||
+        deviceProp.argument.property.type !== 'Literal' ||
+        typeof deviceProp.argument.property.value !== 'string' 
+      )
+        throw new Error('Invalid device property');
+      deviceName = deviceProp.argument.property.value as string;
+
+      props = props.slice(1);
+    }
+
+    for (const prop of props) {
+      if (prop.type !== 'Property' || prop.key.type !== 'Identifier')
+        throw new Error('Invalid context option');
+
+      if (prop.value.type === 'Literal' && typeof prop.value.type === 'string') {
+        const value = prop.value.value as string;
+        switch (prop.key.name) {
+          case 'colorScheme':
+            contextOptions.colorScheme = value as BrowserContextOptions['colorScheme'];
+            break;
+          case 'locale':
+            contextOptions.locale = value as BrowserContextOptions['locale'];
+            break;
+          case 'timezoneId':
+            contextOptions.timezoneId = value as BrowserContextOptions['timezoneId'];
+            break;
+          case 'serviceWorkers':
+            contextOptions.serviceWorkers = value as BrowserContextOptions['serviceWorkers'];
+            break;
+        };
+      }
+
+      if (prop.value.type === 'ObjectExpression') {
+        if (prop.value.properties.length !== 2)
+          throw new Error('Invalid object');
+        if (prop.value.properties.some(p => p.type !== 'Property' || p.key.type !== 'Identifier'))
+          throw new Error('Invalid object');
+        const props = prop.value.properties as acorn.Property[];
+        const propValues = Object.fromEntries(props.map(p => {
+          let value: number;
+          if (p.value.type === 'Literal') {
+            if (typeof (p.value as acorn.Literal).value !== 'number')
+              throw new Error('Invalid number');
+            value = (p.value as acorn.Literal).value as number;
+          } else if (p.value.type === 'UnaryExpression') {
+            if (p.value.operator !== '-' || p.value.argument.type !== 'Literal' || typeof (p.value.argument as acorn.Literal).value !== 'number')
+              throw new Error('Invalid number');
+            value = -((p.value.argument as acorn.Literal).value as number);
+          } else {
+            throw new Error('Invalid number');
+          }
+
+          return [
+            (p.key as acorn.Identifier).name,
+            value,
+          ];
+        }));
+
+        switch (prop.key.name) {
+          case 'geolocation':
+            {
+              const { latitude, longitude } = propValues;
+              if (typeof latitude !== 'number' || typeof longitude !== 'number')
+                throw new Error('Invalid geolocation');
+              contextOptions.geolocation = { latitude, longitude };
+            }
+            break;
+          case 'viewport':
+            {
+              const { width, height } = propValues;
+              if (typeof width !== 'number' || typeof height !== 'number')
+                throw new Error('Invalid viewport');
+              contextOptions.viewport = { width, height };
+            }
+            break;
+        };
+      }
+
+      if (prop.key.name === 'permissions') {
+        if (prop.value.type !== 'ArrayExpression' || prop.value.elements.some(e => e?.type !== 'Literal' || typeof e.value !== 'string'))
+          throw new Error('Invalid permissions');
+
+        contextOptions.permissions = prop.value.elements.map(e => (e as acorn.Literal).value as string);
+      }
+    }
+  }
+
   const tests: Test[] = [];
 
   walk.ancestor(ast, {
-    CallExpression({ callee, arguments: [title, fn] }, _, ancestors) {
+    CallExpression({ callee, arguments: args }, _, ancestors) {
       if (ancestors.length !== 3 || ancestors[0]?.type !== 'Program' || ancestors[1]?.type !== 'ExpressionStatement')
         return;
+      if (
+        callee.type === 'MemberExpression' &&
+        callee.object.type === 'Identifier' &&
+        callee.object.name === 'test' &&
+        callee.property.type === 'Identifier' && callee.property.name === 'use' &&
+        args.length === 1 &&
+        args[0].type === 'ObjectExpression'
+      ) {
+        handleOptions(args[0]);
+        return;
+      }
+
+      if (args.length !== 2)
+        throw new Error('Invalid call expression');
+
+      const [title, fn] = args;
       if (callee.type !== 'Identifier' || callee.name !== 'test')
         throw new Error('Invalid call expression');
       if (title.type !== 'Literal' || typeof title.value !== 'string')
@@ -209,7 +326,6 @@ export function parse(code: string, file: string = 'test.js') {
         throw new Error('Invalid test function');
       if (
         fn.body.type !== 'BlockStatement' ||
-        fn.body.body.length === 0 ||
         fn.body.body.some(e => e.type !== 'ExpressionStatement' || e.expression.type !== 'AwaitExpression')
       )
         throw new Error('Invalid test function body');
@@ -223,7 +339,8 @@ export function parse(code: string, file: string = 'test.js') {
         options: {
           browserName: 'chromium',
           launchOptions: {},
-          contextOptions: {},
+          deviceName,
+          contextOptions,
         },
         location: { file, ...indexToLineColumn(code, callee.start) },
       });      

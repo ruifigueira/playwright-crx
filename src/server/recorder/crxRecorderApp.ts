@@ -190,12 +190,12 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
 
     if (!headerJson || !actionsJson || !file) return [];
 
-    const header = JSON.parse(headerJson) as LanguageGeneratorOptions;
+    const options = JSON.parse(headerJson) as LanguageGeneratorOptions;
     // check jsonl.ts for actions type
     const actions = actionsJson.map(a => JSON.parse(a)).map(
       ({ pageAlias, locator, framePath, ...action }) => ({ action, frame: { pageAlias, framePath } }
     ) as ActionInContext);
-    const script: Script = { header, actions, filename: file };
+    const script: Script = { options, actions, filename: file };
     const source = toSource(script);
 
     return script.actions.map((action, index) => {
