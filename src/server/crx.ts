@@ -273,7 +273,7 @@ export class CrxApplication extends SdkObject {
 
   list(code: string) {
     const tests = parse(code);
-    return tests.map(({ title, location }) => ({ title, line: location?.line, column: location?.column }));
+    return tests.map(({ title, location }) => ({ title, location }));
   }
 
   load(code: string) {

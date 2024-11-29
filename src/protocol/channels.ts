@@ -205,8 +205,11 @@ export type CrxApplicationListOptions = { code: string };
 export type CrxApplicationListResult = {
   tests: {
     title: string,
+    location?: {
+      file: string,
     line?: number,
     column?: number,
+    },
   }[]
 };
 export type CrxApplicationLoadParams = { code: string };

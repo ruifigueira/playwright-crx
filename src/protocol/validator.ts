@@ -128,8 +128,11 @@ scheme.CrxApplicationListParams = tObject({
 scheme.CrxApplicationListResult = tObject({
   tests: tArray(tObject({
     title: tString,
-    line: tOptional(tNumber),
-    column: tOptional(tNumber),
+    location: tOptional(tObject({
+      file: tString,
+      line: tOptional(tNumber),
+      column: tOptional(tNumber),
+    })),
   }))
 });
 scheme.CrxApplicationLoadParams = tObject({

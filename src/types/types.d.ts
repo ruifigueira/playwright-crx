@@ -483,8 +483,11 @@ export interface CrxRecorder {
 
   list(code: string): Promise<{
     title: string,
-    line?: number,
-    column?: number,
+    location?: {
+      file: string,
+      line?: number,
+      column?: number,
+    },
   }[]>;
 
   load(code: string): Promise<void>;
