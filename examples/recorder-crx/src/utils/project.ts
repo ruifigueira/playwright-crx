@@ -127,14 +127,6 @@ type TeleReporterReceiverEventMap = {
 type TeleReporterReceiverEvent = TeleReporterReceiverEventMap[keyof TeleReporterReceiverEventMap];
 export type TeleReporter = TeleReporterReceiverEvent[];
 
-function generateHexString(length: number = 32) {
-  let hexString = '';
-  for (let i = 0; i < length; i++) {
-      hexString += Math.floor(Math.random() * 16).toString(16);
-  }
-  return hexString;
-}
-
 function generateTestId(testFilepath: string, title: string) {
   const fileId = sha1(testFilepath).slice(0, 20);
   const testIdExpression = `[project=${testFilepath}\x1e${title}`;
@@ -170,7 +162,7 @@ async function getSuitesRecursively(crxApp: CrxApplication, fs: VirtualFs, direc
     }satisfies JsonSuite)));
   }
 
-  const directories = children.filter(h => h.kind === 'directory');
+  const directories = children.filter(h => h.kind === 'directory' && !['node_modules', '.git', 'test-results'].includes(h.name));
   const directoryEntries = await Promise.all(directories.map(d => getSuitesRecursively(crxApp, fs, d)));
   return [...jsEntries, ...directoryEntries.flatMap(e => e)];
 }
