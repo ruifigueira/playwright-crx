@@ -138,6 +138,6 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Te
 
     const [crxApp, fs] = await Promise.all([this._crxAppPromise, this._virtualFsPromise]);
     const content = await fs.readFile(file, { encoding: 'utf-8' });
-    await crxApp.recorder.reset(content);
+    await crxApp.recorder.load(content);
   }
 }
