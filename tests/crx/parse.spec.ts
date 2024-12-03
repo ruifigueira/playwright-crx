@@ -148,23 +148,23 @@ test('test', async ({ page }) => {
 });
 
 test('should not parse wrong options', async ({ testParse }) => {
-  const testParseWithOptions = (options: any) => {
-    return testParse(`import { test, expect } from '@playwright/test';
+  const testParseWithOptions = async (options: any) => {
+    return await testParse(`import { test, expect } from '@playwright/test';
 
 test.use(${typeof options === 'object' ? JSON.stringify(options) : options});
 
 test('test', async ({ page }) => {});`);
   };
 
-  await expect.soft(() => testParseWithOptions('{ ...devices }')).rejects.toThrow();
-  await expect.soft(() => testParseWithOptions('{ ...devices[1] }')).rejects.toThrow();
-  await expect.soft(() => testParseWithOptions({ colorScheme: 42 })).rejects.toThrow();
-  await expect.soft(() => testParseWithOptions({ timezoneId: 42 })).rejects.toThrow();
-  await expect.soft(() => testParseWithOptions({ locale: 42 })).rejects.toThrow();
-  await expect.soft(() => testParseWithOptions({ serviceWorkers: 42 })).rejects.toThrow();
-  await expect.soft(() => testParseWithOptions({ geolocation: '1,2' })).rejects.toThrow();
-  await expect.soft(() => testParseWithOptions({ viewport: '1,2' })).rejects.toThrow();
-  await expect.soft(() => testParseWithOptions({ viewport: { width: 42 } })).rejects.toThrow();
-  await expect.soft(() => testParseWithOptions({ geolocation: { latitude: 42 } })).rejects.toThrow();
+  await expect.soft(() => testParseWithOptions('{ ...devices }')).rejects.toThrow('Invalid device property (3:11)');
+  await expect.soft(() => testParseWithOptions('{ ...devices[1] }')).rejects.toThrow('Invalid device property (3:11)');
+  await expect.soft(() => testParseWithOptions({ colorScheme: 42 })).rejects.toThrow('Invalid context option (3:10)');
+  await expect.soft(() => testParseWithOptions({ timezoneId: 42 })).rejects.toThrow('Invalid context option (3:10)');
+  await expect.soft(() => testParseWithOptions({ locale: 42 })).rejects.toThrow('Invalid context option (3:10)');
+  await expect.soft(() => testParseWithOptions({ serviceWorkers: 42 })).rejects.toThrow('Invalid context option (3:10)');
+  await expect.soft(() => testParseWithOptions({ geolocation: '1,2' })).rejects.toThrow('Invalid context option (3:10)');
+  await expect.soft(() => testParseWithOptions({ viewport: '1,2' })).rejects.toThrow('Invalid context option (3:10)');
+  await expect.soft(() => testParseWithOptions({ viewport: { width: 42 } })).rejects.toThrow('Invalid context option (3:10)');
+  await expect.soft(() => testParseWithOptions({ geolocation: { latitude: 42 } })).rejects.toThrow('Invalid context option (3:10)');
 });
 

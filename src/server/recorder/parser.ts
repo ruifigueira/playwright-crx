@@ -19,7 +19,6 @@ import * as acorn from 'acorn';
 import type { AwaitExpression, Expression, ExpressionStatement } from 'acorn';
 import * as walk from 'acorn-walk';
 import { fromKeyboardModifiers } from 'playwright-core/lib/server/codegen/language';
-import type { LanguageGeneratorOptions } from 'playwright-core/lib/server/codegen/types';
 import type { SmartKeyboardModifier } from 'playwright-core/lib/server/types';
 import type { ActionInContextWithLocation, Location } from './script';
 import { locatorOrSelectorAsSelector } from 'playwright-core/lib/utils/isomorphic/locatorParser';
@@ -132,10 +131,26 @@ export type Test = {
   location: Location;
 };
 
-export function parse(code: string, file: string = 'test.js') {
+export type ErrorWithLocation = { message: string, loc?: acorn.SourceLocation };
+
+class ParserError extends Error implements ErrorWithLocation {
+  loc?: acorn.SourceLocation;
+  
+  constructor(message: string, loc?: acorn.SourceLocation) {
+    super(`${message}${loc ? ` (${loc.start.line}:${loc.start.column})` : ''}`);
+    this.loc = loc;
+  }
+}
+
+function parserError(message: string, loc?: acorn.SourceLocation | null): never {
+  throw new ParserError(message, loc ?? undefined);
+}
+
+export function parse(code: string, file: string = 'playwright-test') {
   const ast = acorn.parse(code, {
     ecmaVersion: 2020,
     sourceType: 'module',
+    locations: true,
   });
   
   function parseActionExpression(expr: AwaitExpression): ActionInContextWithLocation {
@@ -145,7 +160,7 @@ export function parse(code: string, file: string = 'test.js') {
       expr.argument.callee.type !== 'MemberExpression' ||
       expr.argument.callee.property.type !== 'Identifier'
     )
-      throw new Error('Invalid action expression');
+    parserError('Invalid action expression', expr.loc);
 
     const actionFnName = expr.argument.callee.property.name as ActionFnName;
     let locator: string | undefined;
@@ -160,10 +175,10 @@ export function parse(code: string, file: string = 'test.js') {
           expr.argument.callee.object.arguments.length !== 1 ||
           expr.argument.callee.object.arguments[0].type !== 'CallExpression'
         )
-          throw new Error('Invalid expect expression'); 
+          parserError('Invalid expect expression', expr.argument.callee.loc); 
         const expectArg = code.substring(expr.argument.callee.object.arguments[0].start, expr.argument.callee.object.arguments[0].end);
         if (!expectArg.startsWith('page.'))
-          throw new Error('Invalid expect expression');
+          parserError('Invalid expect expression', expr.argument.callee.loc);
   
         locator = expectArg.substring('page.'.length);
         expectAction = true;
@@ -176,7 +191,7 @@ export function parse(code: string, file: string = 'test.js') {
         return arg.value;
       if (arg.type === 'TemplateLiteral') {
         if (arg.quasis.length !== 1)
-          throw new Error('Invalid template literal');
+          parserError('Invalid template literal', arg.loc);
         const templateLiteral = arg.quasis[0].value.raw;
         const indent = templateLiteral.split(/\r?\n/).filter(Boolean)[0]?.match(/^( +)[^ ]/)?.[1] ?? '';
         return templateLiteral.replace(new RegExp(`^${indent}`, 'gm'), '').trim();
@@ -185,15 +200,17 @@ export function parse(code: string, file: string = 'test.js') {
     });
 
     const selector = locator ? locatorOrSelectorAsSelector('javascript', locator, 'data-testid') : undefined;
+    if (selector === '')
+      parserError('Invalid locator', expr.argument.callee.loc);
 
     if (expectAction) {
       if (!expectFnActions[actionFnName as AssertFnAction])
-        throw new Error(`Invalid asserion ${actionFnName}`);
+        parserError(`Invalid asserion ${actionFnName}`, );
       const [name, params] = expectFnActions[actionFnName as AssertFnAction](...args);
       action = { name, selector, signals: [], ...cleanParams(params) } as Action;
     } else {
       if (!fnActions[actionFnName as Exclude<ActionFnName, AssertFnAction>])
-        throw new Error(`Invalid asserion ${actionFnName}`);
+        parserError(`Invalid asserion ${actionFnName}`, expr.argument.callee.loc);
       const [name, params] = fnActions[actionFnName as Exclude<ActionFnName, AssertFnAction>](...args);
       action = { name, selector, signals: [], ...cleanParams(params) } as Action;
     }
@@ -222,7 +239,7 @@ export function parse(code: string, file: string = 'test.js') {
         deviceProp.argument.property.type !== 'Literal' ||
         typeof deviceProp.argument.property.value !== 'string' 
       )
-        throw new Error('Invalid device property');
+      parserError('Invalid device property', deviceProp.loc);
       deviceName = deviceProp.argument.property.value as string;
 
       props = props.slice(1);
@@ -230,7 +247,7 @@ export function parse(code: string, file: string = 'test.js') {
 
     for (const prop of props) {
       if (prop.type !== 'Property' || prop.key.type !== 'Identifier')
-        throw new Error('Invalid context option');
+        parserError('Invalid context option', prop.loc);
 
       if (prop.value.type === 'Literal' && typeof prop.value.type === 'string') {
         const value = prop.value.value as string;
@@ -252,22 +269,22 @@ export function parse(code: string, file: string = 'test.js') {
 
       if (prop.value.type === 'ObjectExpression') {
         if (prop.value.properties.length !== 2)
-          throw new Error('Invalid object');
+          parserError('Invalid object', prop.value.loc);
         if (prop.value.properties.some(p => p.type !== 'Property' || p.key.type !== 'Identifier'))
-          throw new Error('Invalid object');
+          parserError('Invalid object', prop.value.loc);
         const props = prop.value.properties as acorn.Property[];
         const propValues = Object.fromEntries(props.map(p => {
           let value: number;
           if (p.value.type === 'Literal') {
             if (typeof (p.value as acorn.Literal).value !== 'number')
-              throw new Error('Invalid number');
+              parserError('Invalid number', p.value.loc);
             value = (p.value as acorn.Literal).value as number;
           } else if (p.value.type === 'UnaryExpression') {
             if (p.value.operator !== '-' || p.value.argument.type !== 'Literal' || typeof (p.value.argument as acorn.Literal).value !== 'number')
-              throw new Error('Invalid number');
+              parserError('Invalid number', p.value.loc);
             value = -((p.value.argument as acorn.Literal).value as number);
           } else {
-            throw new Error('Invalid number');
+            parserError('Invalid number', p.value.loc);
           }
 
           return [
@@ -281,7 +298,7 @@ export function parse(code: string, file: string = 'test.js') {
             {
               const { latitude, longitude } = propValues;
               if (typeof latitude !== 'number' || typeof longitude !== 'number')
-                throw new Error('Invalid geolocation');
+                parserError('Invalid geolocation', prop.key.loc);
               contextOptions.geolocation = { latitude, longitude };
             }
             break;
@@ -289,7 +306,7 @@ export function parse(code: string, file: string = 'test.js') {
             {
               const { width, height } = propValues;
               if (typeof width !== 'number' || typeof height !== 'number')
-                throw new Error('Invalid viewport');
+                parserError('Invalid viewport', prop.key.loc);
               contextOptions.viewport = { width, height };
             }
             break;
@@ -298,7 +315,7 @@ export function parse(code: string, file: string = 'test.js') {
 
       if (prop.key.name === 'permissions') {
         if (prop.value.type !== 'ArrayExpression' || prop.value.elements.some(e => e?.type !== 'Literal' || typeof e.value !== 'string'))
-          throw new Error('Invalid permissions');
+          parserError('Invalid permissions', prop.value.loc);
 
         contextOptions.permissions = prop.value.elements.map(e => (e as acorn.Literal).value as string);
       }
@@ -324,13 +341,13 @@ export function parse(code: string, file: string = 'test.js') {
       }
 
       if (args.length !== 2)
-        throw new Error('Invalid call expression');
+        parserError('Invalid call expression', callee.loc);
 
       const [title, fn] = args;
       if (callee.type !== 'Identifier' || callee.name !== 'test')
-        throw new Error('Invalid call expression');
+        parserError('Invalid call expression', callee.loc);
       if (title.type !== 'Literal' || typeof title.value !== 'string')
-        throw new Error('Invalid test title');
+        parserError('Invalid test title', title.loc);
       if (
         fn.type !== 'ArrowFunctionExpression' ||
         fn.params.length !== 1 ||
@@ -342,12 +359,12 @@ export function parse(code: string, file: string = 'test.js') {
         fn.params[0].properties[0].value.type !== 'Identifier' ||
         fn.params[0].properties[0].value.name !== 'page'
       )
-        throw new Error('Invalid test function');
+        parserError('Invalid test function', fn.loc);
       if (
         fn.body.type !== 'BlockStatement' ||
         fn.body.body.some(e => e.type !== 'ExpressionStatement' || e.expression.type !== 'AwaitExpression')
       )
-        throw new Error('Invalid test function body');
+        parserError('Invalid test function body', fn.body.loc);
       
       const stms = fn.body.body as ExpressionStatement[];
       const actions = stms.map(s => s.expression as AwaitExpression).map(parseActionExpression);
