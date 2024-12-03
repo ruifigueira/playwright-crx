@@ -279,8 +279,13 @@ export class CrxApplication extends SdkObject {
   }
 
   load(code: string) {
-    const [{ actions }] = parse(code);
-    this._recorderApp?._recorder.loadScript(actions);
+    try {
+      const [{ actions, options }] = parse(code);
+      const { deviceName, contextOptions } = { deviceName: '', contextOptions: {}, ...options };
+      this._recorderApp?._recorder.loadScript({ actions, deviceName, contextOptions, text: code });
+    } catch (error) {
+      this._recorderApp?._recorder.loadScript({ actions: [], deviceName: '', contextOptions: {}, text: code, error });
+    }
   }
 
   async run(code: string, page?: Page) {
