@@ -19,13 +19,12 @@ import { Page } from 'playwright-core/lib/server/page';
 import type { Recorder } from 'playwright-core/lib/server/recorder';
 import type * as channels from '../../protocol/channels';
 import CrxPlayer from './crxPlayer';
-import { Script, toSource } from './script';
-import { LanguageGeneratorOptions } from 'playwright-core/lib/server/codegen/types';
-import { PerformAction } from './crxPlayer';
+import { ActionInContextWithLocation } from './script';
 import { PopupRecorderWindow } from './popupRecorderWindow';
 import { SidepanelRecorderWindow } from './sidepanelRecorderWindow';
 import { IRecorderApp } from 'playwright-core/lib/server/recorder/recorderFrontend';
 import { ActionInContext } from '@recorder/actions';
+import { parse } from './parser';
 
 export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'updateCallLogs', callLogs: CallLog[] }
@@ -53,8 +52,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   readonly wsEndpointForTest: string | undefined;
   readonly _recorder: Recorder;
   private _player: CrxPlayer;
-  private _filename?: string;
-  private _jsonlSource?: Source;
+  private _code?: string;
   private _mode: Mode = 'none';
   private _window?: RecorderWindow;
 
@@ -125,7 +123,17 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   }
 
   async setRunningFile(file?: string) {
+    // hack to prevent recorder from opening files
+    if (file?.endsWith('.js'))
+      return;
     this._sendMessage({ type: 'recorder', method: 'setRunningFile', file });
+  }
+
+  async setSources(sources: Source[]) {
+    // hack to prevent recorder from opening files
+    sources = sources.filter(s => s.isRecorded);
+    this._sendMessage({ type: 'recorder', method: 'setSources', sources });
+    this._code = sources.find(s => s.id === 'playwright-test')?.text;
   }
 
   async elementPicked(elementInfo: ElementInfo, userGesture?: boolean) {
@@ -144,11 +152,6 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     this._sendMessage({ type: 'recorder', method: 'updateCallLogs', callLogs });
   }
 
-  async setSources(sources: Source[]) {
-    this._jsonlSource = sources.find(s => s.id === 'jsonl');
-    this._sendMessage({ type: 'recorder', method: 'setSources', sources });
-  }
-
   async setActions(actions: ActionInContext[], sources: Source[]) {
     this._sendMessage({ type: 'recorder', method: 'setActions', actions, sources });
   }
@@ -156,12 +159,9 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   private _onMessage({ type, event, params }: EventData & { type: string }) {
     if (type === 'recorderEvent') {
       switch (event) {
-        case 'fileChanged':
-          this._filename = params.file;
-          break;
         case 'resume':
         case 'step':
-          this._player.run(this._getPerformActions()).catch(() => {});
+          this._player.run(this._getActions()).catch(() => {});
           break;
         case 'setMode':
           const { mode } = params;
@@ -184,28 +184,10 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     await this._recorder._uninstallInjectedRecorder(page);
   }
 
-  private _getPerformActions(): PerformAction[] {
-    const { header: headerJson, actions: actionsJson } = this._jsonlSource ?? {};
-    const file = this._filename;
-
-    if (!headerJson || !actionsJson || !file) return [];
-
-    const options = JSON.parse(headerJson) as LanguageGeneratorOptions;
-    // check jsonl.ts for actions type
-    const actions = actionsJson.map(a => JSON.parse(a)).map(
-      ({ pageAlias, locator, framePath, ...action }) => ({ action, frame: { pageAlias, framePath } }
-    ) as ActionInContext);
-    const script: Script = { options, actions, filename: file };
-    const source = toSource(script);
-
-    return script.actions.map((action, index) => {
-      const location = { file, line: sourceLine(source!, index) };
-      return { ...action, location };
-    });
+  private _getActions(): ActionInContextWithLocation[] {
+    if (!this._code)
+      return [];
+    const [{ actions }] = parse(this._code);
+    return actions;
   }
-}
-
-function sourceLine({ header, actions }: Source, index: number) {
-  const numLines = (str?: string) => str ? str.split(/\r?\n/).length : 0;
-  return numLines(header) + numLines(actions?.slice(0, index).filter(Boolean).join('\n')) + 1;
 }
