@@ -21,7 +21,6 @@ import { CrxApplication } from '../crx';
 import type { RootDispatcher } from 'playwright-core/lib/server/dispatchers/dispatcher';
 import { Dispatcher } from 'playwright-core/lib/server/dispatchers/dispatcher';
 import { BrowserContextDispatcher } from 'playwright-core/lib/server/dispatchers/browserContextDispatcher';
-import { CallMetadata } from '@protocol/callMetadata';
 
 export class CrxDispatcher extends Dispatcher<Crx, channels.CrxChannel, RootDispatcher> implements channels.CrxChannel {
   _type_Crx = true;
