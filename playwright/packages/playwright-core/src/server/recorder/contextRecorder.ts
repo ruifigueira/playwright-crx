@@ -30,6 +30,7 @@ import type * as actions from '@recorder/actions';
 import { ThrottledFile } from './throttledFile';
 import { RecorderCollection } from './recorderCollection';
 import { generateCode } from '../codegen/language';
+import { SourceLocation } from 'packages/trace-viewer/src/ui/modelUtil';
 
 type BindingSource = { frame: Frame, page: Page };
 
@@ -65,18 +66,17 @@ export class ContextRecorder extends EventEmitter {
     this._recorderSources = [];
     const language = params.language || context.attribution.playwright.options.sdkLanguage;
     this.setOutput(language, params.outputFile);
-
-    // Make a copy of options to modify them later.
-    const languageGeneratorOptions: LanguageGeneratorOptions = {
-      browserName: context._browser.options.name,
-      launchOptions: { headless: false, ...params.launchOptions, tracesDir: undefined },
-      contextOptions: { ...params.contextOptions },
-      deviceName: params.device,
-      saveStorage: params.saveStorage,
-    };
-
+    
     this._collection = new RecorderCollection(this._pageAliases);
     this._collection.on('change', (actions: actions.ActionInContext[]) => {
+      const languageGeneratorOptions: LanguageGeneratorOptions = {
+        browserName: context._browser.options.name,
+        launchOptions: { headless: false, ...params.launchOptions, tracesDir: undefined },
+        contextOptions: { ...params.contextOptions },
+        deviceName: params.device,
+        saveStorage: params.saveStorage,
+      };
+
       this._recorderSources = [];
       for (const languageGenerator of this._orderedLanguages) {
         const { header, footer, actionTexts, text } = generateCode(actions, languageGenerator, languageGeneratorOptions);
@@ -208,10 +208,25 @@ export class ContextRecorder extends EventEmitter {
     }
   }
 
-  loadScript(actions: actions.ActionInContext[]): void {
-    // hack to update actions by simulating a change event.
-    // this will regenerate recorderSources.
-    this._collection.emit('change', actions);
+  loadScript({ actions, deviceName, contextOptions, text, error }: { actions: actions.ActionInContext[], deviceName: string, contextOptions: LanguageGeneratorOptions['contextOptions'], text: string, error?: { message: string, loc: SourceLocation } }): Source[] {
+    if (error) {
+      const index = this._recorderSources.findIndex(source => source.id === 'playwright-test');
+      const toReplace = this._recorderSources[index];
+      this._recorderSources[index] = {
+        ...toReplace,
+        text,
+        actions: [],
+        highlight: [{ line: error.loc.line, message: error.message, type: 'error' }],
+      };
+    } else {
+      this._params.contextOptions = contextOptions;
+      this._params.device = deviceName;
+
+      this._collection.loadActions(actions);
+      // it will update recorderSources both here in contextRecorder and in the recorder
+      this._collection.emit('change', actions);
+    }
+    return Array.from(this._recorderSources);
   }
 
   private _describeMainFrame(page: Page): actions.FrameDescription {
