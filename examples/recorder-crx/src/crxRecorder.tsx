@@ -43,12 +43,11 @@ export const CrxRecorder: React.FC = ({
   const [mode, setMode] = React.useState<Mode>('none');
   const [selectedFileId, setSelectedFileId] = React.useState<string | undefined>();
   const [testServer, setTestServer] = React.useState<CrxTestServerConnection>();
+  const [editedCode, setEditedCode] = React.useState<string>();
 
   React.useEffect(() => {
     const testServer = new CrxTestServerConnection();
-    testServer.onItemSelected(location => console.log('itemSelected', location));
     setTestServer(testServer);
-    testServer.openUiMode().catch(() => {});
     return () => testServer.close();
   }, []);
 
@@ -56,7 +55,7 @@ export const CrxRecorder: React.FC = ({
     const port = chrome.runtime.connect({ name: 'crx-recorder' });
     const onMessage = (msg: any) => {
       if (!('type' in msg) || msg.type !== 'recorder') return;
-  
+
       switch (msg.method) {
         case 'setPaused': setPaused(msg.paused); break;
         case 'setMode': setMode(msg.mode); break;
@@ -95,39 +94,21 @@ export const CrxRecorder: React.FC = ({
   }, []);
 
   const requestSave = React.useCallback(() => {
-    if (!testServer || !sources.length || !selectedFileId)
+    if (!testServer)
       return;
 
-    const source = sources.find(s => s.id === selectedFileId);
+    const source = sources?.find(s => s.id === 'playwright-test');
     if (!source)
       return;
 
-    const code = [
+    const code = editedCode ?? [
       source.header,
       ...(source.actions ?? []),
       source.footer,
     ].filter(Boolean).join('\n');
 
-    const language = source.language;
-    let suggestedName: string | undefined;
-    switch (selectedFileId) {
-      case 'javascript': suggestedName = 'example.js'; break;
-      case 'playwright-test': suggestedName = 'example.spec.ts'; break;
-      case 'java-junit': suggestedName = 'TestExample.java'; break;
-      case 'java': suggestedName = 'Example.java'; break;
-      case 'python-pytest': suggestedName = 'test_example.py'; break;
-      case 'python': suggestedName = 'example.py'; break;
-      case 'python-async': suggestedName = 'example.py'; break;
-      case 'csharp-mstest': suggestedName = 'Tests.cs'; break;
-      case 'csharp-nunit': suggestedName = 'Tests.cs'; break;
-      case 'csharp': suggestedName = 'Example.cs'; break;
-    };
-
-    if (!suggestedName)
-      return;
-
-    testServer.saveScript({ code, language, suggestedName }).catch(() => {});
-  }, [sources, selectedFileId, testServer]);
+    testServer?.loadScript({ code });
+  }, [sources, selectedFileId, testServer, editedCode]);
 
   React.useEffect(() => {
     const keydownHandler = (e: KeyboardEvent) => {
@@ -166,7 +147,7 @@ export const CrxRecorder: React.FC = ({
         <ToolbarButton icon='settings-gear' title='Preferences' onClick={() => setShowPreferences(true)}></ToolbarButton>
       </Toolbar>
       </>}
-      <Recorder sources={sources} paused={paused} log={log} mode={mode} />
+      <Recorder sources={sources} paused={paused} log={log} mode={mode} onEditedCode={setEditedCode} />
     </div>
   </>;
 };
