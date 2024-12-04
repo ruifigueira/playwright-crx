@@ -22,10 +22,9 @@ import * as consoleApiSource from '../generated/consoleApiSource';
 import { isUnderTest } from '../utils';
 import { locatorOrSelectorAsSelector } from '../utils/isomorphic/locatorParser';
 import { BrowserContext } from './browserContext';
-import { type Language } from './codegen/types';
+import { LanguageGeneratorOptions, type Language } from './codegen/types';
 import { Debugger } from './debugger';
 import type { CallMetadata, InstrumentationListener, SdkObject } from './instrumentation';
-import type { Page } from './page';
 import { ContextRecorder, generateFrameSelector } from './recorder/contextRecorder';
 import type { IRecorderAppFactory, IRecorderApp, IRecorder } from './recorder/recorderFrontend';
 import { metadataToCallLog } from './recorder/recorderUtils';
@@ -34,6 +33,7 @@ import { buildFullSelector } from '../utils/isomorphic/recorderUtils';
 import { stringifySelector } from '../utils/isomorphic/selectorParser';
 import type { Frame } from './frames';
 import type { ParsedYaml } from '@isomorphic/ariaSnapshot';
+import { SourceLocation } from 'packages/trace-viewer/src/ui/modelUtil';
 
 const recorderSymbol = Symbol('recorderSymbol');
 
@@ -233,8 +233,9 @@ export class Recorder implements InstrumentationListener, IRecorder {
     this._refreshOverlay();
   }
   
-  loadScript(actions: actions.ActionInContext[]) {
-    this._contextRecorder.loadScript(actions);
+  loadScript(script: { actions: actions.ActionInContext[], deviceName: string, contextOptions: LanguageGeneratorOptions['contextOptions'], text: string, error?: { message: string, loc: SourceLocation } }) {
+    this._recorderSources = this._contextRecorder.loadScript(script);
+    this._pushAllSources();
   }
 
   resume() {

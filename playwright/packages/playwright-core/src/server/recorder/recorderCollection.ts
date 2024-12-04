@@ -41,6 +41,10 @@ export class RecorderCollection extends EventEmitter {
     this._fireChange();
   }
 
+  loadActions(actions: actions.ActionInContext[]) {
+    this._actions = actions;
+  }
+
   setEnabled(enabled: boolean) {
     this._enabled = enabled;
   }
