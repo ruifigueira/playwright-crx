@@ -27,6 +27,7 @@ const recordingModes: CrxMode[] = ['recording', 'assertingText', 'assertingVisib
 
 // we must lazy initialize it
 let crxAppPromise: Promise<CrxApplication> | undefined;
+let testServer: CrxTestServerDispatcher | undefined;
 
 const attachedTabIds = new Set<number>();
 let currentMode: CrxMode | 'detached' | undefined;
@@ -65,34 +66,41 @@ async function changeAction(tabId: number, mode?: CrxMode | 'detached') {
 // https://bugs.chromium.org/p/chromium/issues/detail?id=1450904
 chrome.tabs.onUpdated.addListener(tabId => changeAction(tabId));
 
-async function getCrxApp() {
+async function initializeInNeeded(): Promise<{ crxApp: CrxApplication, testServer: CrxTestServerDispatcher }> {
   if (!crxAppPromise) {
-    const { testIdAttributeName, targetLanguage } = await chrome.storage.sync.get(['testIdAttributeName', 'targetLanguage']);
-    crxAppPromise = crx.start().then(crxApp => {
-      crxApp.recorder.addListener('hide', async () => {
-        await crxApp.detachAll();
-      });
-      crxApp.recorder.addListener('modechanged', async ({ mode }) => {
-        await Promise.all([...attachedTabIds].map(tabId => changeAction(tabId, mode)));
-      });
-      crxApp.addListener('attached', async ({ tabId }) => {
-        attachedTabIds.add(tabId);
-        await changeAction(tabId, crxApp.recorder.mode());
-      });
-      crxApp.addListener('detached', async tabId => {
-        attachedTabIds.delete(tabId);
-        await changeAction(tabId, 'detached');
-      });
-      if (!testIdAttributeName)
-        setTestIdAttributeName(testIdAttributeName);
-      if (!language && targetLanguage)
-        language = targetLanguage;
+    crxAppPromise = crx.start();
+    testServer = new CrxTestServerDispatcher(crxAppPromise);
+    const [crxApp, { testIdAttributeName, targetLanguage }] = await Promise.all([
+      crxAppPromise,
+      chrome.storage.sync.get(['testIdAttributeName', 'targetLanguage']),
+    ]);
 
-      return crxApp;
+    crxApp.recorder.addListener('hide', async () => {
+      await crxApp.detachAll();
     });
+    crxApp.recorder.addListener('modechanged', async ({ mode }) => {
+      await Promise.all([...attachedTabIds].map(tabId => changeAction(tabId, mode)));
+    });
+    crxApp.addListener('attached', async ({ tabId }) => {
+      attachedTabIds.add(tabId);
+      await changeAction(tabId, crxApp.recorder.mode());
+    });
+    crxApp.addListener('detached', async tabId => {
+      attachedTabIds.delete(tabId);
+      await changeAction(tabId, 'detached');
+    });
+    if (!testIdAttributeName)
+      setTestIdAttributeName(testIdAttributeName);
+    if (!language && targetLanguage)
+      language = targetLanguage;
   }
 
-  return await crxAppPromise;
+  return { crxApp: await crxAppPromise, testServer: testServer! };
+}
+
+async function getCrxApp() {
+  const { crxApp } = await initializeInNeeded();
+  return crxApp;
 }
 
 async function attach(tab: chrome.tabs.Tab, mode?: Mode) {
@@ -111,15 +119,14 @@ async function attach(tab: chrome.tabs.Tab, mode?: Mode) {
   try {
     if (crxApp.recorder.isHidden()) {
       await crxApp.recorder.show({
-        mode: mode ?? 'recording',
         language,
         window: { type: sidepanel ? 'sidepanel' : 'popup', url: 'index.html' },
       });
     }
 
-    await crxApp.attach(tabId);
     if (mode)
       await crxApp.recorder.setMode(mode);
+    await crxApp.attach(tabId);
   } catch (e) {
     // we just open a new page and attach it
     await crxApp.newPage();
@@ -132,10 +139,11 @@ async function setTestIdAttributeName(testIdAttributeName: string) {
   playwright.selectors.setTestIdAttribute(testIdAttributeName);
 }
 
-chrome.action.onClicked.addListener(() => {
-  getCrxApp()
-    .then(() => chrome.windows.create({ url: chrome.runtime.getURL('uiMode.html'), focused: true, type: 'popup' }))
-    .catch(() => {});
+chrome.action.onClicked.addListener(tab => {
+  Promise.all([
+    initializeInNeeded().then(({ testServer }) => testServer.openUiMode()),
+    attach(tab, 'standby'),
+  ])
 });
 
 chrome.contextMenus.create({
@@ -170,15 +178,6 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
     await attach(tab, 'inspecting');
   else if (command === 'record')
     await attach(tab, 'recording');
-});
-
-let testServer: CrxTestServerDispatcher | undefined;
-chrome.runtime.onConnect.addListener(async port => {
-  if (port.name !== 'crx-test-server' || !crxAppPromise)
-    return;
-  if (!testServer)
-    testServer = new CrxTestServerDispatcher(crxAppPromise);
-  testServer.addPort(port);
 });
 
 // for testing
