@@ -30,7 +30,6 @@ export class JsonlLanguageGenerator implements LanguageGenerator {
       ...actionInContext.action,
       pageAlias: actionInContext.frame.pageAlias,
       locator,
-      framePath: actionInContext.frame.framePath,
     };
     return JSON.stringify(entry);
   }
