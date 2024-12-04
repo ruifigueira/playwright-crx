@@ -14,9 +14,26 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Te
   private _virtualFsPromise: Promise<VirtualFs> | undefined;
   private _ports: Set<chrome.runtime.Port> = new Set();
   private _currentSourceLocation?: SourceLocation;
+  private _uiModeWindowIdPromise?: Promise<number>;
 
   constructor(crxAppPromise: Promise<CrxApplication>) {
     this._crxAppPromise = crxAppPromise;
+    const onRemove = (windowId: number) => {
+      if (!this._uiModeWindowIdPromise)
+        return;
+
+      this._uiModeWindowIdPromise.then(id => {
+        if (id === windowId)
+          this._uiModeWindowIdPromise = undefined;
+        chrome.windows.onRemoved.removeListener(onRemove);
+      });
+    };
+    chrome.windows.onRemoved.addListener(onRemove);
+    chrome.runtime.onConnect.addListener(port => {
+      if (port.name !== 'crx-test-server')
+        return;
+      this.addPort(port);
+    });
   }
 
   addPort(port: chrome.runtime.Port) {
@@ -126,7 +143,12 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Te
   }
 
   async openUiMode() {
-    await chrome.windows.create({ url: chrome.runtime.getURL('uiMode.html'), type: 'popup', focused: false });
+    if (this._uiModeWindowIdPromise)
+      return;
+    // initialize playwright-crx
+    this._uiModeWindowIdPromise = chrome.windows.create({ url: chrome.runtime.getURL('uiMode.html'), focused: true, type: 'popup' })
+        .then(({ id }) => id!);
+    await this._uiModeWindowIdPromise;
   }
 
   async sourceLocationChanged(params: { sourceLocation?: SourceLocation }) {
