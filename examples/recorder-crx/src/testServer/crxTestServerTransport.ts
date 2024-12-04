@@ -36,6 +36,10 @@ export class CrxTestServerConnection extends TestServerConnection implements Crx
     await this._sendMessage('saveScript', params);
   }
 
+  async loadScript(params: { code: string }) {
+    await this._sendMessage('loadScript', params);
+  }
+
   async saveStorageState() {
     await this._sendMessage('saveStorageState');
   }

@@ -119,6 +119,11 @@ export class CrxTestServerDispatcher implements Partial<TestServerInterface>, Te
       return;
     await fs.writeFile(path, params.code);
   }
+
+  async loadScript(params: { code: string }) {
+    const crxApp = await this._crxAppPromise;
+    await crxApp.recorder.load(params.code);
+  }
   
   async saveStorageState() {
     const crxApp = await this._crxAppPromise;
