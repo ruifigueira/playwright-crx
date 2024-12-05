@@ -34,7 +34,8 @@ import { Mode } from '@recorder/recorderTypes';
 import CrxPlayer from './recorder/crxPlayer';
 import { createTab } from './utils';
 import { parse } from './recorder/parser';
-import { toSource } from './recorder/script';
+import { generateCode } from 'playwright-core/lib/server/codegen/language';
+import { languageSet } from 'playwright-core/lib/server/codegen/languages';
 
 const kTabIdSymbol = Symbol('kTabIdSymbol');
 
@@ -295,14 +296,9 @@ export class CrxApplication extends SdkObject {
 
   async parseForTest(originCode: string) {
     const [{ actions, options }] = parse(originCode);
-    const jsTestSource = toSource({ filename: 'playwright-test', options, actions });
-    const source = toSource({ filename: 'test', language: 'jsonl', options, actions });
-    const code = [
-      jsTestSource.header,
-      ...jsTestSource.actions ?? [],
-      jsTestSource.footer,
-    ].join('\n');
-    return { source, code };
+    const jsLanguage = [...languageSet()].find(l => l.id === 'playwright-test');
+    const code = generateCode(actions, jsLanguage!, { browserName: '', launchOptions: {}, contextOptions: {}, ...options }).text;
+    return { actions, options, code };
   }
 
   private async _createRecorderApp(recorder: IRecorder) {
