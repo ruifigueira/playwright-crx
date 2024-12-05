@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
-import type { Action, AssertAction, AssertCheckedAction } from '@recorder/actions';
+import type { Action, ActionInContext, AssertAction, AssertCheckedAction } from '@recorder/actions';
 import * as acorn from 'acorn';
 import type { AwaitExpression, Expression, ExpressionStatement } from 'acorn';
 import * as walk from 'acorn-walk';
 import { fromKeyboardModifiers } from 'playwright-core/lib/server/codegen/language';
 import type { SmartKeyboardModifier } from 'playwright-core/lib/server/types';
-import type { ActionInContextWithLocation, Location } from './script';
 import { locatorOrSelectorAsSelector } from 'playwright-core/lib/utils/isomorphic/locatorParser';
+import { CallMetadata } from '@protocol/callMetadata';
+
+export type Location = CallMetadata['location'];
+export type ActionInContextWithLocation = ActionInContext & { location?: Location };
 
 type AssertFnAction =
   | 'toHaveText'
@@ -384,6 +387,16 @@ export function parse(code: string, file: string = 'playwright-test') {
       )
         parserError('Invalid test function', fn.loc);
       
+      const actions: ActionInContextWithLocation[] = [];
+
+      // it has page fixture, let's push a openPage action
+      actions.push({
+        action: { name: 'openPage', signals: [], url: '' },
+        frame: { pageAlias: 'page', framePath: [] },
+        location: { file, ...indexToLineColumn(code, fn.start) },
+        startTime: 0
+      });
+
       if (
         fn.body.type !== 'BlockStatement' ||
         !fn.body.body.every(e => (e.type === 'ExpressionStatement' && e.expression.type === 'AwaitExpression') || e.type === 'VariableDeclaration')
@@ -392,7 +405,7 @@ export function parse(code: string, file: string = 'playwright-test') {
       
       const stms = fn.body.body as (ExpressionStatement | acorn.VariableDeclaration)[];
       const pages = new Set<string>(['page']);
-      const actions = stms.map(s => s.type === 'VariableDeclaration' ? s : s.expression as AwaitExpression).map(a => parseActionExpression(a, pages));
+      actions.push(...stms.map(s => s.type === 'VariableDeclaration' ? s : s.expression as AwaitExpression).map(a => parseActionExpression(a, pages)));
 
       tests.push({
         title: title.value as string,

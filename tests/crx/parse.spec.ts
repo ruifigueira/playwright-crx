@@ -62,6 +62,7 @@ test('test', async ({ page }) => {
 });`;
   const { actions } = await testParse(code);
   expect(actions).toMatchObject([
+    { name: 'openPage' },
     { name: 'navigate' },
     { name: 'click', selector: 'internal:attr=[placeholder="What needs to be done?"i]' },
     { name: 'fill', selector: 'internal:attr=[placeholder="What needs to be done?"i]' },
@@ -84,6 +85,7 @@ test('test', async ({ page }) => {
 });`;
   const { actions } = await testParse(code);
   expect(actions).toMatchObject([
+    { name: 'openPage' },
     { name: 'select', selector: 'select1', options: ['a'] },
     { name: 'select', selector: 'select2', options: ['a', 'b'] },
   ]);
@@ -196,7 +198,8 @@ test('should parse mouse options', async ({ testParse }) => {
 test('test', async ({ page }) => {
   await page.getByRole('button').${actionName}(${options});
 });`, true);
-      const { button, modifiers, clickCount, position } = (actions[0] ?? {}) as any;
+      // first action is openPage, so we need to get the second action
+      const { button, modifiers, clickCount, position } = (actions[1] ?? {}) as any;
       return { button, modifiers, clickCount, position };
   };
   const clickDefaults = { button: 'left', modifiers: 0, clickCount: 1, position: undefined };
@@ -226,6 +229,7 @@ test('test', async ({ page, context }) => {
 });`);
 
   expect.soft(actions).toMatchObject([
+    { pageAlias: 'page', name: 'openPage' },
     { pageAlias: 'newPage', name: 'openPage' },
     { pageAlias: 'newPage', name: 'navigate', url: 'https://example.com' },
     { pageAlias: 'newPage', name: 'assertText',  selector: 'internal:role=heading', text: 'Example Domain' },
