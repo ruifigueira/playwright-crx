@@ -15,7 +15,7 @@
  */
 
 import type * as channels from '@protocol/channels';
-import type { CallLog, CallLogStatus, ElementInfo, EventData, Mode, OverlayState, Source, UIState } from '@recorder/recorderTypes';
+import type { CallLog, CallLogStatus, ElementInfo, EventData, Mode, OverlayState, Source, SourceHighlight, UIState } from '@recorder/recorderTypes';
 import * as fs from 'fs';
 import type { Point } from '../common/types';
 import * as consoleApiSource from '../generated/consoleApiSource';
@@ -233,7 +233,7 @@ export class Recorder implements InstrumentationListener, IRecorder {
     this._refreshOverlay();
   }
   
-  loadScript(script: { actions: actions.ActionInContext[], deviceName: string, contextOptions: LanguageGeneratorOptions['contextOptions'], text: string, error?: { message: string, loc: SourceLocation } }) {
+  loadScript(script: { actions: actions.ActionInContext[], deviceName: string, contextOptions: LanguageGeneratorOptions['contextOptions'], text: string, highlight?: SourceHighlight[] }) {
     this._recorderSources = this._contextRecorder.loadScript(script);
     this._pushAllSources();
   }

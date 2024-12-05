@@ -140,6 +140,7 @@ export type Test = {
 };
 
 export type ErrorWithLocation = { message: string, loc?: acorn.SourceLocation };
+export type SourceLocation = acorn.SourceLocation;
 
 class ParserError extends Error implements ErrorWithLocation {
   loc?: acorn.SourceLocation;

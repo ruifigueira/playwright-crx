@@ -15,7 +15,7 @@
  */
 
 import type * as channels from '@protocol/channels';
-import type { Source } from '@recorder/recorderTypes';
+import type { Source, SourceHighlight } from '@recorder/recorderTypes';
 import { EventEmitter } from 'events';
 import * as recorderSource from '../../generated/pollingRecorderSource';
 import { eventsHelper, monotonicTime, quoteCSSAttributeValue, type RegisteredListener } from '../../utils';
@@ -30,7 +30,6 @@ import type * as actions from '@recorder/actions';
 import { ThrottledFile } from './throttledFile';
 import { RecorderCollection } from './recorderCollection';
 import { generateCode } from '../codegen/language';
-import { SourceLocation } from 'packages/trace-viewer/src/ui/modelUtil';
 
 type BindingSource = { frame: Frame, page: Page };
 
@@ -208,15 +207,15 @@ export class ContextRecorder extends EventEmitter {
     }
   }
 
-  loadScript({ actions, deviceName, contextOptions, text, error }: { actions: actions.ActionInContext[], deviceName: string, contextOptions: LanguageGeneratorOptions['contextOptions'], text: string, error?: { message: string, loc: SourceLocation } }): Source[] {
-    if (error) {
+  loadScript({ actions, deviceName, contextOptions, text, highlight }: { actions: actions.ActionInContext[], deviceName: string, contextOptions: LanguageGeneratorOptions['contextOptions'], text: string, highlight?: SourceHighlight[] }): Source[] {
+    if (highlight) {
       const index = this._recorderSources.findIndex(source => source.id === 'playwright-test');
       const toReplace = this._recorderSources[index];
       this._recorderSources[index] = {
         ...toReplace,
         text,
         actions: [],
-        highlight: [{ line: error.loc.line, message: error.message, type: 'error' }],
+        highlight,
       };
     } else {
       this._params.contextOptions = contextOptions;
