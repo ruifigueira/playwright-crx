@@ -10,7 +10,7 @@
         "--disable-extensions-except=${workspaceFolder}/examples/recorder-crx/dist"
       ],
       "webRoot": "${workspaceFolder}",
-      "url": "https://demo.playwright.dev/todomvc/",
+      "url": "chrome://extensions/",
     },
   ]
 }
