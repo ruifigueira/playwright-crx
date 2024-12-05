@@ -105,7 +105,7 @@ test('should play all supported actions except setInputFiles', async ({ context,
     `► page.getByRole('textbox') .press() ✅ — XXms`,
     `► page.getByRole('combobox') .selectOption() ✅ — XXms`,
     `► page.getByRole('checkbox') .uncheck() ✅ — XXms`,
-    `► browserContext.newPage( about:blank ) ✅ — XXms`,
+    `► browserContext.newPage ✅ — XXms`,
     `► page.close ✅ — XXms`,
   ]);
 });

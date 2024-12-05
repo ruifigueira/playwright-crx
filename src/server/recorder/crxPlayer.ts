@@ -121,7 +121,7 @@ export default class CrxPlayer extends EventEmitter {
       
       switch (actionInContext.action.name) {
         case 'pause': traceParams = { method: 'pause', params: {}, apiName: 'page.pause' }; break;
-        case 'openPage': traceParams = { method: 'newPage', params: { url: actionInContext.action.url }, apiName: 'browserContext.newPage' }; break;
+        case 'openPage': traceParams = { method: 'newPage', params: {}, apiName: 'browserContext.newPage' }; break;
         case 'closePage': traceParams = { method: 'close', params: {}, apiName: 'page.close' }; break;
         default: traceParams = traceParamsForAction(actionInContext as ActionInContext); break;
       }
