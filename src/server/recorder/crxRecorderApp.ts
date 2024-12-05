@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import type { CallLog, ElementInfo, EventData, Mode, Source } from '@recorder/recorderTypes';
+import type { CallLog, ElementInfo, EventData, Mode, Source, SourceHighlight } from '@recorder/recorderTypes';
 import { EventEmitter } from 'events';
 import { Page } from 'playwright-core/lib/server/page';
 import type { Recorder } from 'playwright-core/lib/server/recorder';
@@ -37,7 +37,7 @@ export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'elementPicked', elementInfo: ElementInfo, userGesture?: boolean }
 );
 
-export type RecorderEventData =  EventData & { type: string };
+export type RecorderEventData =  (EventData | { event: 'codeChanged', params: any }) & { type: string };
 
 export interface RecorderWindow {
   isClosed(): boolean;
@@ -55,8 +55,10 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   private _player: CrxPlayer;
   private _filename?: string;
   private _code?: string;
+  private _sources?: Source[];
   private _mode: Mode = 'none';
   private _window?: RecorderWindow;
+  private _codeLoadDebounceTimeout: NodeJS.Timeout | undefined;
 
   constructor(recorder: Recorder, player: CrxPlayer) {
     super();
@@ -133,9 +135,9 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
 
   async setSources(sources: Source[]) {
     // hack to prevent recorder from opening files
-    sources = sources.filter(s => s.isRecorded);
-    this._sendMessage({ type: 'recorder', method: 'setSources', sources });
-    this._code = sources.find(s => s.id === 'playwright-test')?.text;
+    this._sources = sources.filter(s => s.isRecorded);
+    this._sendMessage({ type: 'recorder', method: 'setSources', sources: this._sources });
+    this._setCode(this._sources.find(s => s.id === 'playwright-test')?.text);
   }
 
   async elementPicked(elementInfo: ElementInfo, userGesture?: boolean) {
@@ -158,11 +160,56 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     this._sendMessage({ type: 'recorder', method: 'setActions', actions, sources });
   }
 
-  private _onMessage({ type, event, params }: EventData & { type: string }) {
+  load(code: string) {
+    try {
+      if (this._codeLoadDebounceTimeout) {
+        clearTimeout(this._codeLoadDebounceTimeout);
+        this._codeLoadDebounceTimeout = undefined;
+      }
+      this._code = code;
+      const [{ actions, options }] = parse(code);
+      const { deviceName, contextOptions } = { deviceName: '', contextOptions: {}, ...options };
+      this._recorder.loadScript({ actions, deviceName, contextOptions, text: code });
+      return { actions, code };
+    } catch (error) {
+      // syntax error / parsing error 
+      const line = error.loc.line ?? error.loc.start.line ?? code.split('\n').length;
+      const highlight: SourceHighlight[] = [{ line, type: 'error', message: error.message }];
+      this._recorder.loadScript({ actions: [], deviceName: '', contextOptions: {}, text: code, highlight });
+      return { actions: [] as ActionInContextWithLocation[], code, error };
+    }
+  }
+
+  private _setCode(code?: string) {
+    if (this._code === code)
+      return;
+
+    this._code = code;
+
+    if (this._codeLoadDebounceTimeout)
+      clearTimeout(this._codeLoadDebounceTimeout);
+
+    if (!code || !['inspecting', 'standby'].includes(this._mode)) {
+      this._codeLoadDebounceTimeout = undefined;
+    } else {
+      this._codeLoadDebounceTimeout = setTimeout(() => {
+        this._codeLoadDebounceTimeout = undefined;
+        if (this._code)
+          this.load(this._code);
+      }, 500);
+    }
+  }
+
+  private _onMessage({ type, event, params }: RecorderEventData) {
     if (type === 'recorderEvent') {
       switch (event) {
         case 'fileChanged':
+          if (this._code)
+            this.load(this._code);
           this._filename = params.file;
+          break;
+        case 'codeChanged':
+          this._setCode(params.code);
           break;
         case 'resume':
         case 'step':
@@ -192,16 +239,25 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   private _getActions(): ActionInContextWithLocation[] {
     if (!this._code)
       return [];
-    const [{ actions, options: testOptions }] = parse(this._code);
+
+    // this will indirectly refresh sources
+    const { actions, error }  = this.load(this._code);
+    if (error)
+      return [];
+
     if (!this._filename || this._filename === 'playwright-test')
       return actions;
     
+    const source = this._sources?.find(s => s.id === this._filename);
+    if (!source)
+      return [];
+
+    const { header } = source;
     const languageGenerator = [...languageSet()].find(l => l.id === this._filename)!;
-    const options = { browserName: 'chromium', launchOptions: { headless: false }, contextOptions: {}, ...testOptions };
-
-    const header = languageGenerator.generateHeader(options);
+    // we generate actions here to have a one-to-one mapping between actions and text
+    // (source actions are filtered, only non-empty actions are included)
     const actionTexts = actions.map(a => languageGenerator.generateAction(a));
-
+    
     const sourceLine = (index: number) => {
       const numLines = (str?: string) => str ? str.split(/\r?\n/).length : 0;
       return numLines(header) + numLines(actionTexts.slice(0, index).filter(Boolean).join('\n')) + 1;
