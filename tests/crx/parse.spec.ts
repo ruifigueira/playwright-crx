@@ -214,3 +214,21 @@ test('test', async ({ page }) => {
   await expect.soft(testParseWithMouseOptions('dblclick', `{ button: 'left' }`)).resolves.toEqual({ ...dblclickDefaults });
   await expect.soft(testParseWithMouseOptions('dblclick', `{ button: 'middle' }`)).resolves.toEqual({ ...dblclickDefaults, button: 'middle' });
 });
+
+test('should parse new page', async ({ testParse }) => {
+  const { actions } = await testParse(`import { test, expect } from '@playwright/test';
+
+test('test', async ({ page, context }) => {
+  const newPage = await context.newPage();
+  await newPage.goto('https://example.com');
+  await expect(newPage.getByRole('heading')).toContainText('Example Domain');
+  await newPage.close();
+});`);
+
+  expect.soft(actions).toMatchObject([
+    { pageAlias: 'newPage', name: 'openPage' },
+    { pageAlias: 'newPage', name: 'navigate', url: 'https://example.com' },
+    { pageAlias: 'newPage', name: 'assertText',  selector: 'internal:role=heading', text: 'Example Domain' },
+    { pageAlias: 'newPage', name: 'closePage' },
+  ]);
+});

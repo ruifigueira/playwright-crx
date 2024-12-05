@@ -70,6 +70,8 @@ const fnActions: Record<Exclude<ActionFnName, AssertFnAction>, (...args: any[]) 
   'setInputFiles':  (files) => ['setInputFiles', { files: typeof files === 'string' ? [files] : files }],
 };
 
+const variableCallRegex = /^([a-zA-Z_$][\w$]*)\./;
+
 function parseShortcut(shortcut: string) {
   const parts = shortcut.split('+').map(s => s.trim());
   return {
@@ -185,7 +187,20 @@ export function parse(code: string, file: string = 'playwright-test') {
     locations: true,
   });
   
-  function parseActionExpression(expr: AwaitExpression): ActionInContextWithLocation {
+  function parseActionExpression(expr: AwaitExpression | acorn.VariableDeclaration, pages: Set<string>): ActionInContextWithLocation {
+    let pageAlias: string | undefined;
+    if (expr.type === 'VariableDeclaration') {
+      if (
+        expr.declarations.length !== 1 ||
+        expr.declarations[0].type !== 'VariableDeclarator' ||
+        expr.declarations[0].id.type !== 'Identifier' ||
+        expr.declarations[0].init?.type !== 'AwaitExpression'
+      )
+        parserError('Invalid action expression', expr.loc);
+      pageAlias = expr.declarations[0].id.name;
+      expr = expr.declarations[0].init;
+    }
+  
     if (
       expr.type !== 'AwaitExpression' ||
       expr.argument.type !== 'CallExpression' ||
@@ -199,28 +214,44 @@ export function parse(code: string, file: string = 'playwright-test') {
     let expectAction = false;
     let expectActionNegated = false;
 
-    if (!['goto', 'close', 'newPage'].includes(actionFnName)) {
-      if (code.startsWith('page.', expr.argument.start)) {
-        locator = code.substring(expr.argument.callee.object.start + 'page.'.length, expr.argument.callee.object.end);
+    if (pageAlias && actionFnName !== 'newPage')
+      parserError('Invalid action expression, only newPage can be assigned variables', expr.argument.callee.loc);
+
+    if (!['newPage'].includes(actionFnName)) {
+
+      const [, variable] = variableCallRegex.exec(code.substring(expr.argument.start)) ?? [];
+      if (variable && !pages.has(variable))
+        parserError('Invalid page variable', expr.argument.callee.loc);
+
+      if (variable) {
+        pageAlias = variable;
+        if (!['goto', 'close'].includes(actionFnName)) {
+          locator = code.substring(expr.argument.callee.object.start + (variable.length + 1), expr.argument.callee.object.end);
+        }
       } else if (code.startsWith('expect(', expr.argument.start)) {
         let object = expr.argument.callee.object;
         if (object.type === 'MemberExpression' && object.property.type === 'Identifier' && object.property.name === 'not') {
           if (actionFnName !== 'toBeChecked')
             parserError('Invalid expect expression, .not can only applied to toBeChecked', expr.argument.callee.loc);
+          
           expectActionNegated = true;
           object = object.object;
         }
+
         if (
           object.type !== 'CallExpression' ||
           object.arguments.length !== 1 ||
           object.arguments[0].type !== 'CallExpression'
         )
-          parserError('Invalid expect expression', expr.argument.callee.loc); 
-        const expectArg = code.substring(object.arguments[0].start, object.arguments[0].end);
-        if (!expectArg.startsWith('page.'))
           parserError('Invalid expect expression', expr.argument.callee.loc);
-  
-        locator = expectArg.substring('page.'.length);
+
+        const expectArg = code.substring(object.arguments[0].start, object.arguments[0].end);
+        const [, variable] = variableCallRegex.exec(expectArg) ?? [];
+        if (!variable || !pages.has(variable))
+          parserError('Invalid page variable', expr.argument.callee.loc);
+
+        pageAlias = variable;
+        locator = expectArg.substring(variable.length + 1);
         expectAction = true;
       }
     }
@@ -246,9 +277,12 @@ export function parse(code: string, file: string = 'playwright-test') {
       action = { name, selector, signals: [], ...cleanParams(params) } as Action;
     }
   
+    if (pageAlias)
+      pages.add(pageAlias);
+
     return {
       action,
-      frame: { pageAlias: 'page', framePath: [] },
+      frame: { pageAlias: pageAlias ?? 'page', framePath: [] },
       startTime: 0,
       location: { file, ...indexToLineColumn(code, expr.start) },
     };
@@ -346,22 +380,19 @@ export function parse(code: string, file: string = 'playwright-test') {
         fn.type !== 'ArrowFunctionExpression' ||
         fn.params.length !== 1 ||
         fn.params[0].type !== 'ObjectPattern' ||
-        fn.params[0].properties.length !== 1 ||
-        fn.params[0].properties[0].type !== 'Property' ||
-        fn.params[0].properties[0].key.type !== 'Identifier' ||
-        fn.params[0].properties[0].key.name !== 'page' ||
-        fn.params[0].properties[0].value.type !== 'Identifier' ||
-        fn.params[0].properties[0].value.name !== 'page'
+        fn.params[0].properties.some(p => p.type !== 'Property' || p.key.type !== 'Identifier' || p.value.type !== 'Identifier' || !['page', 'context'].includes(p.key.name))
       )
         parserError('Invalid test function', fn.loc);
+      
       if (
         fn.body.type !== 'BlockStatement' ||
-        fn.body.body.some(e => e.type !== 'ExpressionStatement' || e.expression.type !== 'AwaitExpression')
+        !fn.body.body.every(e => (e.type === 'ExpressionStatement' && e.expression.type === 'AwaitExpression') || e.type === 'VariableDeclaration')
       )
         parserError('Invalid test function body', fn.body.loc);
       
-      const stms = fn.body.body as ExpressionStatement[];
-      const actions = stms.map(s => s.expression as AwaitExpression).map(parseActionExpression);
+      const stms = fn.body.body as (ExpressionStatement | acorn.VariableDeclaration)[];
+      const pages = new Set<string>(['page']);
+      const actions = stms.map(s => s.type === 'VariableDeclaration' ? s : s.expression as AwaitExpression).map(a => parseActionExpression(a, pages));
 
       tests.push({
         title: title.value as string,
