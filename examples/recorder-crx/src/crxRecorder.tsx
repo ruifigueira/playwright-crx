@@ -85,6 +85,9 @@ export const CrxRecorder: React.FC = ({
   }, []);
 
   const requestSave = React.useCallback(() => {
+    if (!settings.experimental)
+      return;
+
     if (!sources.length || !selectedFileId)
       return;
 
@@ -118,13 +121,19 @@ export const CrxRecorder: React.FC = ({
     // send message to background script because we can't save files directly from the extension
     // see: https://issues.chromium.org/issues/337540332
     chrome.runtime.sendMessage({ event: 'saveRequested', params: { code, suggestedName } });
-  }, [sources, selectedFileId]);
+  }, [sources, selectedFileId, settings]);
 
   const requestSaveStorageState = React.useCallback(() => {
+    if (!settings.experimental)
+      return;
+
     chrome.runtime.sendMessage({ event: 'saveStorageStateRequested' });
-  }, []);
+  }, [settings]);
 
   React.useEffect(() => {
+    if (!settings.experimental)
+      return;
+
     const keydownHandler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
@@ -136,7 +145,7 @@ export const CrxRecorder: React.FC = ({
     return () => {
       window.removeEventListener('keydown', keydownHandler);
     };
-  }, [requestSave]);
+  }, [requestSave, settings]);
 
   return <>
     <div>
