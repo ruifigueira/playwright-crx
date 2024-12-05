@@ -20,7 +20,10 @@ import type * as types from '../types';
 import type { LanguageGenerator, LanguageGeneratorOptions } from './types';
 
 export function generateCode(actions: actions.ActionInContext[], languageGenerator: LanguageGenerator, options: LanguageGeneratorOptions) {
-  const header = languageGenerator.generateHeader(options);
+  let includeContext = false;
+  if (actions.some(a => a.action.name === 'openPage' && a.frame.pageAlias !== 'page'))
+    includeContext = true;
+  const header = languageGenerator.generateHeader(options, includeContext);
   const footer = languageGenerator.generateFooter(options.saveStorage);
   const actionTexts = actions.map(a => languageGenerator.generateAction(a)).filter(Boolean);
   const text = [header, ...actionTexts, footer].join('\n');

@@ -36,7 +36,7 @@ export class JavaScriptLanguageGenerator implements LanguageGenerator {
 
   generateAction(actionInContext: actions.ActionInContext): string {
     const action = actionInContext.action;
-    if (this._isTest && (action.name === 'openPage' || action.name === 'closePage'))
+    if (this._isTest && actionInContext.frame.pageAlias === 'page' && (action.name === 'openPage' || action.name === 'closePage'))
       return '';
 
     const pageAlias = actionInContext.frame.pageAlias;
@@ -128,9 +128,9 @@ export class JavaScriptLanguageGenerator implements LanguageGenerator {
     return asLocator('javascript', selector);
   }
 
-  generateHeader(options: LanguageGeneratorOptions): string {
+  generateHeader(options: LanguageGeneratorOptions, includeContext?: boolean): string {
     if (this._isTest)
-      return this.generateTestHeader(options);
+      return this.generateTestHeader(options, includeContext);
     return this.generateStandaloneHeader(options);
   }
 
@@ -140,13 +140,13 @@ export class JavaScriptLanguageGenerator implements LanguageGenerator {
     return this.generateStandaloneFooter(saveStorage);
   }
 
-  generateTestHeader(options: LanguageGeneratorOptions): string {
+  generateTestHeader(options: LanguageGeneratorOptions, includeContext?: boolean): string {
     const formatter = new JavaScriptFormatter();
     const useText = formatContextOptions(options.contextOptions, options.deviceName, this._isTest);
     formatter.add(`
       import { test, expect${options.deviceName ? ', devices' : ''} } from '@playwright/test';
 ${useText ? '\ntest.use(' + useText + ');\n' : ''}
-      test('test', async ({ page }) => {`);
+      test('test', async ({ page${includeContext ? ', context' : ''} }) => {`);
     if (options.contextOptions.recordHar)
       formatter.add(`  await page.routeFromHAR(${quote(options.contextOptions.recordHar.path)});`);
     return formatter.format();
