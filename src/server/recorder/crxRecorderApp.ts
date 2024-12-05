@@ -19,12 +19,13 @@ import { Page } from 'playwright-core/lib/server/page';
 import type { Recorder } from 'playwright-core/lib/server/recorder';
 import type * as channels from '../../protocol/channels';
 import CrxPlayer from './crxPlayer';
-import { ActionInContextWithLocation } from './script';
+import { ActionInContextWithLocation } from './parser';
 import { PopupRecorderWindow } from './popupRecorderWindow';
 import { SidepanelRecorderWindow } from './sidepanelRecorderWindow';
 import { IRecorderApp } from 'playwright-core/lib/server/recorder/recorderFrontend';
 import { ActionInContext } from '@recorder/actions';
 import { parse } from './parser';
+import { languageSet } from 'playwright-core/lib/server/codegen/languages';
 
 export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'updateCallLogs', callLogs: CallLog[] }
@@ -52,6 +53,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   readonly wsEndpointForTest: string | undefined;
   readonly _recorder: Recorder;
   private _player: CrxPlayer;
+  private _filename?: string;
   private _code?: string;
   private _mode: Mode = 'none';
   private _window?: RecorderWindow;
@@ -159,6 +161,9 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   private _onMessage({ type, event, params }: EventData & { type: string }) {
     if (type === 'recorderEvent') {
       switch (event) {
+        case 'fileChanged':
+          this._filename = params.file;
+          break;
         case 'resume':
         case 'step':
           this._player.run(this._getActions()).catch(() => {});
@@ -187,7 +192,21 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   private _getActions(): ActionInContextWithLocation[] {
     if (!this._code)
       return [];
-    const [{ actions }] = parse(this._code);
-    return actions;
+    const [{ actions, options: testOptions }] = parse(this._code);
+    if (!this._filename || this._filename === 'playwright-test')
+      return actions;
+    
+    const languageGenerator = [...languageSet()].find(l => l.id === this._filename)!;
+    const options = { browserName: 'chromium', launchOptions: { headless: false }, contextOptions: {}, ...testOptions };
+
+    const header = languageGenerator.generateHeader(options);
+    const actionTexts = actions.map(a => languageGenerator.generateAction(a));
+
+    const sourceLine = (index: number) => {
+      const numLines = (str?: string) => str ? str.split(/\r?\n/).length : 0;
+      return numLines(header) + numLines(actionTexts.slice(0, index).filter(Boolean).join('\n')) + 1;
+    }
+    
+    return actions.map((action, index) => ({ ...action, location: { file: this._filename!, line: sourceLine(index), column: 1 } }));
   }
 }
