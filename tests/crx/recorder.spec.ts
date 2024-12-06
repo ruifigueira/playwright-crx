@@ -25,22 +25,13 @@ test('should record @smoke', async ({ page, attachRecorder, recordAction, baseUR
   await recordAction(() => page.locator('textarea').click());
   await recordAction(() => page.locator('textarea').fill('test'));
 
-  const code = `const { chromium } = require('playwright');
+  const code = `import { test, expect } from '@playwright/test';
 
-(async () => {
-  const browser = await chromium.launch({
-    headless: false
-  });
-  const context = await browser.newContext();
-  const page = await context.newPage();
+test('test', async ({ page }) => {
   await page.goto('${baseURL}/input/textarea.html');
   await page.locator('textarea').click();
   await page.locator('textarea').fill('test');
-
-  // ---------------------
-  await context.close();
-  await browser.close();
-})();`;
+});`;
 
   await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
 });
@@ -55,22 +46,13 @@ test('should attach two pages', async ({ context, page, attachRecorder, recordAc
   await attachRecorder(page1);
   await recordAction(() => page1.goto(`${baseURL}/input/textarea.html`));
 
-  const code = `const { chromium } = require('playwright');
+  const code = `import { test, expect } from '@playwright/test';
 
-(async () => {
-  const browser = await chromium.launch({
-    headless: false
-  });
-  const context = await browser.newContext();
-  const page = await context.newPage();
+test('test', async ({ page, context }) => {
   await page.goto('${baseURL}/empty.html');
   const page1 = await context.newPage();
   await page1.goto('${baseURL}/input/textarea.html');
-
-  // ---------------------
-  await context.close();
-  await browser.close();
-})();`;
+});`;
 
   await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
 });
@@ -125,23 +107,14 @@ test('should record popups', async ({ page, attachRecorder, baseURL, mockPaths, 
 
   await recorderPage.getByTitle('Record').click();
 
-  const code = `const { chromium } = require('playwright');
+  const code = `import { test, expect } from '@playwright/test';
 
-(async () => {
-  const browser = await chromium.launch({
-    headless: false
-  });
-  const context = await browser.newContext();
-  const page = await context.newPage();
+test('test', async ({ page }) => {
   await page.goto('${baseURL}/popup/root.html');
   const page1Promise = page.waitForEvent('popup');
   await page.getByRole('button', { name: 'Open popup' }).click();
   const page1 = await page1Promise;
-
-  // ---------------------
-  await context.close();
-  await browser.close();
-})();`;
+});`;
 
   await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
 });
@@ -201,14 +174,9 @@ test('should record with all supported actions and assertions', async ({ context
 
   await recorderPage.getByTitle('Record').click();
 
-  const code = `const { chromium } = require('playwright');
+  const code = `import { test, expect } from '@playwright/test';
 
-(async () => {
-  const browser = await chromium.launch({
-    headless: false
-  });
-  const context = await browser.newContext();
-  const page = await context.newPage();
+test('test', async ({ page, context }) => {
   await page.goto('${baseURL}/root.html');
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'button' }).click();
@@ -219,26 +187,22 @@ test('should record with all supported actions and assertions', async ({ context
   await page.locator('input[type="file"]').setInputFiles('file-to-upload.txt');
   const page1 = await context.newPage();
   await page1.close();
-  // await expect(page.getByRole('checkbox')).not.toBeChecked();
-  // await expect(page.locator('input[type="text"]')).toHaveValue('Hello world');
-  // await expect(page.getByRole('combobox')).toHaveValue('B');
-  // await expect(page.locator('div')).toContainText('Some long text');
-  // await expect(page.getByText('Some long text')).toBeVisible();
-  // await expect(page.locator('body')).toMatchAriaSnapshot(\`
-  //  - checkbox: on
-  //  - button "button clicked"
-  //  - textbox: Hello world
-  //  - combobox:
-  //    - option "A"
-  //    - option "B" [selected]
-  //  - textbox: C:\\\\fakepath\\\\file-to-upload.txt
-  //  - text: Some long text
-  //  \`);
-​
-  // ---------------------
-  await context.close();
-  await browser.close();
-})();`;
+  await expect(page.getByRole('checkbox')).not.toBeChecked();
+  await expect(page.locator('input[type="text"]')).toHaveValue('Hello world');
+  await expect(page.getByRole('combobox')).toHaveValue('B');
+  await expect(page.locator('div')).toContainText('Some long text');
+  await expect(page.getByText('Some long text')).toBeVisible();
+  await expect(page.locator('body')).toMatchAriaSnapshot(\`
+    - checkbox: on
+    - button "button clicked"
+    - textbox: Hello world
+    - combobox:
+      - option "A"
+      - option "B" [selected]
+    - textbox: C:\\\\fakepath\\\\file-to-upload.txt
+    - text: Some long text
+    \`);
+});`;
 
   await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
 });
@@ -260,22 +224,13 @@ test('should record with custom testid', async ({ page, attachRecorder, recordAc
 
   await recorderPage.getByTitle('Record').click();
 
-  const code = `const { chromium } = require('playwright');
+  const code = `import { test, expect } from '@playwright/test';
 
-(async () => {
-  const browser = await chromium.launch({
-    headless: false
-  });
-  const context = await browser.newContext();
-  const page = await context.newPage();
+test('test', async ({ page }) => {
   await page.goto('${baseURL}/empty.html');
   await page.getByTestId('btn-testid').click();
   await page.getByTestId('btn-foobar').click();
-
-  // ---------------------
-  await context.close();
-  await browser.close();
-})();`;
+});`;
 
   await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
 });
@@ -287,21 +242,12 @@ test('should record oopif frames', async ({ page, attachRecorder, recordAction, 
 
   await recorderPage.getByTitle('Record').click();
 
-  const code = `const { chromium } = require('playwright');
+  const code = `import { test, expect } from '@playwright/test';
 
-(async () => {
-  const browser = await chromium.launch({
-    headless: false
-  });
-  const context = await browser.newContext();
-  const page = await context.newPage();
+test('test', async ({ page }) => {
   await page.goto('${server.PREFIX}/dynamic-oopif.html');
   await page.locator('iframe').contentFrame().locator('div:nth-child(21)').click();
-​
-  // ---------------------
-  await context.close();
-  await browser.close();
-})();`;
+});`;
 
   await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
 });

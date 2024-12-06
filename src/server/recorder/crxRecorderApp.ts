@@ -67,7 +67,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
 
   async open(options?: channels.CrxApplicationShowRecorderParams) {
     const mode = options?.mode ?? 'none';
-    const language = options?.language ?? 'javascript';
+    const language = options?.language ?? 'playwright-test';
 
     if (this._window)
       await this._window.close();

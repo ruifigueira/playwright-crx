@@ -65,8 +65,8 @@ test('should support target change while steping', async ({ recorderPage }) => {
   await recorderPage.getByTitle('Step Over (F10)').click();
 
   await Promise.all([
-    expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toHaveText(langs.javascript.line),
-    expect(recorderPage.locator('.source-line-paused .CodeMirror-linenumber')).toHaveText(`${langs.javascript.linenumber}`),
+    expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toHaveText(langs['playwright-test'].line),
+    expect(recorderPage.locator('.source-line-paused .CodeMirror-linenumber')).toHaveText(`${langs['playwright-test'].linenumber}`),
   ]);
 
   await recorderPage.locator('.source-chooser').selectOption('csharp');
@@ -81,7 +81,7 @@ test('should support target change while steping', async ({ recorderPage }) => {
   await recorderPage.getByTitle('Step Over (F10)').click();
 
   await Promise.all([
-    expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toHaveText(langs.csharp.line),
-    expect(recorderPage.locator('.source-line-paused .CodeMirror-linenumber')).toHaveText(`${langs.csharp.linenumber}`),
+    expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toHaveText(langs['csharp'].line),
+    expect(recorderPage.locator('.source-line-paused .CodeMirror-linenumber')).toHaveText(`${langs['csharp'].linenumber}`),
   ]);
 });
