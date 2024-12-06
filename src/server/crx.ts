@@ -200,7 +200,7 @@ export class CrxApplication extends SdkObject {
     if (!this._recorderApp) {
       const { mode, window, ...otherOptions } = options ?? {};
       const recorderParams = {
-        language: options?.language ?? 'javascript',
+        language: options?.language ?? 'playwright-test',
         mode: mode === 'none' ? undefined : mode,
         ...otherOptions
       };
