@@ -30,6 +30,7 @@ export interface RawSourceMap {
 
 export const crx: Crx;
 export function _setUnderTest(): void;
+export function _isUnderTest(): boolean;
 export const registerSourceMap: (url?: string, sourceMapUrl?: string | RawSourceMap) => Promise<void>;
 export const _debug: {
   enable(namespaces: string): void;
