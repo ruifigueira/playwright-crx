@@ -32,6 +32,19 @@ function setRunningFileId(fileId: string) {
   window.playwrightSetRunningFile(fileId);
 }
 
+function download(filename: string, text: string) {
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export const CrxRecorder: React.FC = ({
 }) => {
   const [settings, setSettings] = React.useState<CrxSettings>(defaultSettings);
@@ -40,7 +53,7 @@ export const CrxRecorder: React.FC = ({
   const [paused, setPaused] = React.useState(false);
   const [log, setLog] = React.useState(new Map<string, CallLog>());
   const [mode, setMode] = React.useState<Mode>('none');
-  const [selectedFileId, setSelectedFileId] = React.useState<string | undefined>();
+  const [selectedFileId, setSelectedFileId] = React.useState<string>(defaultSettings.targetLanguage);
 
   React.useEffect(() => {
     const port = chrome.runtime.connect({ name: 'recorder' });
@@ -71,10 +84,7 @@ export const CrxRecorder: React.FC = ({
         setSelectedFileId(data.params.file);
     };
     window.dispatch = dispatch;
-    loadSettings().then(settings => {
-      setSettings(settings);
-      setSelectedFileId(settings.targetLanguage);
-    }).catch(() => {});
+    loadSettings().then(setSettings).catch(() => {});
 
     addSettingsChangedListener(setSettings);
 
@@ -84,7 +94,7 @@ export const CrxRecorder: React.FC = ({
     };
   }, []);
 
-  const requestSave = React.useCallback(() => {
+  const downloadCode = React.useCallback(() => {
     if (!settings.experimental)
       return;
 
@@ -95,32 +105,26 @@ export const CrxRecorder: React.FC = ({
     if (!source)
       return;
 
-    const code = [
-      source.header,
-      ...(source.actions ?? []),
-      source.footer,
-    ].filter(Boolean).join('\n');
-
-    let suggestedName: string | undefined;
+    let filename: string | undefined;
     switch (selectedFileId) {
-      case 'javascript': suggestedName = 'example.js'; break;
-      case 'playwright-test': suggestedName = 'example.spec.ts'; break;
-      case 'java-junit': suggestedName = 'TestExample.java'; break;
-      case 'java': suggestedName = 'Example.java'; break;
-      case 'python-pytest': suggestedName = 'test_example.py'; break;
-      case 'python': suggestedName = 'example.py'; break;
-      case 'python-async': suggestedName = 'example.py'; break;
-      case 'csharp-mstest': suggestedName = 'Tests.cs'; break;
-      case 'csharp-nunit': suggestedName = 'Tests.cs'; break;
-      case 'csharp': suggestedName = 'Example.cs'; break;
+      case 'javascript': filename = 'example.js'; break;
+      case 'playwright-test': filename = 'example.spec.ts'; break;
+      case 'java-junit': filename = 'TestExample.java'; break;
+      case 'java': filename = 'Example.java'; break;
+      case 'python-pytest': filename = 'test_example.py'; break;
+      case 'python': filename = 'example.py'; break;
+      case 'python-async': filename = 'example.py'; break;
+      case 'csharp-mstest': filename = 'Tests.cs'; break;
+      case 'csharp-nunit': filename = 'Tests.cs'; break;
+      case 'csharp': filename = 'Example.cs'; break;
     };
 
-    if (!suggestedName)
+    if (!filename)
       return;
 
-    // send message to background script because we can't save files directly from the extension
-    // see: https://issues.chromium.org/issues/337540332
-    chrome.runtime.sendMessage({ event: 'saveRequested', params: { code, suggestedName } });
+    const code = source.text;
+
+    download(filename, code);
   }, [sources, selectedFileId, settings]);
 
   const requestSaveStorageState = React.useCallback(() => {
@@ -137,7 +141,7 @@ export const CrxRecorder: React.FC = ({
     const keydownHandler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
-        requestSave();
+        downloadCode();
       }
     };
     window.addEventListener('keydown', keydownHandler);
@@ -145,7 +149,7 @@ export const CrxRecorder: React.FC = ({
     return () => {
       window.removeEventListener('keydown', keydownHandler);
     };
-  }, [requestSave, settings]);
+  }, [downloadCode, settings]);
 
   return <>
     <div>
@@ -157,7 +161,7 @@ export const CrxRecorder: React.FC = ({
     <div className="recorder">
       {settings.experimental && <>
       <Toolbar>
-        <ToolbarButton icon='save' title='Save' disabled={false} onClick={requestSave}>Save</ToolbarButton>
+        <ToolbarButton icon='save' title='Save' disabled={false} onClick={downloadCode}>Save</ToolbarButton>
         <div style={{ flex: 'auto' }}></div>
           <div className="dropdown">
             <ToolbarButton icon="tools" title='Tools' disabled={false} onClick={() => {}}></ToolbarButton>

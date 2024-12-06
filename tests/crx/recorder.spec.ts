@@ -307,22 +307,8 @@ const langs = {
   'csharp': ['Example.cs', 'csharp.cs'],
 };
 
-for (const [lang, [suggestedName, filename]] of Object.entries(langs)) {
-  test(`should save ${lang} as ${suggestedName}`, async ({ page, attachRecorder, recordAction, baseURL, context, configureRecorder }) => {
-    await context.addInitScript((filename) => {
-      // mock showSaveFilePicker
-      (window as any).showSaveFilePicker = ({ suggestedName }: { suggestedName: string }) => {
-        return {
-          createWritable: () => Promise.resolve({
-            write: async (code: string) => {
-              localStorage.setItem('savedCode', JSON.stringify({ suggestedName, filename, code }));
-            },
-            close: () => Promise.resolve()
-          })
-        };
-      }
-    }, filename);
-    
+for (const [lang, [expectedSuggestedName, filename]] of Object.entries(langs)) {
+  test(`should save ${lang} as ${expectedSuggestedName}`, async ({ page, attachRecorder, recordAction, baseURL, configureRecorder }) => {
     await configureRecorder({ experimental: true });
     const recorderPage = await attachRecorder(page);
 
@@ -335,13 +321,26 @@ for (const [lang, [suggestedName, filename]] of Object.entries(langs)) {
     await recordAction(() => page.locator('textarea').fill('test'));
   
     await recorderPage.getByTitle('Record').click();
-    await recorderPage.getByTitle('Save').click();
 
-    const code = fs.readFileSync(path.join(__dirname, 'code', filename), 'utf8');
-    await expect.poll(() => recorderPage.evaluate(() => JSON.parse(localStorage.getItem('savedCode') ?? '{}'))).toEqual({
-      suggestedName,
-      filename,
-      code,
+    const [download] = await Promise.all([
+      recorderPage.waitForEvent('download'),
+      recorderPage.getByTitle('Save').click(),
+    ]);
+
+    const suggestedName = download.suggestedFilename();
+    const code = await new Promise<string>(resolve => {
+      let text = '';
+      download.createReadStream().then(stream => {
+        stream.on('data', chunk => {
+          text += chunk.toString();
+        });
+        stream.on('end', () => resolve(text));
+      });
+    });
+
+    expect({ suggestedName, code }).toEqual({
+      suggestedName: expectedSuggestedName,
+      code: fs.readFileSync(path.join(__dirname, 'code', filename), 'utf8'),
     });
   });
 }
