@@ -88,8 +88,7 @@ export const test = crxTest.extend<{
       await extensionServiceWorker.evaluate(async () => {
         // ensure we're in test mode
         _setUnderTest();
-        // ensure tests are performed in a popup recorder window
-        await chrome.storage.sync.set({ sidepanel: false });
+
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         await attach(tab);
       });

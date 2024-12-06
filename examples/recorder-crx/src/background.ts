@@ -16,7 +16,7 @@
 
 import { Mode } from '@recorder/recorderTypes';
 import type { CrxApplication } from 'playwright-crx';
-import playwright, { crx, registerSourceMap, _debug, _setUnderTest } from 'playwright-crx';
+import playwright, { crx, registerSourceMap, _debug, _setUnderTest, _isUnderTest as isUnderTest } from 'playwright-crx';
 import { addSettingsChangedListener, CrxSettings, defaultSettings, loadSettings } from './settings';
 
 registerSourceMap().catch(() => {});
@@ -106,8 +106,10 @@ async function attach(tab: chrome.tabs.Tab, mode?: Mode) {
   if (!tab?.id || (attachedTabIds.has(tab.id) && !mode)) return;
   const tabId = tab.id;
   
+  const sidepanel = !isUnderTest() && settings.sidepanel;
+
   // we need to open sidepanel before any async call
-  if (settings.sidepanel)
+  if (sidepanel)
     chrome.sidePanel.open({ windowId: tab.windowId });
   
   // ensure one attachment at a time
@@ -120,7 +122,7 @@ async function attach(tab: chrome.tabs.Tab, mode?: Mode) {
       await crxApp.recorder.show({
         mode: mode ?? 'recording',
         language: settings.targetLanguage,
-        window: { type: settings.sidepanel ? 'sidepanel' : 'popup', url: 'index.html' },
+        window: { type: sidepanel ? 'sidepanel' : 'popup', url: 'index.html' },
       });
     }
 
