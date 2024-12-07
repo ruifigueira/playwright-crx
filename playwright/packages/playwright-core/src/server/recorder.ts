@@ -33,7 +33,7 @@ import { buildFullSelector } from '../utils/isomorphic/recorderUtils';
 import { stringifySelector } from '../utils/isomorphic/selectorParser';
 import type { Frame } from './frames';
 import type { ParsedYaml } from '@isomorphic/ariaSnapshot';
-import { SourceLocation } from 'packages/trace-viewer/src/ui/modelUtil';
+import type { Page } from './page';
 
 const recorderSymbol = Symbol('recorderSymbol');
 
@@ -388,7 +388,7 @@ export class Recorder implements InstrumentationListener, IRecorder {
     this._recorderApp?.updateCallLogs(logs);
   }
 
-  private _isRecording() {
+  _isRecording() {
     return ['recording', 'assertingText', 'assertingVisibility', 'assertingValue', 'assertingSnapshot'].includes(this._mode);
   }
 
