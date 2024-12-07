@@ -57,6 +57,14 @@ export class Crx extends ChannelOwner<channels.CrxChannel> implements api.Crx {
     crxApp.on('close', onClose);
     return crxApp;
   }
+
+  async get(options?: { incognito: boolean }): Promise<CrxApplication | undefined> {
+    if (options?.incognito)
+      return await this._incognitoCrxPromise;
+    else
+      return await this._crxAppPromise;
+
+  }
 }
 
 export class CrxRecorder extends EventEmitter implements api.CrxRecorder {

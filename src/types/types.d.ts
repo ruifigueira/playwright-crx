@@ -62,6 +62,10 @@ export interface Crx {
 
     contextOptions?: CrxBrowserContextOptions;
   }): Promise<CrxApplication>;
+
+  get(options?: {
+    incognito?: boolean;
+  }): Promise<CrxApplication | undefined>;
 }
 
 export interface CrxApplication {
@@ -489,6 +493,8 @@ export interface CrxRecorder {
     mode?: null|"none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"|"assertingSnapshot";
 
     testIdAttributeName?: null|string;
+
+    playInIncognito?: null|boolean;
 
     window?: {
       type?: null|"popup"|"sidepanel";
