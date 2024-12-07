@@ -175,6 +175,7 @@ export type CrxApplicationShowRecorderParams = {
   mode?: 'none' | 'recording' | 'inspecting',
   language?: string,
   testIdAttributeName?: string,
+  playInIncognito?: boolean,
   window?: {
     type?: 'popup' | 'sidepanel',
     url?: string,
@@ -184,6 +185,7 @@ export type CrxApplicationShowRecorderOptions = {
   mode?: 'none' | 'recording' | 'inspecting',
   language?: string,
   testIdAttributeName?: string,
+  playInIncognito?: boolean,
   window?: {
     type?: 'popup' | 'sidepanel',
     url?: string,

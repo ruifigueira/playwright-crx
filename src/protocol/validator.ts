@@ -129,6 +129,7 @@ scheme.CrxApplicationShowRecorderParams = tObject({
   mode: tOptional(tEnum(['none', 'recording', 'inspecting', 'assertingText', 'recording-inspecting', 'standby', 'assertingVisibility', 'assertingValue'])),
   language: tOptional(tString),
   testIdAttributeName: tOptional(tString),
+  playInIncognito: tOptional(tBoolean),
   window: tOptional(tObject({
     type: tOptional(tEnum(['popup', 'sidepanel'])),
     url: tOptional(tString),

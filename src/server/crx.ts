@@ -296,6 +296,7 @@ export class CrxApplication extends SdkObject {
   async close(options?: { closePages?: boolean, closeWindows?: boolean }) {
     if (options?.closeWindows && !this.isIncognito())
       throw new Error('closeWindows is only supported in incognito mode');
+
     chrome.windows.onRemoved.removeListener(this.onWindowRemoved);
 
     if (options?.closeWindows) {
@@ -304,6 +305,9 @@ export class CrxApplication extends SdkObject {
     } else {
       await Promise.all(this._crPages().map(crPage => options?.closePages ? crPage.closePage(false) : this._doDetach(crPage._targetId)));
     }
+
+    await this._context._closePromise;
+
     if (!this.isIncognito())
       await this._crx.closeAndWait();
   }

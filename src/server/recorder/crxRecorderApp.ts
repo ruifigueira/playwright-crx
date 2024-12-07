@@ -26,6 +26,7 @@ import type { IRecorderApp } from 'playwright-core/lib/server/recorder/recorderF
 import type { ActionInContext } from '@recorder/actions';
 import { parse } from './parser';
 import { languageSet } from 'playwright-core/lib/server/codegen/languages';
+import type { Crx } from '../crx';
 
 export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'updateCallLogs', callLogs: CallLog[] }
@@ -50,6 +51,7 @@ export interface RecorderWindow {
 
 export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   readonly wsEndpointForTest: string | undefined;
+  private _crx: Crx;
   readonly _recorder: Recorder;
   private _player: CrxPlayer;
   private _filename?: string;
@@ -58,12 +60,18 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   private _window?: RecorderWindow;
   private _editedCode?: EditedCode;
   private _recordedActions: ActionInContextWithLocation[] = [];
+  private _playInIncognito = false;
 
-  constructor(recorder: Recorder, player: CrxPlayer) {
+  constructor(crx: Crx, recorder: Recorder, player: CrxPlayer) {
     super();
+    this._crx = crx;
     this._recorder = recorder;
     this._player = player;
     this._player.on('start', () => this._recorder.clearErrors());
+  }
+
+  setPlayInIncognito(playInIncognito: boolean) {
+    this._playInIncognito = playInIncognito;
   }
 
   async open(options?: channels.CrxApplicationShowRecorderParams) {
@@ -194,7 +202,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
           break;
         case 'resume':
         case 'step':
-          this._player.run(this._getActions()).catch(() => {});
+          this._run().catch(() => {});
           break;
         case 'setMode':
           const { mode } = params;
@@ -207,6 +215,18 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
 
       this.emit('event', { event, params });
     }
+  }
+
+  async _run() {
+    if (this._player.isPlaying())
+      return;
+    const incognito = this._playInIncognito;
+    if (incognito) {
+      const incognitoCrxApp = await this._crx.get({ incognito });
+      await incognitoCrxApp?.close({ closeWindows: true });
+    }
+    const crxApp = await this._crx.get({ incognito }) ?? await this._crx.start({ incognito });
+    await this._player.run(this._getActions(), crxApp._context);
   }
 
   _sendMessage(msg: RecorderMessage) {

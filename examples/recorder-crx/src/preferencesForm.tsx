@@ -18,6 +18,7 @@ export const PreferencesForm: React.FC = ({}) => {
     return initialSettings.sidepanel !== settings.sidepanel ||
       initialSettings.targetLanguage !== settings.targetLanguage ||
       initialSettings.testIdAttributeName !== settings.testIdAttributeName ||
+      initialSettings.playInIncognito !== settings.playInIncognito ||
       initialSettings.experimental !== settings.experimental;
   }, [settings, initialSettings]);
 
@@ -71,6 +72,16 @@ export const PreferencesForm: React.FC = ({}) => {
         name="sidepanel"
         checked={settings.sidepanel}
         onChange={e => setSettings({ ...settings, sidepanel: e.target.checked })}
+      />
+    </div>
+    <div>
+      <label htmlFor="playInIncognito" className="row">Play in incognito:</label>
+      <input
+        type="checkbox"
+        id="playInIncognito"
+        name="playInIncognito"
+        checked={settings.playInIncognito}
+        onChange={e => setSettings({ ...settings, playInIncognito: e.target.checked })}
       />
     </div>
     <div>

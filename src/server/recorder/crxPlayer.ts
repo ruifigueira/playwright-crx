@@ -16,7 +16,7 @@
 
 import EventEmitter from 'events';
 import type { BrowserContext } from 'playwright-core/lib/server/browserContext';
-import type { Page } from 'playwright-core/lib/server/page';
+import { Page } from 'playwright-core/lib/server/page';
 import { createGuid, isUnderTest, ManualPromise, monotonicTime, serializeExpectedTextValues } from 'playwright-core/lib/utils';
 import type { Frame } from 'playwright-core/lib/server/frames';
 import type { CallMetadata } from '@protocol/callMetadata';
@@ -59,25 +59,33 @@ export default class CrxPlayer extends EventEmitter {
         frame: { pageAlias: 'page', framePath: [] },
       } satisfies PerformAction;
       this._pause = this
-          ._performAction(pauseAction)
+          ._performAction(this._context, pauseAction)
           .finally(() => this._pause = undefined)
           .catch(() => {});
     }
     await this._pause;
   }
 
-  async run(actions: PerformAction[], page?: Page) {
+  async run(actions: PerformAction[], pageOrContext?: Page | BrowserContext) {
     if (this.isPlaying())
       return;
 
-    if (page && !this._context.pages().includes(page))
-      throw new Error('Page does not belong to this player context');
+    let page: Page;
+    let context: BrowserContext;
 
-    if (!page)
+    if (!pageOrContext) {
       page = this._context.pages()[0] ?? await this._context.newPage(serverSideCallMetadata());
+      context = this._context;
+    } else if (pageOrContext instanceof Page) {
+      page = pageOrContext;
+      context = page.context();
+    } else {
+      context = pageOrContext;
+      page = context.pages()[0] ?? await context.newPage(serverSideCallMetadata());
+    }
 
     this._pageAliases.clear();
-    this._pageAliases.set(page ?? this._context.pages()[0], 'page');
+    this._pageAliases.set(page, 'page');
     this.emit('start');
 
     try {
@@ -85,7 +93,7 @@ export default class CrxPlayer extends EventEmitter {
         if (action.action.name === 'openPage' && action.frame.pageAlias === 'page')
           continue;
         this._currAction = action;
-        await this._performAction(action);
+        await this._performAction(context, action);
       }
     } catch (e) {
       if (e instanceof Stopped)
@@ -116,11 +124,12 @@ export default class CrxPlayer extends EventEmitter {
   }
 
   // "borrowed" from ContextRecorder
-  private async _performAction(actionInContext: PerformAction) {
+  private async _performAction(browserContext: BrowserContext, actionInContext: PerformAction) {
     this._checkStopped();
 
     const innerPerformAction = async (mainFrame: Frame | null, actionInContext: PerformAction, cb: (callMetadata: CallMetadata) => Promise<any>): Promise<void> => {
-      const context = mainFrame ?? this._context;
+      // we must use the default browser context here!
+      const context = mainFrame ?? browserContext;
       let traceParams: ReturnType<typeof traceParamsForAction>;
 
       switch (actionInContext.action.name) {
@@ -147,14 +156,14 @@ export default class CrxPlayer extends EventEmitter {
 
       try {
         this._checkStopped();
-        await context.instrumentation.onBeforeCall(context, callMetadata);
+        await this._context.instrumentation.onBeforeCall(this._context, callMetadata);
         this._checkStopped();
         await cb(callMetadata);
       } catch (e) {
         callMetadata.error = serializeError(e);
       } finally {
         callMetadata.endTime = monotonicTime();
-        await context.instrumentation.onAfterCall(context, callMetadata);
+        await this._context.instrumentation.onAfterCall(this._context, callMetadata);
         if (callMetadata.error)
           throw callMetadata.error.error;
       }
@@ -164,7 +173,8 @@ export default class CrxPlayer extends EventEmitter {
     const kActionTimeout = isUnderTest() ? 2000 : 5000;
 
     const { action } = actionInContext;
-    const { _pageAliases: pageAliases, _context: context } = this;
+    const pageAliases = this._pageAliases;
+    const context = browserContext;
 
     if (action.name === 'pause')
       return await innerPerformAction(null, actionInContext, () => Promise.resolve());
