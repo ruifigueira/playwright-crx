@@ -16,6 +16,7 @@
 
 import { Page } from '@playwright/test';
 import { test, expect } from './crxRecorderTest';
+import type { CrxApplication } from '../../test';
 
 async function editCode(recorderPage: Page, code: string) {
   const editor = recorderPage.locator('.CodeMirror textarea');
@@ -23,7 +24,7 @@ async function editCode(recorderPage: Page, code: string) {
   await editor.fill(code);
 }
 
-async function getCode(recorderPage: Page) {
+async function getCode(recorderPage: Page): Promise<string> {
   return await recorderPage.locator('.CodeMirror').evaluate(elem => (elem as any).CodeMirror.getValue());
 }
 
@@ -217,4 +218,34 @@ def test_example(page: Page) -> None:
 
   await recorderPage.getByTitle('Step Over (F10)').click();
   await expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toHaveText(`    await page.locator('textarea')`);
+});
+
+test('should load script using api', async ({ page, attachRecorder, extensionServiceWorker, baseURL }) => {
+  const recorderPage = await attachRecorder(page);
+  await recorderPage.getByTitle('Record').click();
+
+  const code = `import { test, expect } from '@playwright/test';
+
+test('test', async ({ page }) => {
+  await page.goto('${baseURL}/input/textarea.html');
+  await page.locator('textarea').fill('modified test');
+});`;
+
+  await extensionServiceWorker.evaluate(async code => {
+    const crxApp = await (globalThis as any).getCrxApp() as CrxApplication;
+    await crxApp.recorder.load(code);
+  }, code);
+
+  expect(await getCode(recorderPage)).toBe(code);
+
+  await extensionServiceWorker.evaluate(async () => {
+    const crxApp = await (globalThis as any).getCrxApp() as CrxApplication;
+    await crxApp.recorder.load(`import { test, expect } from '@playwright/test';
+
+test('test', async ({ page }) => {
+  await page.gotoError();
+});`);
+  });
+
+  await expect(recorderPage.locator('.source-line-error-widget')).toHaveText('Invalid locator (4:8)');
 });

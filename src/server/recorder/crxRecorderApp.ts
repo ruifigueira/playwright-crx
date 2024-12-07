@@ -33,7 +33,6 @@ export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'setMode', mode: Mode }
   | { method: 'setSources', sources: Source[] }
   | { method: 'setActions', actions: ActionInContext[], sources: Source[] }
-  | { method: 'setRunningFile', file?: string }
   | { method: 'elementPicked', elementInfo: ElementInfo, userGesture?: boolean }
 );
 
@@ -92,7 +91,11 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     }
 
     this.setMode(mode);
-    this.setRunningFile(language);
+  }
+
+  load(code: string) {
+    this._updateCode(code);
+    this._editedCode?.load();
   }
 
   async close() {
@@ -126,11 +129,8 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     this._sendMessage({ type: 'recorder', method: 'setMode', mode });
   }
 
-  async setRunningFile(file?: string) {
-    // hack to prevent recorder from opening files
-    if (file?.endsWith('.js'))
-      return;
-    this._sendMessage({ type: 'recorder', method: 'setRunningFile', file });
+  async setRunningFile() {
+    // this doesn't make sense in crx, it only runs recorded files
   }
 
   async setSources(sources: Source[]) {

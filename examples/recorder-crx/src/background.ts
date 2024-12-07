@@ -250,4 +250,4 @@ chrome.runtime.onMessage.addListener((message) => {
 });
 
 // for testing
-Object.assign(self, { attach, setTestIdAttributeName, _debug, _setUnderTest });
+Object.assign(self, { attach, setTestIdAttributeName, getCrxApp, _debug, _setUnderTest });
