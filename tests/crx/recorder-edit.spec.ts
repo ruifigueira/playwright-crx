@@ -23,6 +23,10 @@ async function editCode(recorderPage: Page, code: string) {
   await editor.fill(code);
 }
 
+async function getCode(recorderPage: Page) {
+  return await recorderPage.locator('.CodeMirror').evaluate(elem => (elem as any).CodeMirror.getValue());
+}
+
 function editorLine(recorderPage: Page, linenumber: number) {
   return recorderPage.locator('.CodeMirror-code > div')
     .filter({ has: recorderPage.locator('.CodeMirror-linenumber', { hasText: String(linenumber) }) })
@@ -130,4 +134,87 @@ test('test', async ({ page }) => {
   await recorderPage.getByTitle('Resume (F8)').click();
   
   await expect(page.locator('textarea')).toHaveValue('modified test');
+});
+
+test('should reset code with errors if file changed', async ({ page, recordAction, attachRecorder, baseURL }) => {
+  const recorderPage = await attachRecorder(page);
+
+  await recordAction(() => page.goto(`${baseURL}/input/textarea.html`));
+
+  await recorderPage.getByTitle('Record').click();
+
+  // introduce an error in the code
+  await editCode(recorderPage, `import { test, expect } from '@playwright/test';
+
+test('test', async ({ page }) => {
+  await page.errorFunction('${baseURL}/input/textarea.html');
+});`);
+  
+  // ensure it's visible
+  await expect(recorderPage.locator('.source-line-error-widget')).toBeVisible();
+  
+  // change to python
+  await recorderPage.locator('.source-chooser').selectOption('python-pytest');
+
+  // should not display the error anymore
+  await expect(recorderPage.locator('.source-line-error-widget')).toBeHidden();
+
+  // back to javascript
+  await recorderPage.locator('.source-chooser').selectOption('playwright-test');
+
+  // error was reverted
+  await expect(editorLine(recorderPage, 4)).toHaveText(`  await page.goto('${baseURL}/input/textarea.html');`);
+});
+
+test('should keep playwright test formatting', async ({ page, attachRecorder, baseURL }) => {
+  const recorderPage = await attachRecorder(page);
+  await recorderPage.getByTitle('Record').click();
+
+  const reformattedCode = `import { test, expect } from '@playwright/test';
+
+
+test('test', async ({ page }) => {
+    await  page.goto(
+      '${baseURL}/input/textarea.html'
+    )
+
+    await page.locator('textarea')
+      .fill('modified test');
+});`;
+
+  await editCode(recorderPage, reformattedCode);
+
+  // ensure code is loaded
+  await recorderPage.waitForTimeout(1000);
+  
+  // ensure there's no errors
+  await expect(recorderPage.locator('.source-line-error-widget')).toBeHidden();
+  
+  // ensure code was not reformatted
+  expect(await getCode(recorderPage)).toBe(reformattedCode);
+
+  // change to python
+  await recorderPage.locator('.source-chooser').selectOption('python-pytest');
+
+  // ensure edited code is formatted the default python way
+  expect(await getCode(recorderPage)).toBe(`import re
+from playwright.sync_api import Page, expect
+
+
+def test_example(page: Page) -> None:
+    page.goto("${baseURL}/input/textarea.html")
+    page.locator("textarea").fill("modified test")
+`);
+
+  // back to javascript
+  await recorderPage.locator('.source-chooser').selectOption('playwright-test');
+
+  // ensure code keeps same formatting
+  expect(await getCode(recorderPage)).toBe(reformattedCode);
+
+  await recorderPage.getByTitle('Step Over (F10)').click();
+  await expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toHaveText(`    await  page.goto(`);
+
+  await recorderPage.getByTitle('Step Over (F10)').click();
+  await expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toHaveText(`    await page.locator('textarea')`);
 });

@@ -54,11 +54,11 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   readonly _recorder: Recorder;
   private _player: CrxPlayer;
   private _filename?: string;
-  private _code?: string;
   private _sources?: Source[];
   private _mode: Mode = 'none';
   private _window?: RecorderWindow;
-  private _codeLoadDebounceTimeout: NodeJS.Timeout | undefined;
+  private _editedCode?: EditedCode;
+  private _recordedActions: ActionInContextWithLocation[] = [];
 
   constructor(recorder: Recorder, player: CrxPlayer) {
     super();
@@ -114,11 +114,11 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   }
 
   async setMode(mode: Mode) {
-    if (['none', 'standby'].includes(mode)) {
+    if (!this._recorder._isRecording())
       this._player.pause().catch(() => {});
-    } else {
+    else
       this._player.stop().catch(() => {});
-    }
+
     if (this._mode !== mode) {
       this._mode = mode;
       this.emit('modeChanged', { mode });
@@ -134,10 +134,11 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   }
 
   async setSources(sources: Source[]) {
-    // hack to prevent recorder from opening files
-    this._sources = sources.filter(s => s.isRecorded);
-    this._sendMessage({ type: 'recorder', method: 'setSources', sources: this._sources });
-    this._setCode(this._sources.find(s => s.id === 'playwright-test')?.text);
+    sources = sources
+      // hack to prevent recorder from opening files
+      .filter(s => s.isRecorded)
+      .map(s => this._editedCode?.decorate(s) ?? s);
+    this._sendMessage({ type: 'recorder', method: 'setSources', sources });
   }
 
   async elementPicked(elementInfo: ElementInfo, userGesture?: boolean) {
@@ -157,59 +158,39 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   }
 
   async setActions(actions: ActionInContext[], sources: Source[]) {
-    this._sendMessage({ type: 'recorder', method: 'setActions', actions, sources });
+    this._recordedActions = Array.from(actions);
+    this._sources = Array.from(sources);
+    if (this._recorder._isRecording())
+      this._updateCode(null);
   }
 
-  load(code: string) {
-    try {
-      if (this._codeLoadDebounceTimeout) {
-        clearTimeout(this._codeLoadDebounceTimeout);
-        this._codeLoadDebounceTimeout = undefined;
-      }
-      this._code = code;
-      const [{ actions, options }] = parse(code);
-      const { deviceName, contextOptions } = { deviceName: '', contextOptions: {}, ...options };
-      this._recorder.loadScript({ actions, deviceName, contextOptions, text: code });
-      return { actions, code };
-    } catch (error) {
-      // syntax error / parsing error 
-      const line = error.loc.line ?? error.loc.start.line ?? code.split('\n').length;
-      const highlight: SourceHighlight[] = [{ line, type: 'error', message: error.message }];
-      this._recorder.loadScript({ actions: [], deviceName: '', contextOptions: {}, text: code, highlight });
-      return { actions: [] as ActionInContextWithLocation[], code, error };
-    }
-  }
-
-  private _setCode(code?: string) {
-    if (this._code === code)
+  private _updateCode(code: string | null) {
+    if (this._editedCode?.code === code)
       return;
 
-    this._code = code;
+    this._editedCode?.stopLoad();
+    this._editedCode = undefined;
 
-    if (this._codeLoadDebounceTimeout)
-      clearTimeout(this._codeLoadDebounceTimeout);
+    if (!code || this._recorder._isRecording())
+      return;
 
-    if (!code || !['inspecting', 'standby'].includes(this._mode)) {
-      this._codeLoadDebounceTimeout = undefined;
-    } else {
-      this._codeLoadDebounceTimeout = setTimeout(() => {
-        this._codeLoadDebounceTimeout = undefined;
-        if (this._code)
-          this.load(this._code);
-      }, 500);
-    }
+    this._editedCode = new EditedCode(this._recorder, code);
   }
 
   private _onMessage({ type, event, params }: RecorderEventData) {
     if (type === 'recorderEvent') {
       switch (event) {
         case 'fileChanged':
-          if (this._code)
-            this.load(this._code);
           this._filename = params.file;
+          if (this._editedCode?.hasErrors()) {
+            this._updateCode(null);
+            // force editor sources to refresh
+            if (this._sources)
+              this.setSources(this._sources);
+          }
           break;
         case 'codeChanged':
-          this._setCode(params.code);
+          this._updateCode(params.code);
           break;
         case 'resume':
         case 'step':
@@ -237,20 +218,20 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   }
 
   private _getActions(): ActionInContextWithLocation[] {
-    if (!this._code)
-      return [];
-
-    // this will indirectly refresh sources
-    const { actions, error }  = this.load(this._code);
-    if (error)
-      return [];
-
-    if (!this._filename || this._filename === 'playwright-test')
-      return actions;
+    if (this._editedCode) {
+      // this will indirectly refresh sources
+      this._editedCode.load();
+      let actions = this._editedCode.actions();
+  
+      if (!this._filename || this._filename === 'playwright-test')
+        return actions;
+    }
     
     const source = this._sources?.find(s => s.id === this._filename);
     if (!source)
       return [];
+
+    const actions = this._editedCode && !this._editedCode.hasErrors() ? this._editedCode.actions() : this._recordedActions;
 
     const { header } = source;
     const languageGenerator = [...languageSet()].find(l => l.id === this._filename)!;
@@ -263,6 +244,74 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
       return numLines(header) + numLines(actionTexts.slice(0, index).filter(Boolean).join('\n')) + 1;
     }
     
-    return actions.map((action, index) => ({ ...action, location: { file: this._filename!, line: sourceLine(index), column: 1 } }));
+    return actions.map((action, index) => ({
+      ...action,
+      location: {
+        file: this._filename!,
+        line: sourceLine(index),
+        column: 1
+      }
+    }));
+  }
+}
+
+class EditedCode {
+  readonly code: string;
+  private _recorder: Recorder;
+  private _actions: ActionInContextWithLocation[] = [];
+  private _highlight: SourceHighlight[] = [];
+  private _codeLoadDebounceTimeout: NodeJS.Timeout | undefined;
+
+  constructor(recorder: Recorder, code: string) {
+    this.code = code;
+    this._recorder = recorder;
+    this._codeLoadDebounceTimeout = setTimeout(this.load.bind(this), 500);
+  }
+
+  actions() {
+    return Array.from(this._actions);
+  }
+
+  hasErrors() {
+    return this._highlight?.length > 0;
+  }
+  
+  hasLoaded() {
+    return !this._codeLoadDebounceTimeout;
+  }
+
+  decorate(source: Source) {
+    if (source.id !== 'playwright-test')
+      return;
+
+    return {
+      ...source,
+      highlight: this.hasLoaded() && this.hasErrors() ? this._highlight : source.highlight,
+      text: this.code, 
+    };
+  }
+
+  stopLoad() {
+    clearTimeout(this._codeLoadDebounceTimeout);
+    this._codeLoadDebounceTimeout = undefined;
+  }
+  
+  load() {
+    if (this.hasLoaded())
+      return;
+
+    this.stopLoad();
+    try {
+      const [{ actions, options }] = parse(this.code);
+      this._actions = actions;
+      const { deviceName, contextOptions } = { deviceName: '', contextOptions: {}, ...options };
+      this._recorder.loadScript({ actions, deviceName, contextOptions, text: this.code });
+    } catch (error) {
+      this._actions = [];
+      // syntax error / parsing error 
+      const line = error.loc.line ?? error.loc.start.line ?? this.code.split('\n').length;
+      this._highlight = [{ line, type: 'error', message: error.message }];
+      this._recorder.loadScript({ actions: this._actions, deviceName: '', contextOptions: {}, text: this.code, highlight: this._highlight });
+    }
   }
 }
