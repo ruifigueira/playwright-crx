@@ -23,7 +23,7 @@ import { CallMetadata } from '@protocol/callMetadata';
 import { serializeError } from 'playwright-core/lib/server/errors';
 import { buildFullSelector, traceParamsForAction } from 'playwright-core/lib/utils/isomorphic/recorderUtils';
 import { toKeyboardModifiers } from 'playwright-core/lib/server/codegen/language';
-import { ActionInContextWithLocation, Location } from './script';
+import { ActionInContextWithLocation, Location } from './parser';
 import { ActionInContext, FrameDescription } from '@recorder/actions';
 import { toClickOptions } from 'playwright-core/lib/server/recorder/recorderRunner';
 import { parseAriaSnapshot } from 'playwright-core/lib/server/ariaSnapshot';
@@ -72,7 +72,8 @@ export default class CrxPlayer extends EventEmitter {
     if (page && !this._context.pages().includes(page))
       throw new Error('Page does not belong to this player context');
 
-    page = this._context.pages()[0] ?? await this._context.newPage(serverSideCallMetadata());
+    if (!page)
+      page = this._context.pages()[0] ?? await this._context.newPage(serverSideCallMetadata());
 
     this._pageAliases.clear();
     this._pageAliases.set(page ?? this._context.pages()[0], 'page');
@@ -215,7 +216,7 @@ export default class CrxPlayer extends EventEmitter {
     if (action.name === 'uncheck')
       return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.uncheck(callMetadata, selector, { timeout: kActionTimeout, strict: true }));
     if (action.name === 'select') {
-      const values = action.options.map(value => ({ value }));
+      const values = action.options.map((value: any) => ({ value }));
       return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.selectOption(callMetadata, selector, [], values, { timeout: kActionTimeout, strict: true }));
     }
     if (action.name === 'assertChecked') {
