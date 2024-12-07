@@ -47,6 +47,8 @@ export class Crx extends SdkObject {
 
   private _transport!: CrxTransport;
   private _browserPromise!: Promise<CRBrowser>;
+  private _crxApplicationPromise: Promise<CrxApplication> | undefined;
+  private _incognitoCrxApplicationPromise: Promise<CrxApplication> | undefined;
 
   constructor(playwright: Playwright) {
     super(playwright, 'crx');
@@ -85,9 +87,24 @@ export class Crx extends SdkObject {
       this._browserPromise = CRBrowser.connect(this.attribution.playwright, this._transport, browserOptions);
     }
     const browser = await this._browserPromise;
-    return incognito ?
-      await this._startIncognitoCrxApplication(browser, this._transport, contextOptions) :
-      new CrxApplication(this, browser._defaultContext as CRBrowserContext, this._transport);
+
+    if (incognito) {
+      if (this._incognitoCrxApplicationPromise)
+        throw new Error(`incognito crxApplication is already started`);
+      this._incognitoCrxApplicationPromise = this._startIncognitoCrxApplication(browser, this._transport, contextOptions);
+      return await this._incognitoCrxApplicationPromise;
+    } else {
+      if (this._crxApplicationPromise)
+        throw new Error(`crxApplication is already started`);
+      this._crxApplicationPromise = this._startCrxApplication(browser, this._transport);
+      return await this._crxApplicationPromise;
+    }
+  }
+
+  private async _startCrxApplication(browser: CRBrowser, transport: CrxTransport) {
+    const crxApp = new CrxApplication(this, browser._defaultContext as CRBrowserContext, transport);
+    crxApp.once('close', () => this._crxApplicationPromise = undefined);
+    return crxApp;
   }
 
   private async _startIncognitoCrxApplication(browser: CRBrowser, transport: CrxTransport, options?: crxchannels.CrxStartOptions['contextOptions']) {
@@ -118,8 +135,15 @@ export class Crx extends SdkObject {
     });
 
     const crxApp = new CrxApplication(this, context, this._transport);
+    crxApp.once('close', () => this._incognitoCrxApplicationPromise = undefined);
     await crxApp.attach(incognitoTabId);
     return crxApp;
+  }
+
+  async get(options: { incognito: boolean }): Promise<CrxApplication | undefined> {
+    return options.incognito ?
+      await this._incognitoCrxApplicationPromise :
+      await this._crxApplicationPromise;
   }
 
   async closeAndWait() {
@@ -206,7 +230,7 @@ export class CrxApplication extends SdkObject {
         mode: mode === 'none' ? undefined : mode,
         ...otherOptions
       };
-      Recorder.show('actions', this._context, this._createRecorderApp.bind(this), recorderParams);
+      Recorder.show('actions', this._context, recorder => this._createRecorderApp(recorder, options?.playInIncognito ?? false), recorderParams);
     }
 
     await this._recorderApp!.open(options);
@@ -269,12 +293,19 @@ export class CrxApplication extends SdkObject {
     return await this.attach(tabId);
   }
 
-  async close() {
+  async close(options?: { closePages?: boolean, closeWindows?: boolean }) {
+    if (options?.closeWindows && !this.isIncognito())
+      throw new Error('closeWindows is only supported in incognito mode');
     chrome.windows.onRemoved.removeListener(this.onWindowRemoved);
-    await Promise.all(this._crPages().map(crPage => this._doDetach(crPage._targetId)));
+
+    if (options?.closeWindows) {
+      const windows = await chrome.windows.getAll();
+      await Promise.all(windows.filter(w => w.incognito && w.id).map(w => chrome.windows.remove(w.id!)));
+    } else {
+      await Promise.all(this._crPages().map(crPage => options?.closePages ? crPage.closePage(false) : this._doDetach(crPage._targetId)));
+    }
     if (!this.isIncognito())
       await this._crx.closeAndWait();
-
   }
 
   list(code: string) {
@@ -298,15 +329,16 @@ export class CrxApplication extends SdkObject {
     return { actions, options, code };
   }
 
-  private async _createRecorderApp(recorder: IRecorder) {
+  private async _createRecorderApp(recorder: IRecorder, playInIncognito: boolean) {
     if (!this._recorderApp) {
-      this._recorderApp = new CrxRecorderApp(recorder as Recorder, this._player);
+      this._recorderApp = new CrxRecorderApp(this._crx, recorder as Recorder, this._player);
       this._recorderApp.on('show', () => this.emit(CrxApplication.Events.RecorderShow));
       this._recorderApp.on('hide', () => this.emit(CrxApplication.Events.RecorderHide));
       this._recorderApp.on('modeChanged', event => {
         this.emit(CrxApplication.Events.ModeChanged, event);
       });
     }
+    this._recorderApp.setPlayInIncognito(playInIncognito);
     return this._recorderApp;
   }
 
