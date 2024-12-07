@@ -81,7 +81,7 @@ test('should allow new incognito context after closing', async ({ runCrxTest }) 
 test('should fail if two incognito contexts are opened', async ({ runCrxTest }) => {
   await runCrxTest(async ({ crx, expect }) => {
     await crx.start({ incognito: true });
-    await expect(() => crx.start({ incognito: true })).rejects.toThrowError();
+    await expect(() => crx.start({ incognito: true })).rejects.toThrowError('incognito crxApplication is already started');
   });
 });
 
@@ -91,7 +91,7 @@ test('should fail if incognito tab is attached to default crxApp', async ({ runC
       new Promise<chrome.tabs.Tab>(f => chrome.tabs.onCreated.addListener(f)),
       chrome.windows.create({ incognito: true, url: server.EMPTY_PAGE }),
     ]);
-    await expect(crxApp.attach(tab.id!)).rejects.toThrowError();
+    await expect(crxApp.attach(tab.id!)).rejects.toThrowError('Tab is not in the expected browser context');
   });
 });
 
@@ -99,7 +99,7 @@ test('should fail if normal tab is attached to incognito crxApp', async ({ runCr
   await runCrxTest(async ({ crx, server, expect }) => {
     const tab = await chrome.tabs.create({ url: server.EMPTY_PAGE });
     const incognitoApp = await crx.start({ incognito: true });
-    await expect(incognitoApp.attach(tab.id!)).rejects.toThrowError();
+    await expect(incognitoApp.attach(tab.id!)).rejects.toThrowError('Tab is not in the expected browser context');
   });
 });
 
@@ -109,7 +109,7 @@ test('should fail when create new page in default crxApp passing on an incognito
       new Promise<chrome.windows.Window>(f => chrome.windows.onCreated.addListener(f)),
       chrome.windows.create({ incognito: true }),
     ]);
-    await expect(crxApp.newPage({ windowId: wnd.id! })).rejects.toThrowError();
+    await expect(crxApp.newPage({ windowId: wnd.id! })).rejects.toThrowError(/Window with id \d+ not found or bound to a different context/);
   });
 });
 
@@ -117,7 +117,7 @@ test('should fail when create new page in incognito crxApp passing on a normal w
   await runCrxTest(async ({ crx, expect }) => {
     const wnd = await chrome.windows.create();
     const incognitoApp = await crx.start({ incognito: true });
-    await expect(incognitoApp.newPage({ windowId: wnd.id! })).rejects.toThrowError();
+    await expect(incognitoApp.newPage({ windowId: wnd.id! })).rejects.toThrowError(/Window with id \d+ not found or bound to a different context/);
   });
 });
 

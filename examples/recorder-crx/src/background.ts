@@ -123,6 +123,7 @@ async function attach(tab: chrome.tabs.Tab, mode?: Mode) {
         mode: mode ?? 'recording',
         language: settings.targetLanguage,
         window: { type: sidepanel ? 'sidepanel' : 'popup', url: 'index.html' },
+        playInIncognito: settings.playInIncognito,
       });
     }
 
