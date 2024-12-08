@@ -29,8 +29,8 @@ import type * as crxchannels from '../protocol/channels';
 import { CrxRecorderApp } from './recorder/crxRecorderApp';
 import { CrxTransport } from './transport/crxTransport';
 import { BrowserContext } from 'playwright-core/lib/server/browserContext';
-import { IRecorder } from 'playwright-core/lib/server/recorder/recorderFrontend';
-import { Mode } from '@recorder/recorderTypes';
+import type { IRecorder } from 'playwright-core/lib/server/recorder/recorderFrontend';
+import type { Mode } from '@recorder/recorderTypes';
 import CrxPlayer from './recorder/crxPlayer';
 import { createTab } from './utils';
 import { parse } from './recorder/parser';
@@ -102,21 +102,21 @@ export class Crx extends SdkObject {
       };
       chrome.tabs.onCreated.addListener(tabCreated);
     });
-    if (!windowId) {
+    if (!windowId)
       chrome.windows.create({ incognito: true, url: 'about:blank' });
-    } else {
+    else
       chrome.tabs.create({ url: 'about:blank', windowId });
-    }
+
     const incognitoTabId = await incognitoTabIdPromise;
     let context!: CRBrowserContext;
     await transport.attach(incognitoTabId, async ({ browserContextId }) => {
-      // ensure we create and initialize the new context before the Target.attachedToTarget event is emitted 
+      // ensure we create and initialize the new context before the Target.attachedToTarget event is emitted
       assert(browserContextId);
       context = new CRBrowserContext(browser, browserContextId, options ?? {});
       await context._initialize();
       browser._contexts.set(browserContextId, context);
     });
-    
+
     const crxApp = new CrxApplication(this, context, this._transport);
     await crxApp.attach(incognitoTabId);
     return crxApp;
@@ -158,10 +158,11 @@ export class CrxApplication extends SdkObject {
     this._player = new CrxPlayer(context);
     context.on(BrowserContext.Events.Page, (page: Page) => {
       const tabId = this.tabIdForPage(page);
-      if (!tabId) return;
+      if (!tabId)
+        return;
 
       (page as any)[kTabIdSymbol] = tabId;
-      
+
       page.on(Page.Events.Close, () => {
         this.emit(CrxApplication.Events.Detached, { tabId });
       });
@@ -191,14 +192,15 @@ export class CrxApplication extends SdkObject {
 
   tabIdForPage(page: Page) {
     const targetId = this._crPages().find(crPage => crPage._initializedPage === page)?._targetId;
-    if (!targetId) return;
+    if (!targetId)
+      return;
 
     return this._transport.getTabId(targetId);
   }
 
   async showRecorder(options?: crxchannels.CrxApplicationShowRecorderParams) {
     if (!this._recorderApp) {
-      const { mode, window, ...otherOptions } = options ?? {};
+      const { mode, ...otherOptions } = options ?? {};
       const recorderParams = {
         language: options?.language ?? 'playwright-test',
         mode: mode === 'none' ? undefined : mode,
@@ -229,7 +231,8 @@ export class CrxApplication extends SdkObject {
     const crPage = this._crPageByTargetId(targetId);
     assert(crPage);
     const pageOrError = await crPage.pageOrError();
-    if (pageOrError instanceof Error) throw pageOrError;
+    if (pageOrError instanceof Error)
+      throw pageOrError;
     return pageOrError;
   }
 
@@ -269,9 +272,9 @@ export class CrxApplication extends SdkObject {
   async close() {
     chrome.windows.onRemoved.removeListener(this.onWindowRemoved);
     await Promise.all(this._crPages().map(crPage => this._doDetach(crPage._targetId)));
-    if (!this.isIncognito()) {
+    if (!this.isIncognito())
       await this._crx.closeAndWait();
-    }
+
   }
 
   list(code: string) {
@@ -300,7 +303,7 @@ export class CrxApplication extends SdkObject {
       this._recorderApp = new CrxRecorderApp(recorder as Recorder, this._player);
       this._recorderApp.on('show', () => this.emit(CrxApplication.Events.RecorderShow));
       this._recorderApp.on('hide', () => this.emit(CrxApplication.Events.RecorderHide));
-      this._recorderApp.on('modeChanged', (event) => {
+      this._recorderApp.on('modeChanged', event => {
         this.emit(CrxApplication.Events.ModeChanged, event);
       });
     }
@@ -314,16 +317,19 @@ export class CrxApplication extends SdkObject {
   };
 
   private async _doDetach(targetId?: string) {
-    if (!targetId) return;
+    if (!targetId)
+      return;
 
     if (this._transport.isIncognito(targetId) !== this.isIncognito())
       throw new Error('Tab is not in the expected browser context');
 
     const crPage = this._crPageByTargetId(targetId);
-    if (!crPage) return;
+    if (!crPage)
+      return;
 
     const pageOrError = await crPage.pageOrError();
-    if (pageOrError instanceof Error) throw pageOrError;
+    if (pageOrError instanceof Error)
+      throw pageOrError;
 
     // ensure we don't have any injected highlights
     await Promise.all([

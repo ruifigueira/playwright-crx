@@ -16,11 +16,11 @@
 
 import { EventEmitter } from 'events';
 import { ChannelOwner } from 'playwright-core/lib/client/channelOwner';
-import * as api from '../types/types';
+import type * as api from '../types/types';
 import type * as channels from '../protocol/channels';
 import { Page } from 'playwright-core/lib/client/page';
 import type { BrowserContext } from 'playwright-core/lib/client/browserContext';
-import { Mode } from '@recorder/recorderTypes';
+import type { Mode } from '@recorder/recorderTypes';
 import fs from '../shims/fs';
 
 function from<T>(obj: any): T {
@@ -37,7 +37,7 @@ export class Crx extends ChannelOwner<channels.CrxChannel> implements api.Crx {
   static from(crx: channels.CrxChannel): Crx {
     return (crx as any)._object;
   }
-  
+
   async start(options?: channels.CrxStartOptions) {
     if (options?.incognito) {
       if (this._incognitoCrxPromise)
@@ -105,7 +105,7 @@ export class CrxRecorder extends EventEmitter implements api.CrxRecorder {
     const { tests } = await this._channel.list({ code });
     return tests;
   }
-  
+
   async load(code: string) {
     await this._channel.load({ code });
   }

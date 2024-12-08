@@ -1,3 +1,18 @@
+/**
+ * Copyright (c) Rui Figueira.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 import { type RawSourceMap, SourceMapConsumer } from 'source-map';
 // @ts-ignore
 import mappingsUrl from './mappings.wasm?url';
@@ -13,16 +28,16 @@ function origName(origLine: string) {
 
 function formatOriginalPosition(source: string, line: number, column: number, name?: string) {
   // mimic chrome's format
-  return `    at ${name ?? "(unknown)"} (${source}:${line}:${column})`;
-};
+  return `    at ${name ?? '(unknown)'} (${source}:${line}:${column})`;
+}
 
 let initialized: Promise<void> | undefined;
 
 export async function registerSourceMap(uri?: string, sourceMapUriOrValue?: string | RawSourceMap) {
   if (!initialized) {
-    initialized = new Promise<void>((resolve) => {
+    initialized = new Promise<void>(resolve => {
       if (mappingsUrl.startsWith('data:')) {
-        const [,base64] = mappingsUrl.split(',');
+        const [, base64] = mappingsUrl.split(',');
         const buffer = Buffer.from(base64, 'base64').buffer;
         // @ts-ignore
         SourceMapConsumer.initialize({ 'lib/mappings.wasm': buffer });
@@ -35,21 +50,22 @@ export async function registerSourceMap(uri?: string, sourceMapUriOrValue?: stri
   uri = uri ?? globalThis.location.href;
   sourceMapUriOrValue =  sourceMapUriOrValue ?? `${uri}.map`;
 
-  if (mapForUri.has(uri)) return;
+  if (mapForUri.has(uri))
+    return;
   // prevents race condition
   mapForUri.set(uri, undefined);
 
-  await new Promise<void>(async (resolve) => {
+  await new Promise<void>(async resolve => {
     try {
       let sourceMap: RawSourceMap | undefined;
 
       if (typeof sourceMapUriOrValue === 'string') {
         const result = await fetch(sourceMapUriOrValue);
-        if (result.ok) {
+        if (result.ok)
           sourceMap = await result.json();
-        } else {
+        else
           console.warn(`response for ${sourceMapUriOrValue} failed, result was ${result.status}: ${result.statusText}`);
-        }
+
       } else if (typeof sourceMapUriOrValue === 'object') {
         sourceMap = sourceMapUriOrValue as RawSourceMap;
       }
@@ -67,7 +83,7 @@ export async function registerSourceMap(uri?: string, sourceMapUriOrValue?: stri
 }
 
 export function processStackTraceLine(line: string) {
-  const [_, uri, lineNumberStr, columnStr] = line.match(regex) ?? [];
+  const [, uri, lineNumberStr, columnStr] = line.match(regex) ?? [];
   if (uri) {
     const lineNumber = parseInt(lineNumberStr, 10);
     const column = parseInt(columnStr, 10);
@@ -75,23 +91,23 @@ export function processStackTraceLine(line: string) {
 
     if (map) {
       // we think we have a map for that uri. call source-map library
-      var origPos = map.originalPositionFor({ line: lineNumber, column });
+      const origPos = map.originalPositionFor({ line: lineNumber, column });
       if (origPos.source && origPos.line && origPos.column) {
         let name = origPos.name;
         if (!name) {
           // esbuild can modify class names and include numbered suffixes
           // so just remove them
           name = origName(line);
-          if (/playwright\/packages\/playwright-core\/src\/client\/\w+\.ts$/.test(origPos.source)) {
+          if (/playwright\/packages\/playwright-core\/src\/client\/\w+\.ts$/.test(origPos.source))
             name = name.replace(/\d+\./, '.');
-          }
+
         }
 
         return formatOriginalPosition(
-          origPos.source,
-          origPos.line,
-          origPos.column,
-          name,
+            origPos.source,
+            origPos.line,
+            origPos.column,
+            name,
         );
       }
     } else {
@@ -101,7 +117,7 @@ export function processStackTraceLine(line: string) {
       return formatOriginalPosition(uri, lineNumber, column, origName(line));
     }
   }
-  
+
   // we weren't able to parse the row, push back what we were given
   return line;
 }

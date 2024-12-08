@@ -15,16 +15,16 @@
  */
 
 import EventEmitter from 'events';
-import { BrowserContext } from 'playwright-core/lib/server/browserContext';
+import type { BrowserContext } from 'playwright-core/lib/server/browserContext';
 import type { Page } from 'playwright-core/lib/server/page';
 import { createGuid, isUnderTest, ManualPromise, monotonicTime, serializeExpectedTextValues } from 'playwright-core/lib/utils';
-import { Frame } from 'playwright-core/lib/server/frames';
-import { CallMetadata } from '@protocol/callMetadata';
+import type { Frame } from 'playwright-core/lib/server/frames';
+import type { CallMetadata } from '@protocol/callMetadata';
 import { serializeError } from 'playwright-core/lib/server/errors';
 import { buildFullSelector, traceParamsForAction } from 'playwright-core/lib/utils/isomorphic/recorderUtils';
 import { toKeyboardModifiers } from 'playwright-core/lib/server/codegen/language';
-import { ActionInContextWithLocation, Location } from './parser';
-import { ActionInContext, FrameDescription } from '@recorder/actions';
+import type { ActionInContextWithLocation, Location } from './parser';
+import type { ActionInContext, FrameDescription } from '@recorder/actions';
 import { toClickOptions } from 'playwright-core/lib/server/recorder/recorderRunner';
 import { parseAriaSnapshot } from 'playwright-core/lib/server/ariaSnapshot';
 import { serverSideCallMetadata } from 'playwright-core/lib/server';
@@ -67,8 +67,9 @@ export default class CrxPlayer extends EventEmitter {
   }
 
   async run(actions: PerformAction[], page?: Page) {
-    if (this.isPlaying()) return;
-    
+    if (this.isPlaying())
+      return;
+
     if (page && !this._context.pages().includes(page))
       throw new Error('Page does not belong to this player context');
 
@@ -81,12 +82,14 @@ export default class CrxPlayer extends EventEmitter {
 
     try {
       for (const action of actions) {
-        if (action.action.name === 'openPage' && action.frame.pageAlias === 'page') continue;
+        if (action.action.name === 'openPage' && action.frame.pageAlias === 'page')
+          continue;
         this._currAction = action;
         await this._performAction(action);
       }
     } catch (e) {
-      if (e instanceof Stopped) return;
+      if (e instanceof Stopped)
+        return;
       throw e;
     } finally {
       this._currAction = undefined;
@@ -119,7 +122,7 @@ export default class CrxPlayer extends EventEmitter {
     const innerPerformAction = async (mainFrame: Frame | null, actionInContext: PerformAction, cb: (callMetadata: CallMetadata) => Promise<any>): Promise<void> => {
       const context = mainFrame ?? this._context;
       let traceParams: ReturnType<typeof traceParamsForAction>;
-      
+
       switch (actionInContext.action.name) {
         case 'pause': traceParams = { method: 'pause', params: {}, apiName: 'page.pause' }; break;
         case 'openPage': traceParams = { method: 'newPage', params: {}, apiName: 'browserContext.newPage' }; break;
@@ -155,21 +158,22 @@ export default class CrxPlayer extends EventEmitter {
         if (callMetadata.error)
           throw callMetadata.error.error;
       }
-    }
+    };
 
     // similar to playwright/packages/playwright-core/src/server/recorder/recorderRunner.ts
     const kActionTimeout = isUnderTest() ? 2000 : 5000;
 
-    const { action } = actionInContext;  
+    const { action } = actionInContext;
     const { _pageAliases: pageAliases, _context: context } = this;
-    
+
     if (action.name === 'pause')
       return await innerPerformAction(null, actionInContext, () => Promise.resolve());
-  
-    if (action.name === 'openPage')
+
+    if (action.name === 'openPage') {
       return await innerPerformAction(null, actionInContext, async callMetadata => {
         const pageAlias = actionInContext.frame.pageAlias;
-        if ([...pageAliases.values()].includes(pageAlias)) throw new Error(`Page with alias ${pageAlias} already exists`);
+        if ([...pageAliases.values()].includes(pageAlias))
+          throw new Error(`Page with alias ${pageAlias} already exists`);
         const newPage = await context.newPage(callMetadata);
         if (action.url && action.url !== 'about:blank' && action.url !== 'chrome://newtab/') {
           const navigateCallMetadata = {
@@ -180,24 +184,26 @@ export default class CrxPlayer extends EventEmitter {
         }
         pageAliases.set(newPage, pageAlias);
       });
-  
+    }
+
     const pageAlias = actionInContext.frame.pageAlias;
     const page = [...pageAliases.entries()].find(([, alias]) => pageAlias === alias)?.[0];
     if (!page)
       throw new Error('Internal error: page not found');
     const mainFrame = page.mainFrame();
-      
+
     if (action.name === 'navigate')
       return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.goto(callMetadata, action.url, { timeout: kActionTimeout }));
-    
-    if (action.name === 'closePage')
+
+    if (action.name === 'closePage') {
       return await innerPerformAction(mainFrame, actionInContext, async callMetadata => {
         pageAliases.delete(page);
         await page.close(callMetadata, { runBeforeUnload: true });
       });
-    
+    }
+
     const selector = buildFullSelector(actionInContext.frame.framePath, action.selector);
-    
+
     if (action.name === 'click') {
       const options = toClickOptions(action);
       return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.click(callMetadata, selector, { ...options, timeout: kActionTimeout, strict: true }));

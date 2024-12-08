@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-import { LogName, debugLogger } from 'playwright-core/lib/utils/debugLogger';
+import type { LogName } from 'playwright-core/lib/utils/debugLogger';
+import { debugLogger } from 'playwright-core/lib/utils/debugLogger';
 import type { Protocol } from 'playwright-core/lib/server/chromium/protocol';
 import type { Progress } from 'playwright-core/lib/server/progress';
 import type { ConnectionTransport, ProtocolRequest, ProtocolResponse } from 'playwright-core/lib/server/transport';
@@ -96,8 +97,8 @@ export class CrxTransport implements ConnectionTransport {
           { exclude: true, type: 'tab' },
           // in versions prior to 126, this fallback doesn't work,
           // but it is necessary for oopif frames to be discoverable in version 126 or greater
-          ...(versionStr && parseInt(versionStr) >= 126 ? [{}] : []),
-        ]});
+          ...(versionStr && parseInt(versionStr, 10) >= 126 ? [{}] : []),
+        ] });
       } else if (message.method === 'Target.getTargetInfo' && !debuggee.tabId) {
         // most likely related with https://chromium-review.googlesource.com/c/chromium/src/+/2885888
         // See CRBrowser.connect
@@ -178,7 +179,7 @@ export class CrxTransport implements ConnectionTransport {
 
       if (!this._defaultBrowserContextId) {
         const tab = await chrome.tabs.get(tabId);
-        if (!tab.incognito) 
+        if (!tab.incognito)
           this._defaultBrowserContextId = targetInfo.browserContextId;
       }
 
@@ -196,7 +197,8 @@ export class CrxTransport implements ConnectionTransport {
 
   async detach(tabOrTarget: number | string) {
     const tabId = typeof tabOrTarget === 'number' ? tabOrTarget : this._targetToTab.get(tabOrTarget);
-    if (!tabId) return;
+    if (!tabId)
+      return;
 
     const targetInfo = this._tabToTarget.get(tabId);
     this._tabToTarget.delete(tabId);
@@ -209,7 +211,8 @@ export class CrxTransport implements ConnectionTransport {
   }
 
   close() {
-    if (this._detachedPromise) return;
+    if (this._detachedPromise)
+      return;
     this._detachedPromise = Promise.all([...this._tabToTarget.keys()]
         .map(this.detach))
         .then(() => this.onclose?.());
@@ -232,19 +235,21 @@ export class CrxTransport implements ConnectionTransport {
     method: T,
     commandParams?: Protocol.CommandParameters[T]
   ) {
-    // eslint-disable-next-line no-console
-    if (!debuggee.tabId) console.trace(`No tabId provided for ${method}`);
 
-    if (debugLogger.isEnabled('chromedebugger' as LogName)) {
+    if (!debuggee.tabId)
+      console.trace(`No tabId provided for ${method}`);
+
+    if (debugLogger.isEnabled('chromedebugger' as LogName))
       debugLogger.log('chromedebugger' as LogName, `SEND> ${method} #${debuggee.tabId}`);
-    }
+
 
     return await chrome.debugger.sendCommand(debuggee, method, commandParams) as
       Protocol.CommandReturnValues[T];
   }
 
   private _onPopupCreated = async ({ openerTabId, id }: Tab) => {
-    if (!openerTabId || !id) return;
+    if (!openerTabId || !id)
+      return;
 
     if (this._tabToTarget.has(openerTabId))
       // it can fail due to "Cannot access a chrome:// URL"
@@ -253,7 +258,8 @@ export class CrxTransport implements ConnectionTransport {
 
   private _onRemoved = (tabIdOrDebuggee: number | { tabId?: number }) => {
     const tabId = typeof tabIdOrDebuggee === 'number' ? tabIdOrDebuggee : tabIdOrDebuggee.tabId;
-    if (!tabId) return;
+    if (!tabId)
+      return;
 
     const targetInfo = this._tabToTarget.get(tabId);
     this._tabToTarget.delete(tabId);
@@ -264,18 +270,20 @@ export class CrxTransport implements ConnectionTransport {
   };
 
   private _onDebuggerEvent = ({ tabId, sessionId }: DebuggerSession, message?: string, params?: any) => {
-    if (!tabId) return;
-    if (!sessionId) sessionId = this._sessionIdFor(tabId);
+    if (!tabId)
+      return;
+    if (!sessionId)
+      sessionId = this._sessionIdFor(tabId);
 
-    if (message === 'Target.attachedToTarget') {
+    if (message === 'Target.attachedToTarget')
       this._sessions.set((params as Protocol.Target.attachToTargetReturnValue).sessionId, tabId);
-    } else if (message === 'Target.detachedFromTarget') {
+    else if (message === 'Target.detachedFromTarget')
       this._sessions.delete((params as Protocol.Target.attachToTargetReturnValue).sessionId);
-    }
 
-    if (debugLogger.isEnabled(`chromedebugger` as LogName)) {
+
+    if (debugLogger.isEnabled(`chromedebugger` as LogName))
       debugLogger.log('chromedebugger' as LogName, `<RECV ${message} #${tabId}`);
-    }
+
 
     this._emitMessage({
       method: message,
@@ -323,7 +331,7 @@ export class CrxTransport implements ConnectionTransport {
     if (!browserContextId)
       throw new Error(`No attached tab found for browserContextId ${browserContextId}`);
     return [...this._tabToTarget]
-      .filter(([, targetInfo]) => targetInfo.browserContextId === browserContextId)
-      .map(([tabId, targetInfo]) => ({ tabId, targetId: targetInfo?.targetId } satisfies chrome.debugger.Debuggee));
+        .filter(([, targetInfo]) => targetInfo.browserContextId === browserContextId)
+        .map(([tabId, targetInfo]) => ({ tabId, targetId: targetInfo?.targetId } satisfies chrome.debugger.Debuggee));
   }
 }

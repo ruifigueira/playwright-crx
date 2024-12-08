@@ -17,7 +17,7 @@
 import type { BrowserContextChannel, Channel, PageChannel, PlaywrightInitializer } from '@protocol/channels';
 import type { Mode } from '@recorder/recorderTypes';
 import type { CallMetadata } from 'playwright-core/lib/server/instrumentation';
-import { CrxBrowserContextOptions } from 'src/types/types';
+import type { CrxBrowserContextOptions } from 'src/types/types';
 
 export type CrxPlaywrightInitializer = PlaywrightInitializer & { _crx: CrxChannel };
 

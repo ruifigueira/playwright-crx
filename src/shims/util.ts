@@ -18,7 +18,8 @@
 import _util, { promisify as promisify } from '_util';
 
 export const promisify = function(first, ...rest) {
-  if (first !== 'function') return Promise.resolve();
+  if (first !== 'function')
+    return Promise.resolve();
   return _promisify(first, ...rest);
 };
 

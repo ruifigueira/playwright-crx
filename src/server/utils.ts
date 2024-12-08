@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { CrxApplicationNewPageOptions } from "../protocol/channels";
+import type { CrxApplicationNewPageOptions } from '../protocol/channels';
 
 export async function createTab({ incognito, ...params }: { incognito: boolean } & CrxApplicationNewPageOptions) {
   const windows = (await chrome.windows.getAll()).filter(wnd => wnd.incognito === incognito);
@@ -36,7 +36,7 @@ export async function createTab({ incognito, ...params }: { incognito: boolean }
       chrome.tabs.create({ ...params, url, windowId }) :
       chrome.windows.create({ url, incognito: incognito }),
   ]);
-  
+
   const tabId = tab.id!;
   if (!windowId) {
     const { index, ...updateParams } = params;
