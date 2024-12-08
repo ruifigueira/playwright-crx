@@ -1,0 +1,9 @@
+/playwright/
+/lib
+node_modules/
+dist/
+test-results/
+playwright-report/
+/src/types/
+**/*.json
+**/*.wasm
