@@ -31,7 +31,7 @@ const tBrowserContextOptions = () => tObject({
     height: tNumber,
   })),
   permissions: tOptional(tArray(tString)),
-  serviceWorkers: tOptional(tEnum(['allow', 'block'])), 
+  serviceWorkers: tOptional(tEnum(['allow', 'block'])),
 });
 
 // "override" PlaywrightInitializer, adds _crx

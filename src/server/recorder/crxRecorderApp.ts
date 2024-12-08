@@ -15,15 +15,15 @@
  */
 import type { CallLog, ElementInfo, EventData, Mode, Source, SourceHighlight } from '@recorder/recorderTypes';
 import { EventEmitter } from 'events';
-import { Page } from 'playwright-core/lib/server/page';
+import type { Page } from 'playwright-core/lib/server/page';
 import type { Recorder } from 'playwright-core/lib/server/recorder';
 import type * as channels from '../../protocol/channels';
-import CrxPlayer from './crxPlayer';
-import { ActionInContextWithLocation } from './parser';
+import type CrxPlayer from './crxPlayer';
+import type { ActionInContextWithLocation } from './parser';
 import { PopupRecorderWindow } from './popupRecorderWindow';
 import { SidepanelRecorderWindow } from './sidepanelRecorderWindow';
-import { IRecorderApp } from 'playwright-core/lib/server/recorder/recorderFrontend';
-import { ActionInContext } from '@recorder/actions';
+import type { IRecorderApp } from 'playwright-core/lib/server/recorder/recorderFrontend';
+import type { ActionInContext } from '@recorder/actions';
 import { parse } from './parser';
 import { languageSet } from 'playwright-core/lib/server/codegen/languages';
 
@@ -44,7 +44,7 @@ export interface RecorderWindow {
   open: () => Promise<void>;
   focus: () => Promise<void>;
   close: () => Promise<void>;
-  onMessage?: ({ type, event, params }: RecorderEventData) => void; 
+  onMessage?: ({ type, event, params }: RecorderEventData) => void;
   hideApp?: () => any;
 }
 
@@ -135,9 +135,9 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
 
   async setSources(sources: Source[]) {
     sources = sources
-      // hack to prevent recorder from opening files
-      .filter(s => s.isRecorded)
-      .map(s => this._editedCode?.decorate(s) ?? s);
+    // hack to prevent recorder from opening files
+        .filter(s => s.isRecorded)
+        .map(s => this._editedCode?.decorate(s) ?? s);
     this._sendMessage({ type: 'recorder', method: 'setSources', sources });
   }
 
@@ -207,7 +207,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
 
       this.emit('event', { event, params });
     }
-  };
+  }
 
   _sendMessage(msg: RecorderMessage) {
     return this._window?.postMessage(msg);
@@ -221,12 +221,12 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     if (this._editedCode) {
       // this will indirectly refresh sources
       this._editedCode.load();
-      let actions = this._editedCode.actions();
-  
+      const actions = this._editedCode.actions();
+
       if (!this._filename || this._filename === 'playwright-test')
         return actions;
     }
-    
+
     const source = this._sources?.find(s => s.id === this._filename);
     if (!source)
       return [];
@@ -238,12 +238,12 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     // we generate actions here to have a one-to-one mapping between actions and text
     // (source actions are filtered, only non-empty actions are included)
     const actionTexts = actions.map(a => languageGenerator.generateAction(a));
-    
+
     const sourceLine = (index: number) => {
       const numLines = (str?: string) => str ? str.split(/\r?\n/).length : 0;
       return numLines(header) + numLines(actionTexts.slice(0, index).filter(Boolean).join('\n')) + 1;
-    }
-    
+    };
+
     return actions.map((action, index) => ({
       ...action,
       location: {
@@ -275,7 +275,7 @@ class EditedCode {
   hasErrors() {
     return this._highlight?.length > 0;
   }
-  
+
   hasLoaded() {
     return !this._codeLoadDebounceTimeout;
   }
@@ -287,7 +287,7 @@ class EditedCode {
     return {
       ...source,
       highlight: this.hasLoaded() && this.hasErrors() ? this._highlight : source.highlight,
-      text: this.code, 
+      text: this.code,
     };
   }
 
@@ -295,7 +295,7 @@ class EditedCode {
     clearTimeout(this._codeLoadDebounceTimeout);
     this._codeLoadDebounceTimeout = undefined;
   }
-  
+
   load() {
     if (this.hasLoaded())
       return;
@@ -308,7 +308,7 @@ class EditedCode {
       this._recorder.loadScript({ actions, deviceName, contextOptions, text: this.code });
     } catch (error) {
       this._actions = [];
-      // syntax error / parsing error 
+      // syntax error / parsing error
       const line = error.loc.line ?? error.loc.start.line ?? this.code.split('\n').length;
       this._highlight = [{ line, type: 'error', message: error.message }];
       this._recorder.loadScript({ actions: this._actions, deviceName: '', contextOptions: {}, text: this.code, highlight: this._highlight });

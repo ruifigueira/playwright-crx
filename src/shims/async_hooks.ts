@@ -36,8 +36,10 @@ export class AsyncLocalStorage<T extends { type: string; previous?: T }> {
     }
 
     return runWithFinally(() => func(), () => {
-      if (id) this._zones.delete(id);
-      if (store) this._current = store.previous;
+      if (id)
+        this._zones.delete(id);
+      if (store)
+        this._current = store.previous;
     });
   }
 }

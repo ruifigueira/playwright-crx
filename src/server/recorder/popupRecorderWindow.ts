@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-import { RecorderEventData, RecorderMessage, RecorderWindow } from "./crxRecorderApp";
+import type { RecorderEventData, RecorderMessage, RecorderWindow } from './crxRecorderApp';
 
 export class PopupRecorderWindow implements RecorderWindow {
   private _recorderUrl: string;
   private _window?: chrome.windows.Window;
   private id?: number;
   private _portPromise?: Promise<chrome.runtime.Port>;
-  onMessage?: ({ type, event, params }: RecorderEventData) => void; 
+  onMessage?: ({ type, event, params }: RecorderEventData) => void;
   hideApp?: () => any;
 
   constructor(recorderUrl?: string) {
@@ -31,7 +31,7 @@ export class PopupRecorderWindow implements RecorderWindow {
         this.close().catch(() => {});
     });
   }
-  
+
   isClosed() {
     return !this._window;
   }
@@ -59,7 +59,7 @@ export class PopupRecorderWindow implements RecorderWindow {
     ]);
     this._window = wnd;
   }
-  
+
   async focus() {
     await chrome.windows.update(this.id!, { drawAttention: true, focused: true });
   }
@@ -67,12 +67,13 @@ export class PopupRecorderWindow implements RecorderWindow {
   async close() {
     if (!this._portPromise)
       return;
-    
+
     this.hideApp?.();
-    
-    if (this._window?.id) chrome.windows.remove(this._window.id).catch(() => {});
+
+    if (this._window?.id)
+      chrome.windows.remove(this._window.id).catch(() => {});
     this._portPromise?.then(port => port.disconnect()).catch(() => {});
     this._window = undefined;
     this._portPromise = undefined;
-  };
+  }
 }

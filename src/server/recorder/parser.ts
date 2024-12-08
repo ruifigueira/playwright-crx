@@ -21,7 +21,7 @@ import * as walk from 'acorn-walk';
 import { fromKeyboardModifiers } from 'playwright-core/lib/server/codegen/language';
 import type { SmartKeyboardModifier } from 'playwright-core/lib/server/types';
 import { locatorOrSelectorAsSelector } from 'playwright-core/lib/utils/isomorphic/locatorParser';
-import { CallMetadata } from '@protocol/callMetadata';
+import type { CallMetadata } from '@protocol/callMetadata';
 
 export type Location = CallMetadata['location'];
 export type ActionInContextWithLocation = ActionInContext & { location?: Location };
@@ -35,7 +35,7 @@ type AssertFnAction =
   | 'toBeEmpty'
   | 'toMatchAriaSnapshot';
 
-type ActionFnName = 
+type ActionFnName =
   | 'check'
   | 'click'
   | 'dblclick'
@@ -50,27 +50,27 @@ type ActionFnName =
   | AssertFnAction;
 
 const expectFnActions: Record<AssertFnAction, (...args: Expression[]) => [action: AssertAction['name'], ...any]> = {
-  'toHaveText': (text) => ['assertText', { text }],
-  'toContainText': (text) => ['assertText', { text, substring: true }],
+  'toHaveText': text => ['assertText', { text }],
+  'toContainText': text => ['assertText', { text, substring: true }],
   'toBeChecked': () => ['assertChecked', { checked: true }],
   'toBeVisible': () => ['assertVisible'],
-  'toHaveValue': (value) => ['assertValue', { value }],
+  'toHaveValue': value => ['assertValue', { value }],
   'toBeEmpty': () => ['assertValue'],
-  'toMatchAriaSnapshot': (snapshot) => ['assertSnapshot', { snapshot }],
+  'toMatchAriaSnapshot': snapshot => ['assertSnapshot', { snapshot }],
 };
 
 const fnActions: Record<Exclude<ActionFnName, AssertFnAction>, (...args: any[]) => [action: Exclude<Action, AssertAction>['name'], ...any]> = {
   'check': () => ['check'],
-  'click':  (options) => ['click', parseClickOptions(options)],
-  'dblclick':  (options) => ['click', parseClickOptions({ ...options, clickCount: 2 })],
-  'close':  () => ['closePage'],
-  'fill':  (text) => ['fill', { text }],
-  'goto':  (url) => ['navigate', { url }],
-  'newPage':  () => ['openPage'],
-  'press':  (shortcut) => ['press', parseShortcut(shortcut)],
-  'selectOption':  (options) => ['select', { options: typeof options === 'string' ? [options] : options }],
-  'uncheck':  () => ['uncheck'],
-  'setInputFiles':  (files) => ['setInputFiles', { files: typeof files === 'string' ? [files] : files }],
+  'click': options => ['click', parseClickOptions(options)],
+  'dblclick': options => ['click', parseClickOptions({ ...options, clickCount: 2 })],
+  'close': () => ['closePage'],
+  'fill': text => ['fill', { text }],
+  'goto': url => ['navigate', { url }],
+  'newPage': () => ['openPage'],
+  'press': shortcut => ['press', parseShortcut(shortcut)],
+  'selectOption': options => ['select', { options: typeof options === 'string' ? [options] : options }],
+  'uncheck': () => ['uncheck'],
+  'setInputFiles': files => ['setInputFiles', { files: typeof files === 'string' ? [files] : files }],
 };
 
 const variableCallRegex = /^([a-zA-Z_$][\w$]*)\./;
@@ -124,7 +124,7 @@ export type TestBrowserContextOptions =  {
     height: number;
   };
   permissions?: string[];
-  serviceWorkers?: 'allow' | 'block'; 
+  serviceWorkers?: 'allow' | 'block';
 };
 
 export type TestOptions = {
@@ -144,7 +144,7 @@ export type SourceLocation = acorn.SourceLocation;
 
 class ParserError extends Error implements ErrorWithLocation {
   loc?: acorn.SourceLocation;
-  
+
   constructor(message: string, loc?: acorn.SourceLocation) {
     super(`${message}${loc ? ` (${loc.start.line}:${loc.start.column})` : ''}`);
     this.loc = loc;
@@ -180,7 +180,7 @@ const argsParser = (arg: acorn.Expression | acorn.SpreadElement | null): any => 
       if (arg.properties.some(p => p.type !== 'Property' || p.key.type !== 'Identifier' || !['Literal', 'ObjectExpression', 'ArrayExpression', 'UnaryExpression'].includes(p.value.type)))
         parserError('Invalid object property', arg.loc);
       return Object.fromEntries(arg.properties.map(p => p as acorn.Property)
-        .map(p => [(p.key as acorn.Identifier).name, argsParser(p.value)]));
+          .map(p => [(p.key as acorn.Identifier).name, argsParser(p.value)]));
   }
 };
 
@@ -190,7 +190,7 @@ export function parse(code: string, file: string = 'playwright-test') {
     sourceType: 'module',
     locations: true,
   });
-  
+
   function parseActionExpression(expr: AwaitExpression | acorn.VariableDeclaration, pages: Set<string>): ActionInContextWithLocation {
     let pageAlias: string | undefined;
     if (expr.type === 'VariableDeclaration') {
@@ -204,14 +204,14 @@ export function parse(code: string, file: string = 'playwright-test') {
       pageAlias = expr.declarations[0].id.name;
       expr = expr.declarations[0].init;
     }
-  
+
     if (
       expr.type !== 'AwaitExpression' ||
       expr.argument.type !== 'CallExpression' ||
       expr.argument.callee.type !== 'MemberExpression' ||
       expr.argument.callee.property.type !== 'Identifier'
     )
-    parserError('Invalid action expression', expr.loc);
+      parserError('Invalid action expression', expr.loc);
 
     const actionFnName = expr.argument.callee.property.name as ActionFnName;
     let locator: string | undefined;
@@ -229,15 +229,15 @@ export function parse(code: string, file: string = 'playwright-test') {
 
       if (variable) {
         pageAlias = variable;
-        if (!['goto', 'close'].includes(actionFnName)) {
+        if (!['goto', 'close'].includes(actionFnName))
           locator = code.substring(expr.argument.callee.object.start + (variable.length + 1), expr.argument.callee.object.end);
-        }
+
       } else if (code.startsWith('expect(', expr.argument.start)) {
         let object = expr.argument.callee.object;
         if (object.type === 'MemberExpression' && object.property.type === 'Identifier' && object.property.name === 'not') {
           if (actionFnName !== 'toBeChecked')
             parserError('Invalid expect expression, .not can only applied to toBeChecked', expr.argument.callee.loc);
-          
+
           expectActionNegated = true;
           object = object.object;
         }
@@ -280,7 +280,7 @@ export function parse(code: string, file: string = 'playwright-test') {
       const [name, params] = fnActions[actionFnName as Exclude<ActionFnName, AssertFnAction>](...args);
       action = { name, selector, signals: [], ...cleanParams(params) } as Action;
     }
-  
+
     if (pageAlias)
       pages.add(pageAlias);
 
@@ -306,9 +306,9 @@ export function parse(code: string, file: string = 'playwright-test') {
         deviceProp.argument.object.type !== 'Identifier' ||
         deviceProp.argument.object.name !== 'devices' ||
         deviceProp.argument.property.type !== 'Literal' ||
-        typeof deviceProp.argument.property.value !== 'string' 
+        typeof deviceProp.argument.property.value !== 'string'
       )
-      parserError('Invalid device property', deviceProp.loc);
+        parserError('Invalid device property', deviceProp.loc);
       deviceName = deviceProp.argument.property.value as string;
 
       props = props.slice(1);
@@ -387,7 +387,7 @@ export function parse(code: string, file: string = 'playwright-test') {
         fn.params[0].properties.some(p => p.type !== 'Property' || p.key.type !== 'Identifier' || p.value.type !== 'Identifier' || !['page', 'context'].includes(p.key.name))
       )
         parserError('Invalid test function', fn.loc);
-      
+
       const actions: ActionInContextWithLocation[] = [];
 
       // it has page fixture, let's push a openPage action
@@ -403,7 +403,7 @@ export function parse(code: string, file: string = 'playwright-test') {
         !fn.body.body.every(e => (e.type === 'ExpressionStatement' && e.expression.type === 'AwaitExpression') || e.type === 'VariableDeclaration')
       )
         parserError('Invalid test function body', fn.body.loc);
-      
+
       const stms = fn.body.body as (ExpressionStatement | acorn.VariableDeclaration)[];
       const pages = new Set<string>(['page']);
       actions.push(...stms.map(s => s.type === 'VariableDeclaration' ? s : s.expression as AwaitExpression).map(a => parseActionExpression(a, pages)));
@@ -416,7 +416,7 @@ export function parse(code: string, file: string = 'playwright-test') {
           contextOptions,
         } : undefined,
         location: { file, ...indexToLineColumn(code, callee.start) },
-      });      
+      });
     },
   });
 

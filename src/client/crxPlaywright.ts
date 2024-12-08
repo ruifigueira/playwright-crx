@@ -15,8 +15,8 @@
 */
 
 import type * as channels from '../protocol/channels';
-import { ChannelOwner } from "playwright-core/lib/client/channelOwner";
-import { Playwright } from "playwright-core/lib/client/playwright";
+import type { ChannelOwner } from 'playwright-core/lib/client/channelOwner';
+import { Playwright } from 'playwright-core/lib/client/playwright';
 import { Crx } from './crx';
 
 export class CrxPlaywright extends Playwright {

@@ -101,7 +101,7 @@ export class CrxApplicationDispatcher extends Dispatcher<CrxApplication, channel
     await this._object.close();
     this._dispose();
   }
-  
+
   async list(params: channels.CrxApplicationListParams): Promise<channels.CrxApplicationListResult> {
     const tests = this._object.list(params.code);
     return { tests };
