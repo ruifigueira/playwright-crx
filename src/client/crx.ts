@@ -63,7 +63,6 @@ export class Crx extends ChannelOwner<channels.CrxChannel> implements api.Crx {
       return await this._incognitoCrxPromise;
     else
       return await this._crxAppPromise;
-
   }
 }
 
@@ -141,6 +140,9 @@ export class CrxApplication extends ChannelOwner<channels.CrxApplicationChannel>
     this._channel.on('detached', ({ tabId }) => {
       this.emit('detached', tabId);
     });
+    this._context.on('close', () => {
+      this.emit('close');
+    });
   }
 
   context() {
@@ -181,7 +183,6 @@ export class CrxApplication extends ChannelOwner<channels.CrxApplicationChannel>
   }
 
   async close() {
-    await this._channel.close().catch(() => {});
-    this.emit('close');
+    await this._channel.close();
   }
 }

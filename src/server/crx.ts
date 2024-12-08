@@ -102,8 +102,11 @@ export class Crx extends SdkObject {
   }
 
   private async _startCrxApplication(browser: CRBrowser, transport: CrxTransport) {
-    const crxApp = new CrxApplication(this, browser._defaultContext as CRBrowserContext, transport);
-    crxApp.once('close', () => this._crxApplicationPromise = undefined);
+    const context = browser._defaultContext as CRBrowserContext;
+    const crxApp = new CrxApplication(this, context, transport);
+    context.on(BrowserContext.Events.Close, () => {
+      this._crxApplicationPromise = undefined;
+    });
     return crxApp;
   }
 
@@ -133,9 +136,10 @@ export class Crx extends SdkObject {
       await context._initialize();
       browser._contexts.set(browserContextId, context);
     });
-
+    context.on(BrowserContext.Events.Close, () => {
+      this._incognitoCrxApplicationPromise = undefined;
+    });
     const crxApp = new CrxApplication(this, context, this._transport);
-    crxApp.once('close', () => this._incognitoCrxApplicationPromise = undefined);
     await crxApp.attach(incognitoTabId);
     return crxApp;
   }
@@ -306,7 +310,7 @@ export class CrxApplication extends SdkObject {
       await Promise.all(this._crPages().map(crPage => options?.closePages ? crPage.closePage(false) : this._doDetach(crPage._targetId)));
     }
 
-    await this._context._closePromise;
+    await this._context.close({});
 
     if (!this.isIncognito())
       await this._crx.closeAndWait();
@@ -346,10 +350,10 @@ export class CrxApplication extends SdkObject {
     return this._recorderApp;
   }
 
-  private onWindowRemoved = async (windowId: number) => {
+  private onWindowRemoved = async () => {
     const windows = await chrome.windows.getAll();
     if (!windows.some(w => w.incognito))
-      await this._context.close({});
+      await this.close({});
   };
 
   private async _doDetach(targetId?: string) {
