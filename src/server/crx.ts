@@ -234,7 +234,7 @@ export class CrxApplication extends SdkObject {
         mode: mode === 'none' ? undefined : mode,
         ...otherOptions
       };
-      Recorder.show('actions', this._context, recorder => this._createRecorderApp(recorder, options?.playInIncognito ?? false), recorderParams);
+      Recorder.show('actions', this._context, recorder => this._createRecorderApp(recorder), recorderParams);
     }
 
     await this._recorderApp!.open(options);
@@ -337,7 +337,7 @@ export class CrxApplication extends SdkObject {
     return { actions, options, code };
   }
 
-  private async _createRecorderApp(recorder: IRecorder, playInIncognito: boolean) {
+  private async _createRecorderApp(recorder: IRecorder) {
     if (!this._recorderApp) {
       this._recorderApp = new CrxRecorderApp(this._crx, recorder as Recorder, this._player);
       this._recorderApp.on('show', () => this.emit(CrxApplication.Events.RecorderShow));
@@ -346,7 +346,6 @@ export class CrxApplication extends SdkObject {
         this.emit(CrxApplication.Events.ModeChanged, event);
       });
     }
-    this._recorderApp.setPlayInIncognito(playInIncognito);
     return this._recorderApp;
   }
 
