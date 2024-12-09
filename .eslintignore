@@ -7,3 +7,4 @@ playwright-report/
 /src/types/
 **/*.json
 **/*.wasm
+/tests/crx/code/
