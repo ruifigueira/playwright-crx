@@ -37,7 +37,8 @@ export interface RecorderProps {
   paused: boolean,
   log: Map<string, CallLog>,
   mode: Mode,
-  onEditedCode?: (code: string) => any, 
+  onEditedCode?: (code: string) => any,
+  onCursorActivity?: (position: { line: number }) => any,
 }
 
 export const Recorder: React.FC<RecorderProps> = ({
@@ -45,7 +46,8 @@ export const Recorder: React.FC<RecorderProps> = ({
   paused,
   log,
   mode,
-  onEditedCode
+  onEditedCode,
+  onCursorActivity,
 }) => {
   const [selectedFileId, setSelectedFileId] = React.useState<string | undefined>();
   const [runningFileId, setRunningFileId] = React.useState<string | undefined>();
@@ -76,7 +78,8 @@ export const Recorder: React.FC<RecorderProps> = ({
     if (mode === 'inspecting' && selectedTab === 'aria') {
       // Keep exploring aria.
     } else {
-      window.dispatch({ event: 'setMode', params: { mode: mode === 'inspecting' ? 'standby' : 'recording' } }).catch(() => { });
+      const isRecording = ['recording', 'assertingText', 'assertingVisibility', 'assertingValue', 'assertingSnapshot'].includes(mode);
+      window.dispatch({ event: 'setMode', params: { mode: isRecording ? 'recording' : 'standby' } }).catch(() => { });
     }
   };
 
@@ -184,7 +187,7 @@ export const Recorder: React.FC<RecorderProps> = ({
     </Toolbar>
     <SplitView
       sidebarSize={200}
-      main={<CodeMirrorWrapper text={source.text} language={source.language} highlight={source.highlight} revealLine={source.revealLine} readOnly={mode !== 'standby' || source.id !== 'playwright-test'} onChange={onEditedCode} lineNumbers={true} />}
+      main={<CodeMirrorWrapper text={source.text} language={source.language} highlight={source.highlight} revealLine={source.revealLine} readOnly={mode !== 'standby' || source.id !== 'playwright-test'} onChange={onEditedCode} onCursorActivity={onCursorActivity} lineNumbers={true} />}
       sidebar={<TabbedPane
         rightToolbar={selectedTab === 'locator' || selectedTab === 'aria' ? [<ToolbarButton key={1} icon='files' title='Copy' onClick={() => copy((selectedTab === 'locator' ? locator : ariaSnapshot) || '')} />] : []}
         tabs={[
