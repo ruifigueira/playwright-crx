@@ -60,7 +60,7 @@ test('should collect trace with resources, but no js', async ({ runCrxTestAndPar
 });
 
 test('should not collect snapshots by default', async ({ runCrxTestAndParseTraceRaw }) => {
-  const { events, actions } = await runCrxTestAndParseTraceRaw(async ({ crxApp, context, server }) => {
+  const { events } = await runCrxTestAndParseTraceRaw(async ({ crxApp, context, server }) => {
     const page = await crxApp.newPage();
     await context.tracing.start();
     await page.goto(server.EMPTY_PAGE);
@@ -303,11 +303,11 @@ test.fixme('should work with multiple chunks', async ({ runCrxTestAndParseTraceR
     page.click('"ClickNoButton"', { timeout: 0 }).catch(() =>  {});
     await page.evaluate(() => {});
     await context.tracing.stopChunk({ path: 'trace.zip' });
-    
+
     await context.tracing.startChunk();
     await page.hover('"Click"');
     await context.tracing.stopChunk({ path: 'trace2.zip' });
-  
+
     await context.tracing.startChunk();
     await page.click('"Click"');
     await context.tracing.stopChunk();  // Should stop without a path.

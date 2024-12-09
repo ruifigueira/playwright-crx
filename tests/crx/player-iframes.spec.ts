@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { dumpLogHeaders, expect, test } from "./crxRecorderTest";
+import { dumpLogHeaders, expect, test } from './crxRecorderTest';
 
 test('should resume with iframes', async ({ recorderPage, recordAction, baseURL, page, mockPaths }) => {
   await mockPaths({

@@ -15,9 +15,9 @@
  */
 
 import path from 'path';
-import { Page, Locator } from 'playwright-core';
+import type { Page, Locator } from 'playwright-core';
 import { test as crxTest, expect } from './crxTest';
-import type { AssertAction, AssertCheckedAction, AssertSnapshotAction, AssertTextAction, AssertValueAction, AssertVisibleAction } from '../../playwright/packages/recorder/src/actions';
+import type { AssertAction } from '../../playwright/packages/recorder/src/actions';
 
 export { expect } from './crxTest';
 
@@ -57,17 +57,17 @@ export function dumpLogHeaders(recorderPage: Page) {
 
       function logHeaderToText(element: Element) {
         return [...element.childNodes].map(n => {
-          if (n.nodeType === Node.TEXT_NODE) {
+          if (n.nodeType === Node.TEXT_NODE)
             return n.textContent;
-          } else if (n instanceof Element) {
+          else if (n instanceof Element)
             return n.classList.contains('codicon') ? iconName(n) : n.textContent?.replace(/— \d+(\.\d+)?m?s/g, '— XXms');
-          }
+
         }).join(' ');
       }
 
       return [...document.querySelectorAll('.call-log-call-header')].map(logHeaderToText);
     });
-  }
+  };
 }
 
 export const test = crxTest.extend<{
@@ -76,104 +76,104 @@ export const test = crxTest.extend<{
   recordAction<T = void>(action: () => Promise<T>): Promise<T>;
   recordAssertion(locator: Locator, type: AssertAction['name']): Promise<void>;
   configureRecorder: (config: { testIdAttributeName?: string, targetLanguage?: string, experimental?: boolean }) => Promise<void>;
-}>({
-  extensionPath: path.join(__dirname, '../../examples/recorder-crx/dist'),
+      }>({
+        extensionPath: path.join(__dirname, '../../examples/recorder-crx/dist'),
 
-  attachRecorder: async ({ extensionServiceWorker, extensionId, context }, run) => {
-    await run(async (page: Page) => {
-      let recorderPage = context.pages().find(p => p.url().startsWith(`chrome-extension://${extensionId}`));
-      const recorderPagePromise = recorderPage ? undefined : context.waitForEvent('page');
+        attachRecorder: async ({ extensionServiceWorker, extensionId, context }, run) => {
+          await run(async (page: Page) => {
+            let recorderPage = context.pages().find(p => p.url().startsWith(`chrome-extension://${extensionId}`));
+            const recorderPagePromise = recorderPage ? undefined : context.waitForEvent('page');
 
-      await page.bringToFront();
-      await extensionServiceWorker.evaluate(async () => {
-        // ensure we're in test mode
-        _setUnderTest();
+            await page.bringToFront();
+            await extensionServiceWorker.evaluate(async () => {
+              // ensure we're in test mode
+              _setUnderTest();
 
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        await attach(tab);
+              const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+              await attach(tab);
+            });
+
+            recorderPage = recorderPage ?? (await recorderPagePromise)!;
+
+            const locator = page.locator('x-pw-glass').first();
+            try {
+              await locator.waitFor({ state: 'attached', timeout: 100 });
+            } catch (e) {
+              if (await recorderPage.getByTitle('Record').evaluate(e => e.classList.contains('toggled'))) {
+                await recorderPage.getByTitle('Record').click();
+                await page.reload();
+                await recorderPage.getByTitle('Record').click();
+              } else {
+                await page.reload();
+              }
+              await locator.waitFor({ state: 'attached', timeout: 100 });
+            }
+
+            return recorderPage;
+          });
+        },
+
+        recorderPage: async ({ page, attachRecorder }, run) => {
+          const recorderPage = await attachRecorder(page);
+          await run(recorderPage);
+          await recorderPage.close();
+        },
+
+        recordAction: async ({ recorderPage }, run) => {
+          await run(async action => {
+            // just to make sure code is up-to-date
+            await recorderPage.waitForTimeout(100);
+            const count = await recorderPage.locator('.CodeMirror-line').count();
+            const result = await action();
+            await expect(recorderPage.locator('.CodeMirror-line')).not.toHaveCount(count);
+            return result;
+          });
+        },
+
+        recordAssertion: async ({ page, recorderPage, recordAction }, run) => {
+          await run(async (locator: Locator, name: AssertAction['name']) => {
+            await recordAction(async () => {
+              switch (name) {
+                case 'assertText':
+                  await recorderPage.getByTitle('Assert text').click();
+                  await locator.click();
+                  await page.locator('x-pw-glass').getByTitle('Accept').click();
+                  break;
+                case 'assertValue':
+                  await recorderPage.getByTitle('Assert value').click();
+                  await locator.click();
+                  break;
+                case 'assertVisible':
+                  await recorderPage.getByTitle('Assert visibility').click();
+                  await locator.click();
+                  break;
+                case 'assertSnapshot':
+                  // ensure snapshot is toggled (for some reason, it may take more than one click)
+                  const assertBtn = recorderPage.getByTitle('Assert snapshot');
+                  while (await assertBtn.evaluate(e => !e.classList.contains('toggled')))
+                    await assertBtn.click();
+                  await locator.click();
+                  break;
+              }
+            });
+          });
+        },
+
+        configureRecorder: async ({ context, extensionId }, run) => {
+          await run(async ({ testIdAttributeName, targetLanguage, experimental }: { testIdAttributeName?: string, targetLanguage?: string, experimental?: boolean }) => {
+            const configPage = await context.newPage();
+            try {
+              await configPage.goto(`chrome-extension://${extensionId}/preferences.html`);
+              if (targetLanguage)
+                await configPage.locator('#target-language').selectOption(targetLanguage);
+              if (testIdAttributeName)
+                await configPage.locator('#test-id').fill(testIdAttributeName);
+              if (experimental !== undefined)
+                await configPage.locator('#experimental').setChecked(experimental);
+              await configPage.locator('#submit').click();
+            } finally {
+              await configPage.close();
+            }
+          });
+        },
       });
-
-      recorderPage = recorderPage ?? (await recorderPagePromise)!;
-
-      const locator = page.locator('x-pw-glass').first();
-      try {
-        await locator.waitFor({ state: 'attached', timeout: 100 });
-      } catch(e) {
-        if (await recorderPage.getByTitle('Record').evaluate(e => e.classList.contains('toggled'))) {
-          await recorderPage.getByTitle('Record').click();
-          await page.reload();
-          await recorderPage.getByTitle('Record').click();
-        } else {
-          await page.reload();
-        }
-        await locator.waitFor({ state: 'attached', timeout: 100 });
-      }
-
-      return recorderPage;
-    });
-  },
-
-  recorderPage: async ({ page, attachRecorder }, run) => {
-    const recorderPage = await attachRecorder(page);
-    await run(recorderPage);
-    await recorderPage.close();
-  },
-
-  recordAction: async ({ recorderPage }, run) => {
-    await run(async (action) => {
-      // just to make sure code is up-to-date
-      await recorderPage.waitForTimeout(100);
-      const count = await recorderPage.locator('.CodeMirror-line').count();
-      const result = await action();
-      await expect(recorderPage.locator('.CodeMirror-line')).not.toHaveCount(count);
-      return result;
-    });
-  },
-
-  recordAssertion: async ({ page, recorderPage, recordAction }, run) => {
-    await run(async (locator: Locator, name: AssertAction['name']) => {
-      await recordAction(async () => {
-        switch (name) {
-          case 'assertText':
-            await recorderPage.getByTitle('Assert text').click();
-            await locator.click();
-            await page.locator('x-pw-glass').getByTitle('Accept').click();
-            break;
-          case 'assertValue':
-            await recorderPage.getByTitle('Assert value').click();
-            await locator.click();
-            break;
-          case 'assertVisible':
-            await recorderPage.getByTitle('Assert visibility').click();
-            await locator.click();
-            break;
-          case 'assertSnapshot':
-            // ensure snapshot is toggled (for some reason, it may take more than one click)
-            const assertBtn = recorderPage.getByTitle('Assert snapshot');
-            while (await assertBtn.evaluate(e => !e.classList.contains('toggled')))
-              await assertBtn.click();
-            await locator.click();
-            break;
-        }
-      });
-    });
-  },
-
-  configureRecorder: async ({ context, extensionId }, run) => {
-    await run(async ({ testIdAttributeName, targetLanguage, experimental }: { testIdAttributeName?: string, targetLanguage?: string, experimental?: boolean }) => {
-      const configPage = await context.newPage();
-      try {
-        await configPage.goto(`chrome-extension://${extensionId}/preferences.html`);
-        if (targetLanguage)
-          await configPage.locator('#target-language').selectOption(targetLanguage);
-        if (testIdAttributeName)
-          await configPage.locator('#test-id').fill(testIdAttributeName);
-        if (experimental !== undefined)
-          await configPage.locator('#experimental').setChecked(experimental);
-        await configPage.locator('#submit').click();
-      } finally {
-        await configPage.close();
-      }
-    });
-  },
-});

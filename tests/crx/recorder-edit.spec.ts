@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { test, expect } from './crxRecorderTest';
 import type { CrxApplication } from '../../test';
 
@@ -38,8 +38,8 @@ async function moveCursorToLine(recorderPage: Page, line: number) {
 
 function editorLine(recorderPage: Page, linenumber: number) {
   return recorderPage.locator('.CodeMirror-code > div')
-    .filter({ has: recorderPage.locator('.CodeMirror-linenumber', { hasText: String(linenumber) }) })
-    .locator('.CodeMirror-line');
+      .filter({ has: recorderPage.locator('.CodeMirror-linenumber', { hasText: String(linenumber) }) })
+      .locator('.CodeMirror-line');
 }
 
 test('should edit @smoke', async ({ page, attachRecorder, baseURL }) => {
@@ -96,7 +96,7 @@ test('test', async ({ page }) => {
   await page.goto('${baseURL}/input/textarea.html');
   await page.locator('textarea').wrongAction('te
 });`);
-  
+
   // validates parsing debouncing: after editing, it should wait for a while before showing the error
   // we wait a bit but less than the debounce time to ensure it's still hidden
   await page.waitForTimeout(250);
@@ -136,7 +136,7 @@ test('test', async ({ page }) => {
 });`);
 
   await recorderPage.getByTitle('Resume (F8)').click();
-  
+
   await expect(page.locator('textarea')).toHaveValue('test');
 
   await editCode(recorderPage, `import { test, expect } from '@playwright/test';
@@ -147,7 +147,7 @@ test('test', async ({ page }) => {
 });`);
 
   await recorderPage.getByTitle('Resume (F8)').click();
-  
+
   await expect(page.locator('textarea')).toHaveValue('modified test');
 });
 
@@ -164,10 +164,10 @@ test('should reset code with errors if file changed', async ({ page, recordActio
 test('test', async ({ page }) => {
   await page.errorFunction('${baseURL}/input/textarea.html');
 });`);
-  
+
   // ensure it's visible
   await expect(recorderPage.locator('.source-line-error-widget')).toBeVisible();
-  
+
   // change to python
   await recorderPage.locator('.source-chooser').selectOption('python-pytest');
 
@@ -201,10 +201,10 @@ test('test', async ({ page }) => {
 
   // ensure code is loaded
   await recorderPage.waitForTimeout(1000);
-  
+
   // ensure there's no errors
   await expect(recorderPage.locator('.source-line-error-widget')).toBeHidden();
-  
+
   // ensure code was not reformatted
   expect(await getCode(recorderPage)).toBe(reformattedCode);
 
@@ -272,7 +272,7 @@ test('should highlight selector at cursor line', async ({ page, attachRecorder, 
   await recorderPage.getByRole('tab', { name: 'Locator' }).click();
 
   await page.goto(`${baseURL}/input/textarea.html`);
-  
+
   await editCode(recorderPage, `import { test, expect } from '@playwright/test';
 
 test('test', async ({ page }) => {

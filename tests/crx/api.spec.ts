@@ -158,7 +158,7 @@ test('should attach popup pages', async ({ runCrxTest }) => {
 // if detached manually by the user (with canceled_by_user), it works.
 // aparently, a chrome.debugger.onDetached event is not triggered if
 // chrome.debugger.detached is called
-test.fixme('should remove page if tab is externally detached',async ({ runCrxTest }) => {
+test.fixme('should remove page if tab is externally detached', async ({ runCrxTest }) => {
   test.skip(true, '');
   await runCrxTest(async ({ expect, crxApp }) => {
     const { id: tabId } = await chrome.tabs.create({ url: 'about:blank' });
@@ -177,7 +177,7 @@ test('should not block on pages with service workers', async ({ runCrxTest }) =>
 });
 
 // https://github.com/ruifigueira/playwright-crx/issues/14
-test("should take screenshot", async ({ runCrxTest }) => {
+test('should take screenshot', async ({ runCrxTest }) => {
   await runCrxTest(async ({ expect, page }) => {
     await page.goto('about:blank');
     await page.setContent('<h1>Hello World!</h1>');

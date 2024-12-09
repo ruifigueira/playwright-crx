@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-import { Mode } from '@recorder/recorderTypes';
+import type { Mode } from '@recorder/recorderTypes';
 import type { CrxApplication } from 'playwright-crx';
 import playwright, { crx, registerSourceMap, _debug, _setUnderTest, _isUnderTest as isUnderTest } from 'playwright-crx';
-import { addSettingsChangedListener, CrxSettings, defaultSettings, loadSettings } from './settings';
+import type { CrxSettings } from './settings';
+import { addSettingsChangedListener, defaultSettings, loadSettings } from './settings';
 
 registerSourceMap().catch(() => {});
 
@@ -35,7 +36,7 @@ let settings: CrxSettings = defaultSettings;
 
 // if it's in sidepanel mode, we need to open it synchronously on action click,
 // so we need to fetch its value asap
-const settingsInitializing = loadSettings().then(s => settings = s ).catch(() => {});
+const settingsInitializing = loadSettings().then(s => settings = s).catch(() => {});
 
 addSettingsChangedListener(newSettings => {
   settings = newSettings;
@@ -43,11 +44,11 @@ addSettingsChangedListener(newSettings => {
 });
 
 async function changeAction(tabId: number, mode?: CrxMode | 'detached') {
-  if (!mode) {
+  if (!mode)
     mode = attachedTabIds.has(tabId) ? currentMode : 'detached';
-  } else if (mode !== 'detached') {
+  else if (mode !== 'detached')
     currentMode = mode;
-  }
+
 
   // detached basically implies recorder windows was closed
   if (!mode || stoppedModes.includes(mode)) {
@@ -103,18 +104,19 @@ async function getCrxApp() {
 }
 
 async function attach(tab: chrome.tabs.Tab, mode?: Mode) {
-  if (!tab?.id || (attachedTabIds.has(tab.id) && !mode)) return;
+  if (!tab?.id || (attachedTabIds.has(tab.id) && !mode))
+    return;
   const tabId = tab.id;
-  
+
   const sidepanel = !isUnderTest() && settings.sidepanel;
 
   // we need to open sidepanel before any async call
   if (sidepanel)
     chrome.sidePanel.open({ windowId: tab.windowId });
-  
+
   // ensure one attachment at a time
   chrome.action.disable();
-  
+
   const crxApp = await getCrxApp();
 
   try {
@@ -151,11 +153,13 @@ chrome.contextMenus.create({
 });
 
 chrome.contextMenus.onClicked.addListener(async (_, tab) => {
-  if (tab) await attach(tab);
+  if (tab)
+    await attach(tab);
 });
 
 chrome.commands.onCommand.addListener(async (command, tab) => {
-  if (!tab.id) return;
+  if (!tab.id)
+    return;
   if (command === 'inspect')
     await attach(tab, 'inspecting');
   else if (command === 'record')
@@ -243,7 +247,7 @@ async function saveStorageState() {
   });
 }
 
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener(message => {
   if (message.event === 'saveRequested')
     saveScript(message.params).catch(e => {});
   else if (message.event === 'saveStorageStateRequested')

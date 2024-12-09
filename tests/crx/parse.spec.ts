@@ -199,8 +199,8 @@ test('test', async ({ page }) => {
   await page.getByRole('button').${actionName}(${options});
 });`, true);
       // first action is openPage, so we need to get the second action
-      const { button, modifiers, clickCount, position } = (actions[1] ?? {}) as any;
-      return { button, modifiers, clickCount, position };
+    const { button, modifiers, clickCount, position } = (actions[1] ?? {}) as any;
+    return { button, modifiers, clickCount, position };
   };
   const clickDefaults = { button: 'left', modifiers: 0, clickCount: 1, position: undefined };
   const dblclickDefaults = { ...clickDefaults, clickCount: 2 };

@@ -45,7 +45,7 @@ test('should resume', async ({ recorderPage, baseURL }) => {
 test('should show errors', async ({ basePath, page, recorderPage, baseURL }) => {
   await recorderPage.getByTitle('Record').click();
 
-  await page.route('**/*', (route) => route.fulfill({ path: `${basePath}/empty.html` }));
+  await page.route('**/*', route => route.fulfill({ path: `${basePath}/empty.html` }));
 
   await recorderPage.getByTitle('Resume (F8)').click();
 
@@ -65,7 +65,7 @@ test('should show errors', async ({ basePath, page, recorderPage, baseURL }) => 
 test('should clear errors when resuming after errors', async ({ basePath, page, recorderPage, baseURL }) => {
   await recorderPage.getByTitle('Record').click();
 
-  await page.route('**/*', (route) => route.fulfill({ path: `${basePath}/empty.html` }));
+  await page.route('**/*', route => route.fulfill({ path: `${basePath}/empty.html` }));
 
   await recorderPage.getByTitle('Resume (F8)').click();
 
@@ -76,7 +76,7 @@ test('should clear errors when resuming after errors', async ({ basePath, page, 
     `▼ page.locator('textarea') .click() ❌ — XXms`,
   ]);
 
-  await page.route('**/*', (route) => route.fulfill({ path: `${basePath}/input/textarea.html` }));
+  await page.route('**/*', route => route.fulfill({ path: `${basePath}/input/textarea.html` }));
 
   await recorderPage.getByTitle('Resume (F8)').click();
 

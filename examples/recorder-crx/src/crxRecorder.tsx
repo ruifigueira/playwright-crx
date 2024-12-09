@@ -19,14 +19,15 @@ import { Toolbar } from '@web/components/toolbar';
 import { ToolbarButton, ToolbarSeparator } from '@web/components/toolbarButton';
 import { Dialog } from './dialog';
 import { PreferencesForm } from './preferencesForm';
-import { CallLog, ElementInfo, Mode, Source } from '@recorder/recorderTypes';
+import type { CallLog, ElementInfo, Mode, Source } from '@recorder/recorderTypes';
 import { Recorder } from '@recorder/recorder';
-import { addSettingsChangedListener, CrxSettings, defaultSettings, loadSettings, removeSettingsChangedListener } from './settings';
+import type { CrxSettings } from './settings';
+import { addSettingsChangedListener, defaultSettings, loadSettings, removeSettingsChangedListener } from './settings';
 import './crxRecorder.css';
 
 function setElementPicked(elementInfo: ElementInfo, userGesture?: boolean) {
   window.playwrightElementPicked(elementInfo, userGesture);
-};
+}
 
 function setRunningFileId(fileId: string) {
   window.playwrightSetRunningFile(fileId);
@@ -58,8 +59,9 @@ export const CrxRecorder: React.FC = ({
   React.useEffect(() => {
     const port = chrome.runtime.connect({ name: 'recorder' });
     const onMessage = (msg: any) => {
-      if (!('type' in msg) || msg.type !== 'recorder') return;
-  
+      if (!('type' in msg) || msg.type !== 'recorder')
+        return;
+
       switch (msg.method) {
         case 'setPaused': setPaused(msg.paused); break;
         case 'setMode': setMode(msg.mode); break;
@@ -89,7 +91,7 @@ export const CrxRecorder: React.FC = ({
     addSettingsChangedListener(setSettings);
 
     return () => {
-      removeSettingsChangedListener(setSettings)
+      removeSettingsChangedListener(setSettings);
       port.disconnect();
     };
   }, []);
@@ -117,7 +119,7 @@ export const CrxRecorder: React.FC = ({
       case 'csharp-mstest': filename = 'Tests.cs'; break;
       case 'csharp-nunit': filename = 'Tests.cs'; break;
       case 'csharp': filename = 'Example.cs'; break;
-    };
+    }
 
     if (!filename)
       return;
@@ -161,25 +163,25 @@ export const CrxRecorder: React.FC = ({
 
   return <>
     <div>
-      <Dialog title="Preferences" isOpen={showPreferences} onClose={() => setShowPreferences(false)}>
+      <Dialog title='Preferences' isOpen={showPreferences} onClose={() => setShowPreferences(false)}>
         <PreferencesForm />
       </Dialog>
     </div>
 
-    <div className="recorder">
+    <div className='recorder'>
       {settings.experimental && <>
-      <Toolbar>
-        <ToolbarButton icon='save' title='Save' disabled={false} onClick={downloadCode}>Save</ToolbarButton>
-        <div style={{ flex: 'auto' }}></div>
-          <div className="dropdown">
-            <ToolbarButton icon="tools" title='Tools' disabled={false} onClick={() => {}}></ToolbarButton>
-            <div className="dropdown-content right-align">
-              <a href="#" onClick={requestSaveStorageState}>Save storage state</a>
+        <Toolbar>
+          <ToolbarButton icon='save' title='Save' disabled={false} onClick={downloadCode}>Save</ToolbarButton>
+          <div style={{ flex: 'auto' }}></div>
+          <div className='dropdown'>
+            <ToolbarButton icon='tools' title='Tools' disabled={false} onClick={() => {}}></ToolbarButton>
+            <div className='dropdown-content right-align'>
+              <a href='#' onClick={requestSaveStorageState}>Save storage state</a>
             </div>
           </div>
           <ToolbarSeparator />
-        <ToolbarButton icon='settings-gear' title='Preferences' onClick={() => setShowPreferences(true)}></ToolbarButton>
-      </Toolbar>
+          <ToolbarButton icon='settings-gear' title='Preferences' onClick={() => setShowPreferences(true)}></ToolbarButton>
+        </Toolbar>
       </>}
       <Recorder sources={sources} paused={paused} log={log} mode={mode} onEditedCode={dispatchEditedCode} onCursorActivity={dispatchCursorActivity} />
     </div>

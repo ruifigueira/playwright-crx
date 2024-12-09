@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-import { crx, expect, _debug, registerSourceMap, CrxApplication } from 'playwright-crx/test';
+import type { CrxApplication } from 'playwright-crx/test';
+import { crx, expect, _debug, registerSourceMap } from 'playwright-crx/test';
 
 registerSourceMap().catch(() => {});
 
@@ -25,7 +26,7 @@ async function _runTest(fn: (fixtures: any, arg: any) => Promise<void>, otherFix
     _crxAppPromise = crx.start();
 
   const fs = crx.fs;
-  const [crxApp, [ tab ]] = await Promise.all([_crxAppPromise, chrome.tabs.query({ active: true })]);
+  const [crxApp, [tab]] = await Promise.all([_crxAppPromise, chrome.tabs.query({ active: true })]);
   const context = crxApp.context();
   expect(tab?.id).toBeTruthy();
   const page = await crxApp.attach(tab?.id!);

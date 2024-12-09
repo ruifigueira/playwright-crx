@@ -238,7 +238,7 @@ test('test', async ({ page }) => {
 test('should record oopif frames', async ({ page, attachRecorder, recordAction, server, browserMajorVersion }) => {
   const recorderPage = await attachRecorder(page);
   await recordAction(() => page.goto(server.PREFIX + '/dynamic-oopif.html'));
-  await recordAction(() => page.locator('iframe').contentFrame().locator('div:nth-child(21)').click({ position: { x: 0, y: 0 }}));
+  await recordAction(() => page.locator('iframe').contentFrame().locator('div:nth-child(21)').click({ position: { x: 0, y: 0 } }));
 
   await recorderPage.getByTitle('Record').click();
 
@@ -268,7 +268,7 @@ def test_example(page: Page) -> None:
     await recorderPage.close();
   }
 
-  // flaky, probably due to asynchronous nature of page detach when recorder page is closed 
+  // flaky, probably due to asynchronous nature of page detach when recorder page is closed
   await page.waitForTimeout(2000);
 
   {
@@ -319,7 +319,7 @@ for (const [lang, [expectedSuggestedName, filename]] of Object.entries(langs)) {
     await recordAction(() => page.goto(`${baseURL}/input/textarea.html`));
     await recordAction(() => page.locator('textarea').click());
     await recordAction(() => page.locator('textarea').fill('test'));
-  
+
     await recorderPage.getByTitle('Record').click();
 
     const [download] = await Promise.all([

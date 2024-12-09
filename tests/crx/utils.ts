@@ -1,3 +1,18 @@
+/**
+ * Copyright (c) Rui Figueira.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 import yauzl from 'yauzl';
 import type { UnzipFile, Entry } from 'yauzl';
 import type { ActionTraceEvent, TraceEvent } from '../../playwright/packages/trace-viewer/src/sw/versions/traceV6';
@@ -79,62 +94,62 @@ export function parseClientSideCallMetadata(data: SerializedClientSideCallMetada
 }
 
 export async function parseTraceRaw(file: string): Promise<{ events: any[], resources: Map<string, Buffer>, actions: string[], actionObjects: ActionTraceEvent[], stacks: Map<string, StackFrame[]> }> {
-    const zipFS = new ZipFile(file);
-    const resources = new Map<string, Buffer>();
-    for (const entry of await zipFS.entries())
-      resources.set(entry, await zipFS.read(entry));
-    zipFS.close();
-  
-    const actionMap = new Map<string, ActionTraceEvent>();
-    const events: any[] = [];
-    for (const traceFile of [...resources.keys()].filter(name => name.endsWith('.trace'))) {
-      for (const line of resources.get(traceFile)!.toString().split('\n')) {
-        if (line) {
-          const event = JSON.parse(line) as TraceEvent;
-          events.push(event);
-  
-          if (event.type === 'before') {
-            const action: ActionTraceEvent = {
-              ...event,
-              type: 'action',
-              endTime: 0,
-            };
-            actionMap.set(event.callId, action);
-          } else if (event.type === 'input') {
-            const existing = actionMap.get(event.callId)!;
-            existing.inputSnapshot = event.inputSnapshot;
-            existing.point = event.point;
-          } else if (event.type === 'after') {
-            const existing = actionMap.get(event.callId)!;
-            existing.afterSnapshot = event.afterSnapshot;
-            existing.endTime = event.endTime;
-            existing.error = event.error;
-            existing.result = event.result;
-          }
+  const zipFS = new ZipFile(file);
+  const resources = new Map<string, Buffer>();
+  for (const entry of await zipFS.entries())
+    resources.set(entry, await zipFS.read(entry));
+  zipFS.close();
+
+  const actionMap = new Map<string, ActionTraceEvent>();
+  const events: any[] = [];
+  for (const traceFile of [...resources.keys()].filter(name => name.endsWith('.trace'))) {
+    for (const line of resources.get(traceFile)!.toString().split('\n')) {
+      if (line) {
+        const event = JSON.parse(line) as TraceEvent;
+        events.push(event);
+
+        if (event.type === 'before') {
+          const action: ActionTraceEvent = {
+            ...event,
+            type: 'action',
+            endTime: 0,
+          };
+          actionMap.set(event.callId, action);
+        } else if (event.type === 'input') {
+          const existing = actionMap.get(event.callId)!;
+          existing.inputSnapshot = event.inputSnapshot;
+          existing.point = event.point;
+        } else if (event.type === 'after') {
+          const existing = actionMap.get(event.callId)!;
+          existing.afterSnapshot = event.afterSnapshot;
+          existing.endTime = event.endTime;
+          existing.error = event.error;
+          existing.result = event.result;
         }
       }
     }
-  
-    for (const networkFile of [...resources.keys()].filter(name => name.endsWith('.network'))) {
-      for (const line of resources.get(networkFile)!.toString().split('\n')) {
-        if (line)
-          events.push(JSON.parse(line));
-      }
-    }
-  
-    const stacks: Map<string, StackFrame[]> = new Map();
-    for (const stacksFile of [...resources.keys()].filter(name => name.endsWith('.stacks'))) {
-      for (const [key, value] of parseClientSideCallMetadata(JSON.parse(resources.get(stacksFile)!.toString())))
-        stacks.set(key, value);
-    }
-  
-    const actionObjects = [...actionMap.values()];
-    actionObjects.sort((a, b) => a.startTime - b.startTime);
-    return {
-      events,
-      resources,
-      actions: actionObjects.map(a => a.apiName),
-      actionObjects,
-      stacks,
-    };
   }
+
+  for (const networkFile of [...resources.keys()].filter(name => name.endsWith('.network'))) {
+    for (const line of resources.get(networkFile)!.toString().split('\n')) {
+      if (line)
+        events.push(JSON.parse(line));
+    }
+  }
+
+  const stacks: Map<string, StackFrame[]> = new Map();
+  for (const stacksFile of [...resources.keys()].filter(name => name.endsWith('.stacks'))) {
+    for (const [key, value] of parseClientSideCallMetadata(JSON.parse(resources.get(stacksFile)!.toString())))
+      stacks.set(key, value);
+  }
+
+  const actionObjects = [...actionMap.values()];
+  actionObjects.sort((a, b) => a.startTime - b.startTime);
+  return {
+    events,
+    resources,
+    actions: actionObjects.map(a => a.apiName),
+    actionObjects,
+    stacks,
+  };
+}

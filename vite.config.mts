@@ -16,7 +16,8 @@
 
 import path from 'path';
 import sourcemaps from 'rollup-plugin-sourcemaps';
-import { defineConfig, Plugin } from 'vite';
+import type { Plugin } from 'vite';
+import { defineConfig } from 'vite';
 import replace from '@rollup/plugin-replace';
 
 const baseDir = __dirname.replace(/\\/g, '/');
@@ -82,15 +83,15 @@ export default defineConfig({
   },
   plugins: [
     replace({
-      preventAssignment: true,
-    '__dirname': id => {
-      const relativePath = path.posix.relative(baseDir, path.posix.dirname(id));
-      return [
-        'src',
-        'playwright/packages/playwright-core/src',
-        'playwright/packages/playwright/src',
-      ].some(p => relativePath.startsWith(p)) ? JSON.stringify(relativePath) : '__dirname';
-    },
+      'preventAssignment': true,
+      '__dirname': id => {
+        const relativePath = path.posix.relative(baseDir, path.posix.dirname(id));
+        return [
+          'src',
+          'playwright/packages/playwright-core/src',
+          'playwright/packages/playwright/src',
+        ].some(p => relativePath.startsWith(p)) ? JSON.stringify(relativePath) : '__dirname';
+      },
     }) as Plugin<any>,
   ],
   build: {

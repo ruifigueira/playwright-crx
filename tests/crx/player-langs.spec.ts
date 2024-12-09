@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { dumpLogHeaders, expect, test } from "./crxRecorderTest";
+import { dumpLogHeaders, expect, test } from './crxRecorderTest';
 
 test.beforeEach(async ({ page, recordAction, baseURL }) => {
   await recordAction(() => page.goto(`${baseURL}/input/textarea.html`));
