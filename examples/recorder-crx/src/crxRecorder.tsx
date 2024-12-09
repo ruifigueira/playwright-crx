@@ -155,6 +155,10 @@ export const CrxRecorder: React.FC = ({
     window.dispatch({ event: 'codeChanged', params: { code } });
   }, []);
 
+  const dispatchCursorActivity = React.useCallback((position: { line: number }) => {
+    window.dispatch({ event: 'cursorActivity', params: { position } });
+  }, []);
+
   return <>
     <div>
       <Dialog title="Preferences" isOpen={showPreferences} onClose={() => setShowPreferences(false)}>
@@ -177,7 +181,7 @@ export const CrxRecorder: React.FC = ({
         <ToolbarButton icon='settings-gear' title='Preferences' onClick={() => setShowPreferences(true)}></ToolbarButton>
       </Toolbar>
       </>}
-      <Recorder sources={sources} paused={paused} log={log} mode={mode} onEditedCode={dispatchEditedCode} />
+      <Recorder sources={sources} paused={paused} log={log} mode={mode} onEditedCode={dispatchEditedCode} onCursorActivity={dispatchCursorActivity} />
     </div>
   </>;
 };
