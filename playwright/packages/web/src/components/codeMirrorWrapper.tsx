@@ -45,6 +45,7 @@ export interface SourceProps {
   focusOnChange?: boolean;
   wrapLines?: boolean;
   onChange?: (text: string) => void;
+  onCursorActivity?: (position: { line: number }) => void;
   dataTestId?: string;
   placeholder?: string;
 }
@@ -62,6 +63,7 @@ export const CodeMirrorWrapper: React.FC<SourceProps> = ({
   focusOnChange,
   wrapLines,
   onChange,
+  onCursorActivity,
   dataTestId,
   placeholder,
 }) => {
@@ -186,11 +188,22 @@ export const CodeMirrorWrapper: React.FC<SourceProps> = ({
       codemirror.on('change', changeListener);
     }
 
+    let cursorActivityListener: () => void | undefined;
+    if (onCursorActivity) {
+      cursorActivityListener = () => {
+        if (codemirrorRef.current!.cm.hasFocus())
+          onCursorActivity(codemirrorRef.current!.cm.getCursor());
+      };
+      codemirror.on('cursorActivity', cursorActivityListener);
+    }
+
     return () => {
       if (changeListener)
         codemirror.off('change', changeListener);
+      if (cursorActivityListener)
+        codemirror.off('cursorActivity', cursorActivityListener);
     };
-  }, [codemirror, text, highlight, revealLine, focusOnChange, onChange]);
+  }, [codemirror, text, highlight, revealLine, focusOnChange, onChange, onCursorActivity]);
 
   return <div data-testid={dataTestId} className='cm-wrapper' ref={codemirrorElement} onClick={onCodeMirrorClick}></div>;
 };
