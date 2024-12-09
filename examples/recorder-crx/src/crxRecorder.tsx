@@ -64,6 +64,7 @@ export const CrxRecorder: React.FC = ({
         case 'setPaused': setPaused(msg.paused); break;
         case 'setMode': setMode(msg.mode); break;
         case 'setSources': setSources(msg.sources); break;
+        case 'resetCallLogs': setLog(new Map()); break;
         case 'updateCallLogs': setLog(log => {
           const newLog = new Map<string, CallLog>(log);
           for (const callLog of msg.callLogs) {
