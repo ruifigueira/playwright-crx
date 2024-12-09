@@ -30,8 +30,11 @@ export const defaultSettings = {
 };
 
 export async function loadSettings(): Promise<CrxSettings> {
-  const loadedPreferences = await chrome.storage.sync.get(['testIdAttributeName', 'targetLanguage', 'sidepanel', 'playInIncognito', 'experimental']) as Partial<CrxSettings>;
-  return { ...defaultSettings, ...loadedPreferences };
+  const [isAllowedIncognitoAccess, loadedPreferences] = await Promise.all([
+    chrome.extension.isAllowedIncognitoAccess(),
+    chrome.storage.sync.get(['testIdAttributeName', 'targetLanguage', 'sidepanel', 'playInIncognito', 'experimental']) as Partial<CrxSettings>,
+  ]);
+  return { ...defaultSettings, ...loadedPreferences, playInIncognito: !!loadedPreferences.playInIncognito && isAllowedIncognitoAccess };
 }
 
 export async function storeSettings(settings: CrxSettings) {

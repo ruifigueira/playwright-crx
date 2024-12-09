@@ -20,6 +20,7 @@ import { defaultSettings, loadSettings, storeSettings } from './settings';
 export const PreferencesForm: React.FC = ({}) => {
   const [initialSettings, setInitialSettings] = React.useState<CrxSettings>(defaultSettings);
   const [settings, setSettings] = React.useState<CrxSettings>(defaultSettings);
+  const [isAllowedIncognitoAccess, setIsAllowedIncognitoAccess] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     loadSettings()
@@ -27,6 +28,7 @@ export const PreferencesForm: React.FC = ({}) => {
           setInitialSettings(settings);
           setSettings(settings);
         });
+    chrome.extension.isAllowedIncognitoAccess().then(setIsAllowedIncognitoAccess);
   }, []);
 
   const canSave = React.useMemo(() => {
@@ -93,12 +95,14 @@ export const PreferencesForm: React.FC = ({}) => {
     <div>
       <label htmlFor='playInIncognito' className='row'>Play in incognito:</label>
       <input
+        disabled={!isAllowedIncognitoAccess}
         type='checkbox'
         id='playInIncognito'
         name='playInIncognito'
         checked={settings.playInIncognito}
         onChange={e => setSettings({ ...settings, playInIncognito: e.target.checked })}
       />
+      {!isAllowedIncognitoAccess && <div className='note error'>This feature requires the extension to be allowed to run in incognito mode.</div>}
     </div>
     <div>
       <label htmlFor='experimental' className='row'>Allow experimental features:</label>
