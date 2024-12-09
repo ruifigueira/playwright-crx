@@ -23,7 +23,7 @@ import type { ActionInContextWithLocation } from './parser';
 import { PopupRecorderWindow } from './popupRecorderWindow';
 import { SidepanelRecorderWindow } from './sidepanelRecorderWindow';
 import type { IRecorderApp } from 'playwright-core/lib/server/recorder/recorderFrontend';
-import type { ActionInContext } from '@recorder/actions';
+import type { ActionInContext, ActionWithSelector } from '@recorder/actions';
 import { parse } from './parser';
 import { languageSet } from 'playwright-core/lib/server/codegen/languages';
 import type { Crx } from '../crx';
@@ -37,7 +37,7 @@ export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'elementPicked', elementInfo: ElementInfo, userGesture?: boolean }
 );
 
-export type RecorderEventData =  (EventData | { event: 'codeChanged', params: any }) & { type: string };
+export type RecorderEventData =  (EventData | { event: 'codeChanged' | 'cursorActivity', params: any }) & { type: string };
 
 export interface RecorderWindow {
   isClosed(): boolean;
@@ -61,6 +61,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   private _editedCode?: EditedCode;
   private _recordedActions: ActionInContextWithLocation[] = [];
   private _playInIncognito = false;
+  private _currentCursorPosition: { line: number } | undefined;
 
   constructor(crx: Crx, recorder: Recorder, player: CrxPlayer) {
     super();
@@ -154,8 +155,6 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
       if (this._recorder.mode() === 'inspecting') {
         this._recorder.setMode('standby');
         this._window?.focus();
-      } else {
-        this._recorder.setMode('recording');
       }
     }
     this._sendMessage({ type: 'recorder', method: 'elementPicked', elementInfo, userGesture });
@@ -182,7 +181,20 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     if (!code || this._recorder._isRecording())
       return;
 
-    this._editedCode = new EditedCode(this._recorder, code);
+    this._editedCode = new EditedCode(this._recorder, code, () => this._updateLocator(this._currentCursorPosition));
+  }
+
+  private async _updateLocator(position?: { line: number}) {
+    if (!position)
+      return;
+
+    // codemirror line is 0-based while action line is 1-based
+    const action = this._getActions(true).find(a => a.location?.line === position.line + 1);
+    if (!action || !(action.action as ActionWithSelector).selector)
+      return;
+    const selector = (action.action as ActionWithSelector).selector;
+    this.elementPicked({ selector, ariaSnapshot: '' }, false);
+    this._onMessage({ type: 'recorderEvent', event: 'highlightRequested', params: { selector } });
   }
 
   private _onMessage({ type, event, params }: RecorderEventData) {
@@ -199,6 +211,10 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
           break;
         case 'codeChanged':
           this._updateCode(params.code);
+          break;
+        case 'cursorActivity':
+          this._currentCursorPosition = params.position;
+          this._updateLocator(this._currentCursorPosition);
           break;
         case 'resume':
         case 'step':
@@ -237,8 +253,8 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     await this._recorder._uninstallInjectedRecorder(page);
   }
 
-  private _getActions(): ActionInContextWithLocation[] {
-    if (this._editedCode) {
+  private _getActions(skipLoad = false): ActionInContextWithLocation[] {
+    if (this._editedCode && !skipLoad) {
       // this will indirectly refresh sources
       this._editedCode.load();
       const actions = this._editedCode.actions();
@@ -251,7 +267,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     if (!source)
       return [];
 
-    const actions = this._editedCode && !this._editedCode.hasErrors() ? this._editedCode.actions() : this._recordedActions;
+    const actions = this._editedCode?.hasLoaded() && !this._editedCode.hasErrors() ? this._editedCode.actions() : this._recordedActions;
 
     const { header } = source;
     const languageGenerator = [...languageSet()].find(l => l.id === this._filename)!;
@@ -281,10 +297,12 @@ class EditedCode {
   private _actions: ActionInContextWithLocation[] = [];
   private _highlight: SourceHighlight[] = [];
   private _codeLoadDebounceTimeout: NodeJS.Timeout | undefined;
+  private _onLoaded?: () => any;
 
-  constructor(recorder: Recorder, code: string) {
+  constructor(recorder: Recorder, code: string, onLoaded?: () => any) {
     this.code = code;
     this._recorder = recorder;
+    this._onLoaded = onLoaded;
     this._codeLoadDebounceTimeout = setTimeout(this.load.bind(this), 500);
   }
 
@@ -333,5 +351,7 @@ class EditedCode {
       this._highlight = [{ line, type: 'error', message: error.message }];
       this._recorder.loadScript({ actions: this._actions, deviceName: '', contextOptions: {}, text: this.code, highlight: this._highlight });
     }
+
+    this._onLoaded?.();
   }
 }

@@ -19,13 +19,21 @@ import { test, expect } from './crxRecorderTest';
 import type { CrxApplication } from '../../test';
 
 async function editCode(recorderPage: Page, code: string) {
-  const editor = recorderPage.locator('.CodeMirror textarea');
+  const editor = recorderPage.locator('.CodeMirror textarea').first();
   await editor.press('ControlOrMeta+a');
   await editor.fill(code);
 }
 
 async function getCode(recorderPage: Page): Promise<string> {
-  return await recorderPage.locator('.CodeMirror').evaluate(elem => (elem as any).CodeMirror.getValue());
+  return await recorderPage.locator('.CodeMirror').first().evaluate((elem: any) => elem.CodeMirror.getValue());
+}
+
+async function moveCursorToLine(recorderPage: Page, line: number) {
+  await recorderPage.locator('.CodeMirror').first().evaluate((elem: any, line) => elem.CodeMirror.setCursor({
+    // codemirror line is 0-based
+    line: line - 1,
+    ch: 0,
+  }), line);
 }
 
 function editorLine(recorderPage: Page, linenumber: number) {
@@ -88,7 +96,13 @@ test('test', async ({ page }) => {
   await page.goto('${baseURL}/input/textarea.html');
   await page.locator('textarea').wrongAction('te
 });`);
+  
+  // validates parsing debouncing: after editing, it should wait for a while before showing the error
+  // we wait a bit but less than the debounce time to ensure it's still hidden
+  await page.waitForTimeout(250);
+  await expect(recorderPage.locator('.source-line-error-widget')).toBeHidden();
 
+  // eventually it should show the error
   await expect(recorderPage.locator('.source-line-error .CodeMirror-line')).toHaveText(`  await page.locator('textarea').wrongAction('te`);
   await expect(recorderPage.locator('.source-line-error-widget')).toHaveText('Unterminated string constant (5:45)');
 });
@@ -248,4 +262,39 @@ test('test', async ({ page }) => {
   });
 
   await expect(recorderPage.locator('.source-line-error-widget')).toHaveText('Invalid locator (4:8)');
+});
+
+test('should highlight selector at cursor line', async ({ page, attachRecorder, baseURL }) => {
+  const recorderPage = await attachRecorder(page);
+  await recorderPage.getByTitle('Record').click();
+
+  // ensure locator tab is selected
+  await recorderPage.getByRole('tab', { name: 'Locator' }).click();
+
+  await page.goto(`${baseURL}/input/textarea.html`);
+  
+  await editCode(recorderPage, `import { test, expect } from '@playwright/test';
+
+test('test', async ({ page }) => {
+  await page.goto('${baseURL}/input/textarea.html');
+  await page.locator('textarea').fill('some test');
+  await page.getByRole('textbox').fill('another test');
+});`);
+
+  await moveCursorToLine(recorderPage, 6);
+
+  await expect(recorderPage.getByRole('tabpanel', { name: 'Locator' }).locator('.CodeMirror-code')).toHaveText(`getByRole('textbox')`);
+  expect(await page.evaluate(() => [
+    ...document.querySelector('x-pw-glass')!.shadowRoot!.querySelectorAll('x-pw-tooltip-line')].map(e => e.textContent)
+  )).toEqual([
+    `getByRole('textbox') [1 of 2]`,
+    `getByRole('textbox') [2 of 2]`,
+  ]);
+
+  await moveCursorToLine(recorderPage, 5);
+
+  await expect(recorderPage.getByRole('tabpanel', { name: 'Locator' }).locator('.CodeMirror-code')).toHaveText(`locator('textarea')`);
+  expect(await page.evaluate(() => [
+    ...document.querySelector('x-pw-glass')!.shadowRoot!.querySelectorAll('x-pw-tooltip-line')].map(e => e.textContent)
+  )).toEqual([`locator('textarea')`]);
 });
