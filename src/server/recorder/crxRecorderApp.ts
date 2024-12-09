@@ -29,6 +29,7 @@ import { languageSet } from 'playwright-core/lib/server/codegen/languages';
 import type { Crx } from '../crx';
 
 export type RecorderMessage = { type: 'recorder' } & (
+  | { method: 'resetCallLogs' }
   | { method: 'updateCallLogs', callLogs: CallLog[] }
   | { method: 'setPaused', paused: boolean }
   | { method: 'setMode', mode: Mode }
@@ -37,7 +38,7 @@ export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'elementPicked', elementInfo: ElementInfo, userGesture?: boolean }
 );
 
-export type RecorderEventData =  (EventData | { event: 'codeChanged' | 'cursorActivity', params: any }) & { type: string };
+export type RecorderEventData =  (EventData | { event: 'resetCallLogs' | 'codeChanged' | 'cursorActivity', params: any }) & { type: string };
 
 export interface RecorderWindow {
   isClosed(): boolean;
@@ -68,7 +69,10 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     this._crx = crx;
     this._recorder = recorder;
     this._player = player;
-    this._player.on('start', () => this._recorder.clearErrors());
+    this._player.on('start', () => {
+      this._recorder.clearErrors();
+      this.resetCallLogs().catch(() => {});
+    });
   }
 
   setPlayInIncognito(playInIncognito: boolean) {
@@ -158,6 +162,10 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
       }
     }
     this._sendMessage({ type: 'recorder', method: 'elementPicked', elementInfo, userGesture });
+  }
+
+  async resetCallLogs() {
+    this._sendMessage({ type: 'recorder', method: 'resetCallLogs' });
   }
 
   async updateCallLogs(callLogs: CallLog[]) {

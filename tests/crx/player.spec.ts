@@ -82,8 +82,6 @@ test('should clear errors when resuming after errors', async ({ basePath, page, 
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
     `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `▼ page.locator('textarea') .click() ❌ — XXms`,
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
     `► page.locator('textarea') .click() ✅ — XXms`,
     `► page.locator('textarea') .fill() ✅ — XXms`,
   ]);
@@ -152,9 +150,6 @@ test('should resume then step', async ({ recorderPage, baseURL }) => {
 
   await recorderPage.getByTitle('Step Over (F10)').click();
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `► page.locator('textarea') .click() ✅ — XXms`,
-    `► page.locator('textarea') .fill() ✅ — XXms`,
     `▼ page.goto( ${baseURL}/input/textarea.html ) ⏸️`,
   ]);
 });
@@ -178,9 +173,6 @@ test('should resume then record then resume', async ({ recorderPage, recordActio
 
   await recorderPage.getByTitle('Resume (F8)').click();
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `► page.locator('textarea') .click() ✅ — XXms`,
-    `► page.locator('textarea') .fill() ✅ — XXms`,
     `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
     `► page.locator('textarea') .click() ✅ — XXms`,
     `► page.locator('textarea') .fill() ✅ — XXms`,
@@ -218,4 +210,28 @@ test('should resume with multiple pages', async ({ context, attachRecorder, reco
   ]);
 
   await page1.close();
+});
+
+
+test('should reset call logs on resume', async ({ context, attachRecorder, recorderPage, recordAction, baseURL, page }) => {
+  await recorderPage.getByTitle('Record').click();
+  await recorderPage.getByTitle('Resume (F8)').click();
+
+  await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
+    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► page.locator('textarea') .click() ✅ — XXms`,
+    `► page.locator('textarea') .fill() ✅ — XXms`,
+  ]);
+
+  await recorderPage.getByTitle('Step Over (F10)').click();
+  await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
+    `▼ page.goto( ${baseURL}/input/textarea.html ) ⏸️`,
+  ]);
+
+  await recorderPage.getByTitle('Resume (F8)').click();
+  await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
+    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► page.locator('textarea') .click() ✅ — XXms`,
+    `► page.locator('textarea') .fill() ✅ — XXms`,
+  ]);
 });
