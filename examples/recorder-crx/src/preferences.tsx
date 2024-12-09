@@ -15,6 +15,8 @@
  */
 import { PreferencesForm } from './preferencesForm';
 import * as ReactDOM from 'react-dom/client';
+import './preferences.css';
+import './form.css';
 
 (async () => {
   ReactDOM.createRoot(document.querySelector('#root')!).render(<PreferencesForm />);

@@ -1,0 +1,53 @@
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+form h1 {
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+form label {
+  font-weight: bold;
+}
+
+form input[type="text"], select {
+  padding: 5px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+form input[type="checkbox"] {
+  padding-left: 16px;
+}
+
+form button[type="submit"] {
+  background-color: #4CAF50;
+  border: none;
+  color: white;
+  padding: 10px 20px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  margin: 4px 2px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s ease-in-out;
+}
+
+form button:hover {
+  background-color: #45A049;
+}
+
+form button[type="submit"]:disabled {
+  background-color: #ccc;
+  color: #666;
+  cursor: not-allowed;
+}
+
+form .note.error {
+  color: darkred;
+}

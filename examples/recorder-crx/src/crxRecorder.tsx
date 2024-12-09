@@ -24,6 +24,7 @@ import { Recorder } from '@recorder/recorder';
 import type { CrxSettings } from './settings';
 import { addSettingsChangedListener, defaultSettings, loadSettings, removeSettingsChangedListener } from './settings';
 import './crxRecorder.css';
+import './form.css';
 
 function setElementPicked(elementInfo: ElementInfo, userGesture?: boolean) {
   window.playwrightElementPicked(elementInfo, userGesture);
