@@ -321,10 +321,11 @@ for (const [lang, [expectedSuggestedName, filename]] of Object.entries(langs)) {
     await recordAction(() => page.locator('textarea').fill('test'));
 
     await recorderPage.getByTitle('Record').click();
+    await recorderPage.getByTitle('Save').click();
 
     const [download] = await Promise.all([
       recorderPage.waitForEvent('download'),
-      recorderPage.getByTitle('Save').click(),
+      recorderPage.getByRole('dialog').getByRole('button', { name: 'Save' }).click(),
     ]);
 
     const suggestedName = download.suggestedFilename();

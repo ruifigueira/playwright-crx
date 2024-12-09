@@ -25,7 +25,7 @@ export const Dialog: React.FC<React.PropsWithChildren<{
     return null;
 
   return (
-    <div className='dialog-overlay' onClick={onClose}>
+    <div className='dialog-overlay' role='dialog' aria-label={title} onClick={onClose}>
       <div className='dialog-box' onClick={e => e.stopPropagation()}>
         <div className='dialog-header'>
           <h2>{title}</h2>

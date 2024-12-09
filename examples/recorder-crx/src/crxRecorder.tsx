@@ -46,6 +46,26 @@ function download(filename: string, text: string) {
   }
 }
 
+function generateDatetimeSuffix() {
+  return new Date().toISOString()
+      .replace(/[-:]/g, '')
+      .replace(/\..+/, '')
+      .replace('T', '-');
+}
+
+const codegenFilenames: Record<string, string> = {
+  'javascript': 'example.js',
+  'playwright-test': 'example.spec.ts',
+  'java-junit': 'TestExample.java',
+  'java': 'Example.java',
+  'python-pytest': 'test_example.py',
+  'python': 'example.py',
+  'python-async': 'example.py',
+  'csharp-mstest': 'Tests.cs',
+  'csharp-nunit': 'Tests.cs',
+  'csharp': 'Example.cs',
+};
+
 export const CrxRecorder: React.FC = ({
 }) => {
   const [settings, setSettings] = React.useState<CrxSettings>(defaultSettings);
@@ -55,6 +75,7 @@ export const CrxRecorder: React.FC = ({
   const [log, setLog] = React.useState(new Map<string, CallLog>());
   const [mode, setMode] = React.useState<Mode>('none');
   const [selectedFileId, setSelectedFileId] = React.useState<string>(defaultSettings.targetLanguage);
+  const [suggestedFilename, setSuggestedFilename] = React.useState<string | undefined>();
 
   React.useEffect(() => {
     const port = chrome.runtime.connect({ name: 'recorder' });
@@ -96,44 +117,30 @@ export const CrxRecorder: React.FC = ({
     };
   }, []);
 
+  const source = React.useMemo(() => sources.find(s => s.id === selectedFileId), [sources, selectedFileId]);
+
   const downloadCode = React.useCallback(() => {
     if (!settings.experimental)
       return;
 
-    if (!sources.length || !selectedFileId)
-      return;
-
-    const source = sources.find(s => s.id === selectedFileId);
-    if (!source)
-      return;
-
-    let filename: string | undefined;
-    switch (selectedFileId) {
-      case 'javascript': filename = 'example.js'; break;
-      case 'playwright-test': filename = 'example.spec.ts'; break;
-      case 'java-junit': filename = 'TestExample.java'; break;
-      case 'java': filename = 'Example.java'; break;
-      case 'python-pytest': filename = 'test_example.py'; break;
-      case 'python': filename = 'example.py'; break;
-      case 'python-async': filename = 'example.py'; break;
-      case 'csharp-mstest': filename = 'Tests.cs'; break;
-      case 'csharp-nunit': filename = 'Tests.cs'; break;
-      case 'csharp': filename = 'Example.cs'; break;
-    }
-
-    if (!filename)
+    if (!source || !suggestedFilename || !selectedFileId)
       return;
 
     const code = source.text;
 
-    download(filename, code);
-  }, [sources, selectedFileId, settings]);
+    download(suggestedFilename, code);
 
-  const requestSaveStorageState = React.useCallback(() => {
+    setSuggestedFilename(undefined);
+  }, [settings, source, suggestedFilename, selectedFileId]);
+
+  const requestStorageState = React.useCallback(() => {
     if (!settings.experimental)
       return;
 
-    chrome.runtime.sendMessage({ event: 'saveStorageStateRequested' });
+    chrome.runtime.sendMessage({ event: 'storageStateRequested' }).then(storageState => {
+      const fileSuffix = generateDatetimeSuffix();
+      download(`storageState-${fileSuffix}.json`, JSON.stringify(storageState, null, 2));
+    });
   }, [settings]);
 
   React.useEffect(() => {
@@ -143,7 +150,7 @@ export const CrxRecorder: React.FC = ({
     const keydownHandler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
-        downloadCode();
+        setSuggestedFilename(codegenFilenames[selectedFileId]);
       }
     };
     window.addEventListener('keydown', keydownHandler);
@@ -151,7 +158,7 @@ export const CrxRecorder: React.FC = ({
     return () => {
       window.removeEventListener('keydown', keydownHandler);
     };
-  }, [downloadCode, settings]);
+  }, [selectedFileId, settings]);
 
   const dispatchEditedCode = React.useCallback((code: string) => {
     window.dispatch({ event: 'codeChanged', params: { code } });
@@ -162,21 +169,35 @@ export const CrxRecorder: React.FC = ({
   }, []);
 
   return <>
-    <div>
-      <Dialog title='Preferences' isOpen={showPreferences} onClose={() => setShowPreferences(false)}>
-        <PreferencesForm />
-      </Dialog>
-    </div>
+    <Dialog title='Preferences' isOpen={showPreferences} onClose={() => setShowPreferences(false)}>
+      <PreferencesForm />
+    </Dialog>
+
+    <Dialog title={`Save ${source?.group} ${source?.label}`} isOpen={typeof suggestedFilename === 'string'} onClose={() => setSuggestedFilename(undefined)}>
+      <form id='save-form' onSubmit={downloadCode}>
+        <label htmlFor='filename'>File Name:</label>
+        <input
+          type='text'
+          id='filename'
+          name='filename'
+          placeholder='Enter file name'
+          required
+          value={suggestedFilename}
+          onChange={e => setSuggestedFilename(e.target.value)}
+        />
+        <button id='submit' type='submit' disabled={!suggestedFilename}>Save</button>
+      </form>
+    </Dialog>
 
     <div className='recorder'>
       {settings.experimental && <>
         <Toolbar>
-          <ToolbarButton icon='save' title='Save' disabled={false} onClick={downloadCode}>Save</ToolbarButton>
+          <ToolbarButton icon='save' title='Save' disabled={false} onClick={() => setSuggestedFilename(codegenFilenames[selectedFileId])}>Save</ToolbarButton>
           <div style={{ flex: 'auto' }}></div>
           <div className='dropdown'>
             <ToolbarButton icon='tools' title='Tools' disabled={false} onClick={() => {}}></ToolbarButton>
             <div className='dropdown-content right-align'>
-              <a href='#' onClick={requestSaveStorageState}>Save storage state</a>
+              <a href='#' onClick={requestStorageState}>Download storage state</a>
             </div>
           </div>
           <ToolbarSeparator />
