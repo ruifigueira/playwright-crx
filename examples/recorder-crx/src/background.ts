@@ -16,11 +16,9 @@
 
 import type { Mode } from '@recorder/recorderTypes';
 import type { CrxApplication } from 'playwright-crx';
-import playwright, { crx, registerSourceMap, _debug, _setUnderTest, _isUnderTest as isUnderTest } from 'playwright-crx';
+import playwright, { crx, _debug, _setUnderTest, _isUnderTest as isUnderTest } from 'playwright-crx';
 import type { CrxSettings } from './settings';
 import { addSettingsChangedListener, defaultSettings, loadSettings } from './settings';
-
-registerSourceMap().catch(() => {});
 
 type CrxMode = Mode | 'detached';
 
