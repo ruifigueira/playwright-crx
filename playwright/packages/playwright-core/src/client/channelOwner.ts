@@ -174,8 +174,10 @@ export abstract class ChannelOwner<T extends channels.Channel = channels.Channel
     if (apiZone)
       return await func(apiZone);
 
+    const crxZone = zones.zoneData<{ apiName: string }>('crxZone');
+
     const stackTrace = captureLibraryStackTrace();
-    let apiName: string | undefined = stackTrace.apiName;
+    let apiName: string | undefined = crxZone?.apiName ?? stackTrace.apiName;
     const frames: channels.StackFrame[] = stackTrace.frames;
 
     if (isInternal === undefined)
