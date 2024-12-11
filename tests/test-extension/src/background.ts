@@ -15,9 +15,7 @@
  */
 
 import type { CrxApplication } from 'playwright-crx/test';
-import { crx, expect, _debug, registerSourceMap } from 'playwright-crx/test';
-
-registerSourceMap().catch(() => {});
+import { crx, expect, _debug } from 'playwright-crx/test';
 
 let _crxAppPromise: Promise<CrxApplication> | undefined;
 

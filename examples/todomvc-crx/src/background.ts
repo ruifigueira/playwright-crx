@@ -14,10 +14,8 @@
  * limitations under the License.
  */
 
-import { crx, registerSourceMap } from 'playwright-crx';
+import { crx } from 'playwright-crx';
 import { createTodos } from './todos';
-
-registerSourceMap().catch(() => {});
 
 chrome.action.onClicked.addListener(async ({ id: tabId }) => {
   await chrome.action.disable();

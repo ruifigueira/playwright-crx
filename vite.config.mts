@@ -63,7 +63,6 @@ export default defineConfig({
       'process': path.resolve(__dirname, './node_modules/process'),
       'readline': path.resolve(__dirname, './src/shims/readline'),
       'setimmediate': path.resolve(__dirname, './node_modules/setimmediate'),
-      'stack-utils': path.resolve(__dirname, './src/shims/stack-utils'),
       'stream': path.resolve(__dirname, './node_modules/readable-stream'),
       'tls': path.resolve(__dirname, './src/shims/tls'),
       'url': path.resolve(__dirname, './src/shims/url'),
@@ -109,9 +108,6 @@ export default defineConfig({
     rollupOptions: {
       // @ts-ignore
       plugins: [sourcemaps()],
-      output: {
-        exports: 'named',
-      }
     },
     commonjsOptions: {
       transformMixedEsModules: true,

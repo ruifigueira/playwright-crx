@@ -17,7 +17,7 @@ import { defineConfig, devices } from '@playwright/test';
 import type { CrxFixtureOptions } from './crx/crxTest';
 
 export default defineConfig<CrxFixtureOptions>({
-  testDir: '.',
+  testDir: './crx',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
