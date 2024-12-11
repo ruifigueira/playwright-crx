@@ -142,3 +142,47 @@ test('should create pages in corresponding contexts', async ({ runCrxTest }) => 
     await incognitoApp.close();
   });
 });
+
+test('should start with viewport', async ({ runCrxTest }) => {
+  await runCrxTest(async ({ crx, expect, server }) => {
+    const incognitoApp = await crx.start({
+      incognito: true,
+      contextOptions: {
+        viewport: { width: 400, height: 620 }
+      }
+    });
+    const [page] = incognitoApp.pages();
+    await page.goto(server.EMPTY_PAGE);
+    expect(page.viewportSize()).toEqual({ width: 400, height: 620 });
+    expect(await page.evaluate(() => [window.innerWidth, window.innerHeight])).toEqual([400, 620]);
+    incognitoApp.close();
+  });
+});
+
+test('should start with device name', async ({ runCrxTest }) => {
+  await runCrxTest(async ({ crx, expect, server }) => {
+    const incognitoApp = await crx.start({ incognito: true, deviceName: 'Nokia N9' });
+    const [page] = incognitoApp.pages();
+    await page.goto(server.EMPTY_PAGE);
+    expect(page.viewportSize()).toEqual({ width: 480, height: 854 });
+    await page.close();
+    await incognitoApp.close();
+  });
+});
+
+test('should start with device name and custom viewport', async ({ runCrxTest }) => {
+  await runCrxTest(async ({ crx, expect, server }) => {
+    const incognitoApp = await crx.start({
+      incognito: true,
+      deviceName: 'Nokia N9',
+      contextOptions: {
+        viewport: { width: 400, height: 620 }
+      }
+    });
+    const [page] = incognitoApp.pages();
+    await page.goto(server.EMPTY_PAGE);
+    expect(page.viewportSize()).toEqual({ width: 400, height: 620 });
+    await page.close();
+    await incognitoApp.close();
+  });
+});

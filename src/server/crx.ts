@@ -36,6 +36,8 @@ import { createTab } from './utils';
 import { parse } from './recorder/parser';
 import { generateCode } from 'playwright-core/lib/server/codegen/language';
 import { languageSet } from 'playwright-core/lib/server/codegen/languages';
+import { deviceDescriptors } from 'playwright-core/lib/server/deviceDescriptors';
+import type { DeviceDescriptor } from 'playwright-core/lib/server/types';
 
 const kTabIdSymbol = Symbol('kTabIdSymbol');
 
@@ -56,10 +58,13 @@ export class Crx extends SdkObject {
 
   async start(options?: crxchannels.CrxStartOptions): Promise<CrxApplication> {
     const { incognito, contextOptions } = options ?? {};
+    const device = deviceDescriptors[options?.deviceName as keyof DeviceDescriptor] ?? {};
+    const viewport = contextOptions?.viewport ?? device.viewport;
     const newContextOptions: channels.BrowserNewContextOptions = {
-      noDefaultViewport: !contextOptions?.viewport,
-      viewport: contextOptions?.viewport,
-      ...contextOptions
+      noDefaultViewport: !viewport,
+      ...device,
+      ...contextOptions,
+      viewport,
     };
     if (!this._transport && !this._browserPromise) {
       const browserLogsCollector = new RecentLogsCollector();
@@ -91,7 +96,7 @@ export class Crx extends SdkObject {
     if (incognito) {
       if (this._incognitoCrxApplicationPromise)
         throw new Error(`incognito crxApplication is already started`);
-      this._incognitoCrxApplicationPromise = this._startIncognitoCrxApplication(browser, this._transport, contextOptions);
+      this._incognitoCrxApplicationPromise = this._startIncognitoCrxApplication(browser, this._transport, newContextOptions);
       return await this._incognitoCrxApplicationPromise;
     } else {
       if (this._crxApplicationPromise)
@@ -110,7 +115,7 @@ export class Crx extends SdkObject {
     return crxApp;
   }
 
-  private async _startIncognitoCrxApplication(browser: CRBrowser, transport: CrxTransport, options?: crxchannels.CrxStartOptions['contextOptions']) {
+  private async _startIncognitoCrxApplication(browser: CRBrowser, transport: CrxTransport, options?: channels.BrowserNewContextParams) {
     const windows = await chrome.windows.getAll().catch(e => console.error(e)) ?? [];
     const windowId = windows.find(window => window.incognito)?.id;
     const incognitoTabIdPromise = new Promise<number>(resolve => {
