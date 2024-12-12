@@ -66,9 +66,6 @@ export default defineConfig({
       'stream': path.resolve(__dirname, './node_modules/readable-stream'),
       'tls': path.resolve(__dirname, './src/shims/tls'),
       'url': path.resolve(__dirname, './src/shims/url'),
-      // browserify-zlib apparently tries to import 'util/'
-      'util/': path.resolve(__dirname, './src/shims/util'),
-      'util': path.resolve(__dirname, './src/shims/util'),
       'zlib': path.resolve(__dirname, './node_modules/browserify-zlib'),
 
       'node:events': path.resolve(__dirname, './node_modules/events'),
