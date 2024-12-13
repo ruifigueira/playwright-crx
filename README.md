@@ -75,42 +75,38 @@ A more complete example can be found in `examples/todomvc-crx`.
 
 Playwright CRX also supports [tracing](https://playwright.dev/docs/api/class-tracing), compatible with [Playwright Trace Viewer](https://trace.playwright.dev).
 
-For it to work properly, some additional steps are required:
+Here's an example on how to run it:
 
-- ensure vite generates source maps with [rollup-plugin-sourcemaps](https://www.npmjs.com/package/rollup-plugin-sourcemaps)  and doesn't minify the code:
+```ts
+await page.context().tracing.start({ screenshots: true, snapshots: true });
 
-```js
-import { defineConfig } from 'vite';
-import sourcemaps from 'rollup-plugin-sourcemaps';
+await page.goto('https://demo.playwright.dev/todomvc');
+const newTodo = page.getByPlaceholder('What needs to be done?');
+await newTodo.fill(item);
+await newTodo.press('Enter');
+await expect(page.getByTestId('todo-title')).toHaveText(TODO_ITEMS);
 
-export default defineConfig({
-  build: {
-    minify: false,
-    sourcemap: true,
-    rollupOptions: {
-      plugins: [sourcemaps()],
-      // other configurations
-    },
-  },
+// stores in memfs and then reads its data
+await page.context().tracing.stop({ path: '/tmp/trace.zip' });
+const data = crx.fs.readFileSync('/tmp/trace.zip');
+
+// opens playwright traceviewer
+const tracePage = await crxApp.newPage();
+await tracePage.goto('https://trace.playwright.dev');
+const [filechooser] = await Promise.all([
+  tracePage.waitForEvent('filechooser'),
+  tracePage.getByRole('button', { name: 'Select file(s)' }).click(),
+]);
+
+// uploads the trace data buffer (file paths from memfs are not supported)
+await filechooser.setFiles({
+  name: 'trace.zip',
+  mimeType: 'application/zip',
+  buffer: Buffer.from(data),
 });
 ```
-- add the following CSP to your extension `manifest.json`:
 
-```json
-  "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'"
-  }
-```
-
-- on the extension service worker script, register the application source map as soon as possible:
-
-```js
-import { crx, registerSourceMap } from 'playwright-crx';
-
-registerSourceMap().catch(() => {});
-```
-
-A complete example can be found in `examples/todomvc-crx`.
+You can give it a try with `playwright-crx/examples/todomvc-crx`.
 
 ## Build
 
