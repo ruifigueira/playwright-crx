@@ -359,7 +359,7 @@ export class CrxApplication extends SdkObject {
 
   private onWindowRemoved = async () => {
     const windows = await chrome.windows.getAll();
-    if (!windows.some(w => w.incognito))
+    if (this.isIncognito() && windows.every(w => !w.incognito))
       await this.close({});
   };
 
