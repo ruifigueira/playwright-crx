@@ -56,7 +56,7 @@ export class Crx extends SdkObject {
     super(playwright, 'crx');
   }
 
-  async start(options?: crxchannels.CrxStartOptions): Promise<CrxApplication> {
+  async start(options?: crxchannels.CrxStartParams): Promise<CrxApplication> {
     const { incognito, contextOptions } = options ?? {};
     const device = deviceDescriptors[options?.deviceName as keyof DeviceDescriptor] ?? {};
     const viewport = contextOptions?.viewport ?? device.viewport;

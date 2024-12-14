@@ -82,9 +82,9 @@ await page.context().tracing.start({ screenshots: true, snapshots: true });
 
 await page.goto('https://demo.playwright.dev/todomvc');
 const newTodo = page.getByPlaceholder('What needs to be done?');
-await newTodo.fill(item);
+await newTodo.fill('buy some cheese');
 await newTodo.press('Enter');
-await expect(page.getByTestId('todo-title')).toHaveText(TODO_ITEMS);
+await expect(page.getByTestId('todo-title')).toHaveText('buy some cheese');
 
 // stores in memfs and then reads its data
 await page.context().tracing.stop({ path: '/tmp/trace.zip' });

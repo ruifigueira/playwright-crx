@@ -35,6 +35,7 @@ export type CrxStartParams = {
   downloadsPath?: string,
   tracesDir?: string,
   incognito?: boolean,
+  deviceName?: string,
   contextOptions?: CrxBrowserContextOptions,
 };
 export type CrxStartOptions = {
