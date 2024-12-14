@@ -195,3 +195,20 @@ test('should report oopif frames', async ({ runCrxTest, browserMajorVersion }) =
     expect(await page.frames()[1].evaluate(() => '' + location.href)).toBe(server.CROSS_PROCESS_PREFIX + '/grid.html');
   });
 });
+
+test('should close crxApp', async ({ runCrxTest }) => {
+  await runCrxTest(async ({ crx, crxApp, expect }) => {
+    await crxApp.close();
+    await expect(crxApp.newPage()).rejects.toThrow();
+    await expect(await crx.get()).toBeUndefined();
+  });
+});
+
+test('should be able to open new crxApp after close', async ({ runCrxTest }) => {
+  await runCrxTest(async ({ crx, crxApp, expect }) => {
+    await crxApp.close();
+    expect(await crx.get()).toBeUndefined();
+    const newCrxApp = await crx.start();
+    expect(await crx.get()).toBe(newCrxApp);
+  });
+});

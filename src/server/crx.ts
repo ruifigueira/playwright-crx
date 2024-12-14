@@ -71,7 +71,9 @@ export class Crx extends SdkObject {
       const browserProcess: BrowserProcess = {
         onclose: undefined,
         process: undefined,
-        close: () => Promise.resolve(),
+        // browser.close() calls this function, and closing transport will trigger
+        // Browser.Events.Disconnected and force the browser to resolve the close promise.
+        close: () => this._transport.closeAndWait(),
         kill: () => Promise.resolve(),
       };
       const browserOptions: BrowserOptions = {
@@ -158,8 +160,6 @@ export class Crx extends SdkObject {
   async closeAndWait() {
     if (this._browserPromise)
       await this._browserPromise.then(browser => browser.close({}));
-    if (this._transport)
-      await this._transport.closeAndWait();
   }
 }
 
@@ -177,6 +177,7 @@ export class CrxApplication extends SdkObject {
   private _transport: CrxTransport;
   private _recorderApp?: CrxRecorderApp;
   private _player: CrxPlayer;
+  private _closed = false;
 
   constructor(crx: Crx, context: CRBrowserContext, transport: CrxTransport) {
     super(context, 'crxApplication');
@@ -303,8 +304,13 @@ export class CrxApplication extends SdkObject {
   }
 
   async close(options?: { closePages?: boolean, closeWindows?: boolean }) {
+    if (this._closed)
+      return;
+
     if (options?.closeWindows && !this.isIncognito())
       throw new Error('closeWindows is only supported in incognito mode');
+
+    this._closed = true;
 
     chrome.windows.onRemoved.removeListener(this.onWindowRemoved);
 
@@ -316,9 +322,6 @@ export class CrxApplication extends SdkObject {
     }
 
     await this._context.close({});
-
-    if (!this.isIncognito())
-      await this._crx.closeAndWait();
   }
 
   list(code: string) {
