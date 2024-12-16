@@ -307,8 +307,8 @@ const langs = {
   'csharp': ['Example.cs', 'csharp.cs'],
 };
 
-for (const [lang, [expectedSuggestedName, filename]] of Object.entries(langs)) {
-  test(`should save ${lang} as ${expectedSuggestedName}`, async ({ page, attachRecorder, recordAction, baseURL, configureRecorder }) => {
+for (const [lang, [suggestedFilename, filename]] of Object.entries(langs)) {
+  test(`should save ${lang}`, async ({ page, attachRecorder, recordAction, baseURL, configureRecorder }) => {
     await configureRecorder({ experimental: true });
     const recorderPage = await attachRecorder(page);
 
@@ -323,12 +323,17 @@ for (const [lang, [expectedSuggestedName, filename]] of Object.entries(langs)) {
     await recorderPage.getByTitle('Record').click();
     await recorderPage.getByTitle('Save').click();
 
+    const filenameFld = recorderPage.getByRole('dialog').getByPlaceholder('Enter file name');
+
+    await expect(filenameFld).toHaveValue(suggestedFilename);
+    await filenameFld.fill(filename);
+
     const [download] = await Promise.all([
       recorderPage.waitForEvent('download'),
       recorderPage.getByRole('dialog').getByRole('button', { name: 'Save' }).click(),
     ]);
 
-    const suggestedName = download.suggestedFilename();
+    const downloadedFilename = download.suggestedFilename();
     const code = await new Promise<string>(resolve => {
       let text = '';
       download.createReadStream().then(stream => {
@@ -339,8 +344,8 @@ for (const [lang, [expectedSuggestedName, filename]] of Object.entries(langs)) {
       });
     });
 
-    expect({ suggestedName, code }).toEqual({
-      suggestedName: expectedSuggestedName,
+    expect({ downloadedFilename, code }).toEqual({
+      downloadedFilename: filename,
       code: fs.readFileSync(path.join(__dirname, 'code', filename), 'utf8'),
     });
   });

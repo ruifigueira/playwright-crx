@@ -23,6 +23,8 @@ import type { CallLog, ElementInfo, Mode, Source } from '@recorder/recorderTypes
 import { Recorder } from '@recorder/recorder';
 import type { CrxSettings } from './settings';
 import { addSettingsChangedListener, defaultSettings, loadSettings, removeSettingsChangedListener } from './settings';
+import ModalContainer, { create as createModal } from 'react-modal-promise';
+import { SaveCodeForm } from './saveCodeForm';
 import './crxRecorder.css';
 import './form.css';
 
@@ -70,13 +72,11 @@ const codegenFilenames: Record<string, string> = {
 export const CrxRecorder: React.FC = ({
 }) => {
   const [settings, setSettings] = React.useState<CrxSettings>(defaultSettings);
-  const [showPreferences, setShowPreferences] = React.useState(false);
   const [sources, setSources] = React.useState<Source[]>([]);
   const [paused, setPaused] = React.useState(false);
   const [log, setLog] = React.useState(new Map<string, CallLog>());
   const [mode, setMode] = React.useState<Mode>('none');
   const [selectedFileId, setSelectedFileId] = React.useState<string>(defaultSettings.targetLanguage);
-  const [suggestedFilename, setSuggestedFilename] = React.useState<string | undefined>();
 
   React.useEffect(() => {
     const port = chrome.runtime.connect({ name: 'recorder' });
@@ -108,7 +108,10 @@ export const CrxRecorder: React.FC = ({
       if (data.event === 'fileChanged')
         setSelectedFileId(data.params.file);
     };
-    loadSettings().then(setSettings).catch(() => {});
+    loadSettings().then(settings => {
+      setSettings(settings);
+      setSelectedFileId(settings.targetLanguage);
+    }).catch(() => {});
 
     addSettingsChangedListener(setSettings);
 
@@ -120,20 +123,6 @@ export const CrxRecorder: React.FC = ({
 
   const source = React.useMemo(() => sources.find(s => s.id === selectedFileId), [sources, selectedFileId]);
 
-  const downloadCode = React.useCallback(() => {
-    if (!settings.experimental)
-      return;
-
-    if (!source || !suggestedFilename || !selectedFileId)
-      return;
-
-    const code = source.text;
-
-    download(suggestedFilename, code);
-
-    setSuggestedFilename(undefined);
-  }, [settings, source, suggestedFilename, selectedFileId]);
-
   const requestStorageState = React.useCallback(() => {
     if (!settings.experimental)
       return;
@@ -144,6 +133,35 @@ export const CrxRecorder: React.FC = ({
     });
   }, [settings]);
 
+  const showPreferences = React.useCallback(() => {
+    const modal = createModal(({ isOpen, onResolve }) =>
+      <Dialog title='Preferences' isOpen={isOpen} onClose={onResolve}>
+        <PreferencesForm />
+      </Dialog>
+    );
+    modal().catch(() => {});
+  }, []);
+
+  const saveCode = React.useCallback(() => {
+    if (!settings.experimental)
+      return;
+
+    const modal = createModal(({ isOpen, onResolve, onReject }) => {
+      return <Dialog title='Save code' isOpen={isOpen} onClose={onReject}>
+        <SaveCodeForm onSubmit={onResolve} suggestedFilename={codegenFilenames[selectedFileId]} />
+      </Dialog>;
+    });
+    modal()
+        .then(({ filename }) => {
+          const code = source?.text;
+          if (!code)
+            return;
+
+          download(filename, code);
+        })
+        .catch(() => {});
+  }, [settings, source, selectedFileId]);
+
   React.useEffect(() => {
     if (!settings.experimental)
       return;
@@ -151,7 +169,7 @@ export const CrxRecorder: React.FC = ({
     const keydownHandler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
-        setSuggestedFilename(codegenFilenames[selectedFileId]);
+        saveCode();
       }
     };
     window.addEventListener('keydown', keydownHandler);
@@ -159,7 +177,7 @@ export const CrxRecorder: React.FC = ({
     return () => {
       window.removeEventListener('keydown', keydownHandler);
     };
-  }, [selectedFileId, settings]);
+  }, [selectedFileId, settings, saveCode]);
 
   const dispatchEditedCode = React.useCallback((code: string) => {
     window.dispatch({ event: 'codeChanged', params: { code } });
@@ -170,30 +188,12 @@ export const CrxRecorder: React.FC = ({
   }, []);
 
   return <>
-    <Dialog title='Preferences' isOpen={showPreferences} onClose={() => setShowPreferences(false)}>
-      <PreferencesForm />
-    </Dialog>
-
-    <Dialog title={`Save ${source?.group} ${source?.label}`} isOpen={typeof suggestedFilename === 'string'} onClose={() => setSuggestedFilename(undefined)}>
-      <form id='save-form' onSubmit={downloadCode}>
-        <label htmlFor='filename'>File Name:</label>
-        <input
-          type='text'
-          id='filename'
-          name='filename'
-          placeholder='Enter file name'
-          required
-          value={suggestedFilename}
-          onChange={e => setSuggestedFilename(e.target.value)}
-        />
-        <button id='submit' type='submit' disabled={!suggestedFilename}>Save</button>
-      </form>
-    </Dialog>
+    <ModalContainer />
 
     <div className='recorder'>
       {settings.experimental && <>
         <Toolbar>
-          <ToolbarButton icon='save' title='Save' disabled={false} onClick={() => setSuggestedFilename(codegenFilenames[selectedFileId])}>Save</ToolbarButton>
+          <ToolbarButton icon='save' title='Save' disabled={false} onClick={saveCode}>Save</ToolbarButton>
           <div style={{ flex: 'auto' }}></div>
           <div className='dropdown'>
             <ToolbarButton icon='tools' title='Tools' disabled={false} onClick={() => {}}></ToolbarButton>
@@ -202,7 +202,7 @@ export const CrxRecorder: React.FC = ({
             </div>
           </div>
           <ToolbarSeparator />
-          <ToolbarButton icon='settings-gear' title='Preferences' onClick={() => setShowPreferences(true)}></ToolbarButton>
+          <ToolbarButton icon='settings-gear' title='Preferences' onClick={showPreferences}></ToolbarButton>
         </Toolbar>
       </>}
       <Recorder sources={sources} paused={paused} log={log} mode={mode} onEditedCode={dispatchEditedCode} onCursorActivity={dispatchCursorActivity} />
