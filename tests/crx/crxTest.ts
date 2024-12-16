@@ -28,6 +28,7 @@ export type CrxFixtureOptions = {
   basePath: string,
   extensionPath: string;
   enabledInIncognito: boolean;
+  openDevTools: boolean;
 };
 
 type CrxServer = {
@@ -78,6 +79,8 @@ export const test = base.extend<CrxFixtureOptions & {
         extensionPath: [path.join(__dirname, '..', 'test-extension', 'dist'), { option: true }],
 
         enabledInIncognito: [false, { option: true }],
+
+        openDevTools: [false, { option: true }],
 
         browserVersion: async ({ browser }, run) => {
           await run(browser.version());
@@ -202,7 +205,13 @@ export const test = base.extend<CrxFixtureOptions & {
 
         // we don't have a way to capture service worker logs, so this trick will open
         // service worker dev tools for debugging purposes
-        _extensionServiceWorkerDevtools: [async ({ context, extensionId, extensionServiceWorker }, run) => {
+        _extensionServiceWorkerDevtools: [async ({ context, extensionId, extensionServiceWorker, openDevTools }, run) => {
+          // in CI we don't want to open devtools
+          if (!openDevTools || process.env.CI) {
+            await run();
+            return;
+          }
+
           const extensionsPage = await context.newPage();
           await extensionsPage.goto(`chrome://extensions/?id=${extensionId}`);
           await extensionsPage.locator('#devMode').click();
@@ -220,7 +229,7 @@ export const test = base.extend<CrxFixtureOptions & {
             await new Promise(r => setTimeout(r, 100));
           }
           await run();
-        }, { timeout: 0 }],
+        }, { auto: true, timeout: 0 }],
 
         _debug: async ({ extensionServiceWorker }, run) => {
           await run({

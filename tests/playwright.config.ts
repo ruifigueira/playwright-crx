@@ -35,6 +35,15 @@ export default defineConfig<CrxFixtureOptions>({
         enabledInIncognito: true,
       },
     },
+    ...(process.env.CI ? [] : [{
+      name: 'Chrome DevTools',
+      use: {
+        ...devices['Desktop Chrome'],
+        enabledInIncognito: true,
+        openDevTools: true,
+      },
+      timeout: 300_000,
+    }]),
   ],
   webServer: {
     command: 'npm run serve',

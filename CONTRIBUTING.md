@@ -29,18 +29,8 @@ test('should add todo item', async ({ runCrxTest }) => {
 
 Debugging an extension service worker requires opening its service worker devtools.
 
-That can be done in `chrome://extensions` but to avoid lots of clicks and to allow test debugging, you can use the `_extensionServiceWorkerDevtools` fixture.
+That can be done in `chrome://extensions` but to avoid lots of clicks and to allow test debugging, you can use the `Chrome DevTools` playwright project.
 
-This fixture will open the extension devtools and set a `debugger` instruction for the debugger to pause before running the test.
+This project will open the extension devtools and set a `debugger` instruction for the debugger to pause before running the test.
 
 That way, you can set all necessary breakpoints before continuing the execution.
-
-Here is an example using both `runCrxTest` and `_extensionServiceWorkerDevtools`:
-
-```ts
-test(`should debug`, async ({ runCrxTest, _extensionServiceWorkerDevtools }) => {
-  await runCrxTest(async ({ crxApp, page /* other fixtures */ }) => {
-    // code goes here
-  });
-});
-```
