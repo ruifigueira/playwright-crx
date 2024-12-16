@@ -16,37 +16,44 @@
 
 import path from 'path';
 import { defineConfig } from 'vite';
-import sourcemaps from 'rollup-plugin-sourcemaps';
+import webExtension, { readJsonFile } from 'vite-plugin-web-extension';
+import recorderBuildConfig from './vite.build.config';
+import crxConfig from '../../vite.config.mjs';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  plugins: [
+    webExtension({
+      manifest: () => {
+        const template = readJsonFile(path.resolve(__dirname, 'manifest.json'));
+        return {
+          ...template,
+          background: {
+            service_worker: 'src/background.ts',
+            type: 'module',
+          },
+        };
+      },
+    }),
+  ],
   resolve: {
     alias: {
-      '@isomorphic': path.resolve(__dirname, '../../playwright/packages/playwright-core/src/utils/isomorphic'),
-      '@protocol': path.resolve(__dirname, '../../playwright/packages/protocol/src'),
-      '@web': path.resolve(__dirname, '../../playwright/packages/web/src'),
-      '@recorder': path.resolve(__dirname, '../../playwright/packages/recorder/src'),
+      ...crxConfig.resolve?.alias,
+      ...recorderBuildConfig.resolve?.alias,
+
+      'playwright-crx': path.resolve(__dirname, '../../src'),
     },
   },
+  define: {
+    ...crxConfig.define,
+    'process.env.CI': 'false',
+  },
   build: {
-    // skip code obfuscation
     minify: false,
-    // chunk limit is not an issue, this is a browser extension
-    chunkSizeWarningLimit: 10240,
     sourcemap: true,
-    rollupOptions: {
-      // @ts-ignore
-      plugins: [sourcemaps()],
-      input: {
-        'index': path.resolve(__dirname, 'index.html'),
-        'preferences': path.resolve(__dirname, 'preferences.html'),
-        'background': path.resolve(__dirname, 'src/background.ts'),
-      },
-      output: {
-        entryFileNames: '[name].js',
-        chunkFileNames: '[name].js',
-        assetFileNames: '[name].[ext]',
-      },
+    commonjsOptions: {
+      ...crxConfig.build?.commonjsOptions,
+      ...recorderBuildConfig.build?.commonjsOptions,
     },
   },
 });
