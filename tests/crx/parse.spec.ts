@@ -16,16 +16,14 @@
 
 import { test as base, expect } from './crxTest';
 import type { Action, ActionInContext } from '../../../playwright/packages/recorder/src/actions';
-import type { LanguageGeneratorOptions } from '../../../playwright/packages/playwright-core/src/server/codegen/types';
+import type { TestOptions } from '../../src/server/recorder/parser';
 
-type TestOptionns = Pick<LanguageGeneratorOptions, 'deviceName' | 'contextOptions'>;
-
-const test = base.extend<{ testParse: (code: string, skipAssertCode?: boolean) => Promise<{ actions: (Action & { pageAlias: string })[], options: TestOptionns }> }>({
+const test = base.extend<{ testParse: (code: string, skipAssertCode?: boolean) => Promise<{ actions: (Action & { pageAlias: string })[], options: TestOptions }> }>({
   testParse: async ({ runCrxTest }, use) => {
     await use(async (code, skipAssertCode) => {
       const { actions: actionsInContext, options, code: resultCode } = await runCrxTest(async ({ crxApp }, code) => {
         const crxAppImpl = await (crxApp as any)._toImpl();
-        return crxAppImpl.parseForTest(code) as { code: string, actions: ActionInContext[], options: TestOptionns };
+        return crxAppImpl.parseForTest(code) as { code: string, actions: ActionInContext[], options: TestOptions };
       }, code);
       if (!skipAssertCode)
         expect.soft(code).toEqual(resultCode);
@@ -235,4 +233,30 @@ test('test', async ({ page, context }) => {
     { pageAlias: 'newPage', name: 'assertText',  selector: 'internal:role=heading', text: 'Example Domain' },
     { pageAlias: 'newPage', name: 'closePage' },
   ]);
+});
+
+test('should parse routefromHAR', async ({ testParse }) => {
+  const { options } = await testParse(`import { test, expect } from '@playwright/test';
+
+test('test', async ({ page }) => {
+  await page.routeFromHAR('har.har');
+});`);
+
+  expect(options.contextOptions?.recordHar).toEqual({
+    path: 'har.har',
+    urlGlob: undefined,
+  });
+});
+
+test('should parse routefromHAR with glob', async ({ testParse }) => {
+  const { options } = await testParse(`import { test, expect } from '@playwright/test';
+
+test('test', async ({ page }) => {
+  await page.routeFromHAR('har.har', { url: '**/*.js' });
+});`, true);
+
+  expect(options.contextOptions?.recordHar).toEqual({
+    path: 'har.har',
+    urlGlob: '**/*.js',
+  });
 });

@@ -19,12 +19,23 @@ import * as acorn from 'acorn';
 import type { AwaitExpression, Expression, ExpressionStatement } from 'acorn';
 import * as walk from 'acorn-walk';
 import { fromKeyboardModifiers } from 'playwright-core/lib/server/codegen/language';
-import type { SmartKeyboardModifier } from 'playwright-core/lib/server/types';
+import type { BrowserContextOptions, SmartKeyboardModifier } from 'playwright-core/lib/server/types';
 import { locatorOrSelectorAsSelector } from 'playwright-core/lib/utils/isomorphic/locatorParser';
 import type { CallMetadata } from '@protocol/callMetadata';
 
 export type Location = CallMetadata['location'];
 export type ActionInContextWithLocation = ActionInContext & { location?: Location };
+
+type RouteFromHAROptions = {
+  url?: string,
+  notFound?: 'abort' | 'fallback',
+  update?: boolean,
+  updateContent?: 'attach' | 'embed',
+  updateMode?: 'minimal' | 'full'
+};
+
+type RouteFromHARAction = { name: 'routeFromHAR', signals: [], har: string } & RouteFromHAROptions;
+type ExtendedActionInContextWithLocation = ActionInContextWithLocation | { action: RouteFromHARAction, location?: Location };
 
 type AssertFnAction =
   | 'toHaveText'
@@ -47,7 +58,10 @@ type ActionFnName =
   | 'selectOption'
   | 'uncheck'
   | 'setInputFiles'
-  | AssertFnAction;
+  | AssertFnAction
+  | PseudoActionName;
+
+type PseudoActionName = 'routeFromHAR';
 
 const expectFnActions: Record<AssertFnAction, (...args: Expression[]) => [action: AssertAction['name'], ...any]> = {
   'toHaveText': text => ['assertText', { text }],
@@ -59,7 +73,7 @@ const expectFnActions: Record<AssertFnAction, (...args: Expression[]) => [action
   'toMatchAriaSnapshot': snapshot => ['assertSnapshot', { snapshot }],
 };
 
-const fnActions: Record<Exclude<ActionFnName, AssertFnAction>, (...args: any[]) => [action: Exclude<Action, AssertAction>['name'], ...any]> = {
+const fnActions: Record<Exclude<ActionFnName, AssertFnAction>, (...args: any[]) => [action: Exclude<Action, AssertAction>['name'] | 'routeFromHAR', ...any]> = {
   'check': () => ['check'],
   'click': options => ['click', parseClickOptions(options)],
   'dblclick': options => ['click', parseClickOptions({ ...options, clickCount: 2 })],
@@ -71,6 +85,7 @@ const fnActions: Record<Exclude<ActionFnName, AssertFnAction>, (...args: any[]) 
   'selectOption': options => ['select', { options: typeof options === 'string' ? [options] : options }],
   'uncheck': () => ['uncheck'],
   'setInputFiles': files => ['setInputFiles', { files: typeof files === 'string' ? [files] : files }],
+  'routeFromHAR': (har, options) => ['routeFromHAR', { har, ...options }],
 };
 
 const variableCallRegex = /^([a-zA-Z_$][\w$]*)\./;
@@ -111,21 +126,17 @@ function indexToLineColumn(code: string, index: number) {
   return { line: line + 1, column: column + 1 };
 }
 
-export type TestBrowserContextOptions =  {
-  colorScheme?: 'dark' | 'light' | 'no-preference';
-  locale?: string;
-  timezoneId?: string;
-  geolocation?: {
-    latitude: number;
-    longitude: number;
-  };
-  viewport?: {
-    width: number;
-    height: number;
-  };
-  permissions?: string[];
-  serviceWorkers?: 'allow' | 'block';
-};
+export type TestBrowserContextOptions = Pick<BrowserContextOptions,
+  | 'colorScheme'
+  | 'locale'
+  | 'timezoneId'
+  | 'geolocation'
+  | 'viewport'
+  | 'permissions'
+  | 'serviceWorkers'
+  | 'storageState'
+  | 'recordHar'
+>;
 
 export type TestOptions = {
   deviceName?: string;
@@ -154,7 +165,6 @@ class ParserError extends Error implements ErrorWithLocation {
 function parserError(message: string, loc?: acorn.SourceLocation | null): never {
   throw new ParserError(message, loc ?? undefined);
 }
-
 
 const argsParser = (arg: acorn.Expression | acorn.SpreadElement | null): any => {
   if (arg === null)
@@ -191,7 +201,7 @@ export function parse(code: string, file: string = 'playwright-test') {
     locations: true,
   });
 
-  function parseActionExpression(expr: AwaitExpression | acorn.VariableDeclaration, pages: Set<string>): ActionInContextWithLocation {
+  function parseActionExpression(expr: AwaitExpression | acorn.VariableDeclaration, pages: Set<string>): ExtendedActionInContextWithLocation {
     let pageAlias: string | undefined;
     if (expr.type === 'VariableDeclaration') {
       if (
@@ -229,7 +239,7 @@ export function parse(code: string, file: string = 'playwright-test') {
 
       if (variable) {
         pageAlias = variable;
-        if (!['goto', 'close'].includes(actionFnName))
+        if (!['goto', 'close', 'routeFromHAR'].includes(actionFnName))
           locator = code.substring(expr.argument.callee.object.start + (variable.length + 1), expr.argument.callee.object.end);
 
       } else if (code.startsWith('expect(', expr.argument.start)) {
@@ -293,6 +303,7 @@ export function parse(code: string, file: string = 'playwright-test') {
   }
 
   let deviceName: string | undefined;
+  let harAction: RouteFromHARAction | undefined;
   const contextOptions: TestBrowserContextOptions = {};
 
   function handleOptions(options: acorn.ObjectExpression) {
@@ -330,7 +341,7 @@ export function parse(code: string, file: string = 'playwright-test') {
       if (typeof v !== 'object' || Object.keys(v).length !== props.length || !props.every(p => typeof v[p] === 'number'))
         parserError(`Invalid object with required number properties, expected ${props.join(', ')}`, loc);
     };
-    const propValidators: Record<keyof TestBrowserContextOptions, (v: any, loc?: acorn.SourceLocation) => void> = {
+    const propValidators: Record<keyof Omit<TestBrowserContextOptions, 'recordHar'>, (v: any, loc?: acorn.SourceLocation) => void> = {
       colorScheme: (v, loc) => assertEnum(v, ['dark', 'light', 'no-preference'], loc),
       locale: assertString,
       timezoneId: assertString,
@@ -338,13 +349,14 @@ export function parse(code: string, file: string = 'playwright-test') {
       viewport: (v, loc) => assertObjectWithRequiredNumberProperties(v, ['width', 'height'], loc),
       permissions: assertStringArray,
       serviceWorkers: (v, loc) => assertEnum(v, ['allow', 'block'], loc),
+      storageState: assertString,
     };
 
     for (const prop of props) {
       if (prop.type !== 'Property' || prop.key.type !== 'Identifier' || !Object.keys(propValidators).includes(prop.key.name as any))
         parserError('Invalid context option', prop.loc);
 
-      const propKey = prop.key.name as keyof TestBrowserContextOptions;
+      const propKey = prop.key.name as keyof Omit<TestBrowserContextOptions, 'recordHar'>;
       const propValidator = propValidators[propKey];
       if (!propValidator)
         parserError(`Invalid context option ${prop.key.name}`, prop.loc);
@@ -404,14 +416,38 @@ export function parse(code: string, file: string = 'playwright-test') {
       )
         parserError('Invalid test function body', fn.body.loc);
 
-      const stms = fn.body.body as (ExpressionStatement | acorn.VariableDeclaration)[];
+      const stmts = fn.body.body as (ExpressionStatement | acorn.VariableDeclaration)[];
       const pages = new Set<string>(['page']);
-      actions.push(...stms.map(s => s.type === 'VariableDeclaration' ? s : s.expression as AwaitExpression).map(a => parseActionExpression(a, pages)));
+
+      for (const stmt of stmts) {
+        const actionExpr = stmt.type === 'VariableDeclaration' ? stmt : stmt.expression as AwaitExpression;
+        const candidateAction = parseActionExpression(actionExpr, pages);
+        if (candidateAction.action.name === 'routeFromHAR') {
+          if (!(actions.length === 0 || (actions.length === 1 && actions[0].action.name === 'openPage')))
+            parserError('routeFromHAR must be the first action', actionExpr.loc);
+
+          if (harAction)
+            parserError('Only one routeFromHAR is allowed', actionExpr.loc);
+
+          harAction = candidateAction.action as RouteFromHARAction;
+          continue;
+        }
+        actions.push(candidateAction as ActionInContextWithLocation);
+      }
+
+      if (contextOptions && harAction) {
+        contextOptions.recordHar = {
+          path: harAction.har,
+          content: harAction.updateContent,
+          mode: harAction.updateMode,
+          urlGlob: harAction.url,
+        };
+      }
 
       tests.push({
         title: title.value as string,
         actions,
-        options: deviceName || (contextOptions && Object.keys(contextOptions).length > 0) ? {
+        options: deviceName || harAction || (contextOptions && Object.keys(contextOptions).length > 0) ? {
           deviceName,
           contextOptions,
         } : undefined,
