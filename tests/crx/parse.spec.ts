@@ -136,6 +136,7 @@ test.use({
   locale: 'pt_PT',
   permissions: ['geolocation'],
   serviceWorkers: 'block',
+  storageState: 'state.json',
   timezoneId: 'Europe/Rome',
   viewport: {
     height: 728,
@@ -161,7 +162,8 @@ test('test', async ({ page }) => {
       viewport: {
         height: 728,
         width: 1024
-      }
+      },
+      storageState: 'state.json',
     },
   });
 });

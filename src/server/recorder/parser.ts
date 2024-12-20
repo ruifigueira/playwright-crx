@@ -134,9 +134,8 @@ export type TestBrowserContextOptions = Pick<BrowserContextOptions,
   | 'viewport'
   | 'permissions'
   | 'serviceWorkers'
-  | 'storageState'
   | 'recordHar'
->;
+> & { storageState?: string };
 
 export type TestOptions = {
   deviceName?: string;
