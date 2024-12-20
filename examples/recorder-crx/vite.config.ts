@@ -23,6 +23,16 @@ import crxConfig from '../../vite.config.mjs';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
+    {
+      // hack to actually load codicon.ttf, otherwise it would try to load it
+      // from chrome-extension:// and it would fail
+      name: 'fix-codicon-css',
+      enforce: 'pre',
+      load(id) {
+        if (id.endsWith('codicon.css'))
+          return `@import url('https://microsoft.github.io/vscode-codicons/dist/codicon.css');`;
+      },
+    },
     webExtension({
       manifest: () => {
         const template = readJsonFile(path.resolve(__dirname, 'manifest.json'));
