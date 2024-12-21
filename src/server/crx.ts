@@ -38,7 +38,7 @@ import { generateCode } from 'playwright-core/lib/server/codegen/language';
 import { languageSet } from 'playwright-core/lib/server/codegen/languages';
 import { deviceDescriptors } from 'playwright-core/lib/server/deviceDescriptors';
 import type { DeviceDescriptor } from 'playwright-core/lib/server/types';
-import { RecorderApp } from 'playwright-core/lib/server/recorder/recorderApp';
+import { EmptyRecorderApp, RecorderApp } from 'playwright-core/lib/server/recorder/recorderApp';
 import type { LanguageGeneratorOptions } from 'playwright-core/lib/server/codegen/types';
 
 const kTabIdSymbol = Symbol('kTabIdSymbol');
@@ -120,7 +120,12 @@ export class Crx extends SdkObject {
     });
     // override factory otherwise it will fail because the default factory tries to launch a new playwright app
     RecorderApp.factory = (): IRecorderAppFactory => {
-      return recorder => crxApp._createRecorderApp(recorder);
+      return async recorder => {
+        if (recorder instanceof Recorder && recorder._context === context)
+          return await crxApp._createRecorderApp(recorder);
+        else
+          return new EmptyRecorderApp();
+      };
     };
     return crxApp;
   }
@@ -361,6 +366,10 @@ export class CrxApplication extends SdkObject {
       });
     }
     return this._recorderApp;
+  }
+
+  _recorder() {
+    return this._recorderApp?._recorder;
   }
 
   private onWindowRemoved = async () => {

@@ -29,6 +29,7 @@ import { toClickOptions } from 'playwright-core/lib/server/recorder/recorderRunn
 import { parseAriaSnapshot } from 'playwright-core/lib/server/ariaSnapshot';
 import { serverSideCallMetadata } from 'playwright-core/lib/server';
 import type { Crx } from '../crx';
+import type { InstrumentationListener } from 'playwright-core/lib/server/instrumentation';
 
 class Stopped extends Error {}
 
@@ -53,10 +54,9 @@ export default class CrxPlayer extends EventEmitter {
     this._crx = crx;
   }
 
-  async pause(context?: BrowserContext) {
+  async pause() {
     if (!this._pause) {
-      if (!context)
-        context = (await this._crx.get({ incognito: false }))!._context;
+      const context = (await this._crx.get({ incognito: false }))!._context;
       const pauseAction = {
         action: { name: 'pause' },
         frame: { pageAlias: 'page', framePath: [] },
@@ -84,6 +84,22 @@ export default class CrxPlayer extends EventEmitter {
       page = context.pages()[0] ?? await context.newPage(serverSideCallMetadata());
     }
 
+    const crxApp = await this._crx.get({ incognito: false });
+    const recorder = crxApp?._recorder();
+    let instrumentationListener: InstrumentationListener | undefined;
+
+    if (recorder && crxApp && crxApp._context !== context) {
+      // we intercept incognito call logs and forward them into the recorder
+      const instrumentationListener: InstrumentationListener = {
+        onBeforeCall: recorder.onBeforeCall.bind(recorder),
+        onBeforeInputAction: recorder.onBeforeInputAction.bind(recorder),
+        onCallLog: recorder.onCallLog.bind(recorder),
+        onAfterCall: recorder.onAfterCall.bind(recorder),
+      };
+      if (instrumentationListener)
+        context.instrumentation.addListener(instrumentationListener, context);
+    }
+
     this._pageAliases.clear();
     this._pageAliases.set(page, 'page');
     this.emit('start');
@@ -101,7 +117,9 @@ export default class CrxPlayer extends EventEmitter {
       throw e;
     } finally {
       this._currAction = undefined;
-      this.pause(context).catch(() => {});
+      this.pause().catch(() => {});
+      if (instrumentationListener)
+        context.instrumentation.removeListener(instrumentationListener);
     }
   }
 

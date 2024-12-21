@@ -74,10 +74,6 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     });
   }
 
-  setPlayInIncognito(playInIncognito: boolean) {
-    this._playInIncognito = playInIncognito;
-  }
-
   async open(options?: channels.CrxApplicationShowRecorderParams) {
     const mode = options?.mode ?? 'none';
     const language = options?.language ?? 'playwright-test';
