@@ -29,7 +29,7 @@ import type * as crxchannels from '../protocol/channels';
 import { CrxRecorderApp } from './recorder/crxRecorderApp';
 import { CrxTransport } from './transport/crxTransport';
 import { BrowserContext } from 'playwright-core/lib/server/browserContext';
-import type { IRecorder } from 'playwright-core/lib/server/recorder/recorderFrontend';
+import type { IRecorder, IRecorderAppFactory } from 'playwright-core/lib/server/recorder/recorderFrontend';
 import type { Mode } from '@recorder/recorderTypes';
 import CrxPlayer from './recorder/crxPlayer';
 import { createTab } from './utils';
@@ -38,6 +38,8 @@ import { generateCode } from 'playwright-core/lib/server/codegen/language';
 import { languageSet } from 'playwright-core/lib/server/codegen/languages';
 import { deviceDescriptors } from 'playwright-core/lib/server/deviceDescriptors';
 import type { DeviceDescriptor } from 'playwright-core/lib/server/types';
+import { RecorderApp } from 'playwright-core/lib/server/recorder/recorderApp';
+import type { LanguageGeneratorOptions } from 'playwright-core/lib/server/codegen/types';
 
 const kTabIdSymbol = Symbol('kTabIdSymbol');
 
@@ -51,9 +53,11 @@ export class Crx extends SdkObject {
   private _browserPromise!: Promise<CRBrowser>;
   private _crxApplicationPromise: Promise<CrxApplication> | undefined;
   private _incognitoCrxApplicationPromise: Promise<CrxApplication> | undefined;
+  readonly player: CrxPlayer;
 
   constructor(playwright: Playwright) {
     super(playwright, 'crx');
+    this.player = new CrxPlayer(this);
   }
 
   async start(options?: crxchannels.CrxStartParams): Promise<CrxApplication> {
@@ -114,6 +118,10 @@ export class Crx extends SdkObject {
     context.on(BrowserContext.Events.Close, () => {
       this._crxApplicationPromise = undefined;
     });
+    // override factory otherwise it will fail because the default factory tries to launch a new playwright app
+    RecorderApp.factory = (): IRecorderAppFactory => {
+      return recorder => crxApp._createRecorderApp(recorder);
+    };
     return crxApp;
   }
 
@@ -176,7 +184,6 @@ export class CrxApplication extends SdkObject {
   readonly _context: CRBrowserContext;
   private _transport: CrxTransport;
   private _recorderApp?: CrxRecorderApp;
-  private _player: CrxPlayer;
   private _closed = false;
 
   constructor(crx: Crx, context: CRBrowserContext, transport: CrxTransport) {
@@ -189,7 +196,6 @@ export class CrxApplication extends SdkObject {
     this._crx = crx;
     this._context = context;
     this._transport = transport;
-    this._player = new CrxPlayer(context);
     context.on(BrowserContext.Events.Page, (page: Page) => {
       const tabId = this.tabIdForPage(page);
       if (!tabId)
@@ -335,19 +341,19 @@ export class CrxApplication extends SdkObject {
 
   async run(code: string, page?: Page) {
     const [{ actions }] = parse(code);
-    await this._player.run(actions, page);
+    await this._crx.player.run(page ?? this._context, actions);
   }
 
   async parseForTest(originCode: string) {
     const [{ actions, options }] = parse(originCode);
     const jsLanguage = [...languageSet()].find(l => l.id === 'playwright-test');
-    const code = generateCode(actions, jsLanguage!, { browserName: '', launchOptions: {}, contextOptions: {}, ...options }).text;
+    const code = generateCode(actions, jsLanguage!, { browserName: '', launchOptions: {}, contextOptions: {}, ...options } as LanguageGeneratorOptions).text;
     return { actions, options, code };
   }
 
-  private async _createRecorderApp(recorder: IRecorder) {
+  async _createRecorderApp(recorder: IRecorder) {
     if (!this._recorderApp) {
-      this._recorderApp = new CrxRecorderApp(this._crx, recorder as Recorder, this._player);
+      this._recorderApp = new CrxRecorderApp(this._crx, recorder as Recorder);
       this._recorderApp.on('show', () => this.emit(CrxApplication.Events.RecorderShow));
       this._recorderApp.on('hide', () => this.emit(CrxApplication.Events.RecorderHide));
       this._recorderApp.on('modeChanged', event => {

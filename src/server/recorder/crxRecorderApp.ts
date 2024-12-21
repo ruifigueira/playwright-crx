@@ -18,7 +18,6 @@ import { EventEmitter } from 'events';
 import type { Page } from 'playwright-core/lib/server/page';
 import type { Recorder } from 'playwright-core/lib/server/recorder';
 import type * as channels from '../../protocol/channels';
-import type CrxPlayer from './crxPlayer';
 import type { ActionInContextWithLocation } from './parser';
 import { PopupRecorderWindow } from './popupRecorderWindow';
 import { SidepanelRecorderWindow } from './sidepanelRecorderWindow';
@@ -27,6 +26,8 @@ import type { ActionInContext, ActionWithSelector } from '@recorder/actions';
 import { parse } from './parser';
 import { languageSet } from 'playwright-core/lib/server/codegen/languages';
 import type { Crx } from '../crx';
+import type { LanguageGeneratorOptions } from 'playwright-core/lib/server/codegen/types';
+import { serverSideCallMetadata } from 'playwright-core/lib/server';
 
 export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'resetCallLogs' }
@@ -54,7 +55,6 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   readonly wsEndpointForTest: string | undefined;
   private _crx: Crx;
   readonly _recorder: Recorder;
-  private _player: CrxPlayer;
   private _filename?: string;
   private _sources?: Source[];
   private _mode: Mode = 'none';
@@ -64,12 +64,11 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   private _playInIncognito = false;
   private _currentCursorPosition: { line: number } | undefined;
 
-  constructor(crx: Crx, recorder: Recorder, player: CrxPlayer) {
+  constructor(crx: Crx, recorder: Recorder) {
     super();
     this._crx = crx;
     this._recorder = recorder;
-    this._player = player;
-    this._player.on('start', () => {
+    this._crx.player.on('start', () => {
       this._recorder.clearErrors();
       this.resetCallLogs().catch(() => {});
     });
@@ -133,9 +132,9 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
 
   async setMode(mode: Mode) {
     if (!this._recorder._isRecording())
-      this._player.pause().catch(() => {});
+      this._crx.player.pause().catch(() => {});
     else
-      this._player.stop().catch(() => {});
+      this._crx.player.stop().catch(() => {});
 
     if (this._mode !== mode) {
       this._mode = mode;
@@ -244,15 +243,15 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
   }
 
   async _run() {
-    if (this._player.isPlaying())
+    if (this._crx.player.isPlaying())
       return;
     const incognito = this._playInIncognito;
     if (incognito) {
       const incognitoCrxApp = await this._crx.get({ incognito });
       await incognitoCrxApp?.close({ closeWindows: true });
     }
-    const crxApp = await this._crx.get({ incognito }) ?? await this._crx.start({ incognito });
-    await this._player.run(this._getActions(), crxApp._context);
+    const crxApp = await this._crx.get({ incognito }) ?? await this._crx.start({ incognito }, serverSideCallMetadata());
+    await this._crx.player.run(crxApp._context, this._getActions());
   }
 
   _sendMessage(msg: RecorderMessage) {
@@ -353,7 +352,7 @@ class EditedCode {
       const [{ actions, options }] = parse(this.code);
       this._actions = actions;
       const { deviceName, contextOptions } = { deviceName: '', contextOptions: {}, ...options };
-      this._recorder.loadScript({ actions, deviceName, contextOptions, text: this.code });
+      this._recorder.loadScript({ actions, deviceName, contextOptions: contextOptions as LanguageGeneratorOptions['contextOptions'], text: this.code });
     } catch (error) {
       this._actions = [];
       // syntax error / parsing error

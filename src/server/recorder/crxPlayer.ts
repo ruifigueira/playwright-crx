@@ -28,6 +28,7 @@ import type { ActionInContext, FrameDescription } from '@recorder/actions';
 import { toClickOptions } from 'playwright-core/lib/server/recorder/recorderRunner';
 import { parseAriaSnapshot } from 'playwright-core/lib/server/ariaSnapshot';
 import { serverSideCallMetadata } from 'playwright-core/lib/server';
+import type { Crx } from '../crx';
 
 class Stopped extends Error {}
 
@@ -41,42 +42,41 @@ export type PerformAction = ActionInContextWithLocation | {
 
 export default class CrxPlayer extends EventEmitter {
 
+  private _crx: Crx;
   private _currAction?: PerformAction;
   private _stopping?: ManualPromise;
   private _pageAliases = new Map<Page, string>();
   private _pause?: Promise<void>;
-  private _context: BrowserContext;
 
-  constructor(context: BrowserContext) {
+  constructor(crx: Crx) {
     super();
-    this._context = context;
+    this._crx = crx;
   }
 
-  async pause() {
+  async pause(context?: BrowserContext) {
     if (!this._pause) {
+      if (!context)
+        context = (await this._crx.get({ incognito: false }))!._context;
       const pauseAction = {
         action: { name: 'pause' },
         frame: { pageAlias: 'page', framePath: [] },
       } satisfies PerformAction;
       this._pause = this
-          ._performAction(this._context, pauseAction)
+          ._performAction(context, pauseAction)
           .finally(() => this._pause = undefined)
           .catch(() => {});
     }
     await this._pause;
   }
 
-  async run(actions: PerformAction[], pageOrContext?: Page | BrowserContext) {
+  async run(pageOrContext: Page | BrowserContext, actions: PerformAction[]) {
     if (this.isPlaying())
       return;
 
     let page: Page;
     let context: BrowserContext;
 
-    if (!pageOrContext) {
-      page = this._context.pages()[0] ?? await this._context.newPage(serverSideCallMetadata());
-      context = this._context;
-    } else if (pageOrContext instanceof Page) {
+    if (pageOrContext instanceof Page) {
       page = pageOrContext;
       context = page.context();
     } else {
@@ -101,7 +101,7 @@ export default class CrxPlayer extends EventEmitter {
       throw e;
     } finally {
       this._currAction = undefined;
-      this.pause().catch(() => {});
+      this.pause(context).catch(() => {});
     }
   }
 
@@ -156,14 +156,14 @@ export default class CrxPlayer extends EventEmitter {
 
       try {
         this._checkStopped();
-        await this._context.instrumentation.onBeforeCall(this._context, callMetadata);
+        await context.instrumentation.onBeforeCall(context, callMetadata);
         this._checkStopped();
         await cb(callMetadata);
       } catch (e) {
         callMetadata.error = serializeError(e);
       } finally {
         callMetadata.endTime = monotonicTime();
-        await this._context.instrumentation.onAfterCall(this._context, callMetadata);
+        await context.instrumentation.onAfterCall(context, callMetadata);
         if (callMetadata.error)
           throw callMetadata.error.error;
       }
