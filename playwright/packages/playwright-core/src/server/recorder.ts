@@ -39,7 +39,7 @@ const recorderSymbol = Symbol('recorderSymbol');
 
 export class Recorder implements InstrumentationListener, IRecorder {
   readonly handleSIGINT: boolean | undefined;
-  private _context: BrowserContext;
+  readonly _context: BrowserContext;
   private _mode: Mode;
   private _highlightedElement: { selector?: string, ariaTemplate?: ParsedYaml } = {};
   private _overlayState: OverlayState = { offsetX: 0 };
