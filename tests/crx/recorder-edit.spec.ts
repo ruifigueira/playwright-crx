@@ -14,33 +14,9 @@
  * limitations under the License.
  */
 
-import type { Page } from '@playwright/test';
 import { test, expect } from './crxRecorderTest';
 import type { CrxApplication } from '../../test';
-
-async function editCode(recorderPage: Page, code: string) {
-  const editor = recorderPage.locator('.CodeMirror textarea').first();
-  await editor.press('ControlOrMeta+a');
-  await editor.fill(code);
-}
-
-async function getCode(recorderPage: Page): Promise<string> {
-  return await recorderPage.locator('.CodeMirror').first().evaluate((elem: any) => elem.CodeMirror.getValue());
-}
-
-async function moveCursorToLine(recorderPage: Page, line: number) {
-  await recorderPage.locator('.CodeMirror').first().evaluate((elem: any, line) => elem.CodeMirror.setCursor({
-    // codemirror line is 0-based
-    line: line - 1,
-    ch: 0,
-  }), line);
-}
-
-function editorLine(recorderPage: Page, linenumber: number) {
-  return recorderPage.locator('.CodeMirror-code > div')
-      .filter({ has: recorderPage.locator('.CodeMirror-linenumber', { hasText: String(linenumber) }) })
-      .locator('.CodeMirror-line');
-}
+import { editCode, editorLine, getCode, moveCursorToLine } from './utils';
 
 test('should edit @smoke', async ({ page, attachRecorder, baseURL }) => {
   const recorderPage = await attachRecorder(page);

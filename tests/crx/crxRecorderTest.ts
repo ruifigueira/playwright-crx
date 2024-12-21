@@ -24,6 +24,13 @@ export { expect } from './crxTest';
 declare function attach(tab: chrome.tabs.Tab): Promise<void>;
 declare function _setUnderTest(): void;
 
+type SettingOptions = {
+  testIdAttributeName?: string,
+  targetLanguage?: string,
+  playInIncognito?: boolean,
+  experimental?: boolean
+};
+
 export function dumpLogHeaders(recorderPage: Page) {
   return async () => {
     return await recorderPage.evaluate(() => {
@@ -75,7 +82,7 @@ export const test = crxTest.extend<{
   recorderPage: Page;
   recordAction<T = void>(action: () => Promise<T>): Promise<T>;
   recordAssertion(locator: Locator, type: AssertAction['name']): Promise<void>;
-  configureRecorder: (config: { testIdAttributeName?: string, targetLanguage?: string, experimental?: boolean }) => Promise<void>;
+  configureRecorder: (config: SettingOptions) => Promise<void>;
       }>({
         extensionPath: path.join(__dirname, '../../examples/recorder-crx/dist'),
 
@@ -160,7 +167,7 @@ export const test = crxTest.extend<{
         },
 
         configureRecorder: async ({ context, extensionId }, run) => {
-          await run(async ({ testIdAttributeName, targetLanguage, experimental }: { testIdAttributeName?: string, targetLanguage?: string, experimental?: boolean }) => {
+          await run(async ({ testIdAttributeName, targetLanguage, playInIncognito, experimental }: SettingOptions) => {
             const configPage = await context.newPage();
             try {
               await configPage.goto(`chrome-extension://${extensionId}/preferences.html`);
@@ -168,6 +175,8 @@ export const test = crxTest.extend<{
                 await configPage.locator('#target-language').selectOption(targetLanguage);
               if (testIdAttributeName)
                 await configPage.locator('#test-id').fill(testIdAttributeName);
+              if (playInIncognito !== undefined)
+                await configPage.locator('#playInIncognito').setChecked(playInIncognito);
               if (experimental !== undefined)
                 await configPage.locator('#experimental').setChecked(experimental);
               await configPage.locator('#submit').click();
