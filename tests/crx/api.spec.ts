@@ -200,7 +200,7 @@ test('should close crxApp', async ({ runCrxTest }) => {
   await runCrxTest(async ({ crx, crxApp, expect }) => {
     await crxApp.close();
     await expect(crxApp.newPage()).rejects.toThrow();
-    await expect(await crx.get()).toBeUndefined();
+    expect(await crx.get()).toBeUndefined();
   });
 });
 
@@ -210,5 +210,10 @@ test('should be able to open new crxApp after close', async ({ runCrxTest }) => 
     expect(await crx.get()).toBeUndefined();
     const newCrxApp = await crx.start();
     expect(await crx.get()).toBe(newCrxApp);
+
+    // ensure we can open a new page on the newly opened crxApp
+    // see: https://github.com/ruifigueira/playwright-crx/issues/7#issuecomment-2570047648
+    const newPage = await newCrxApp.newPage();
+    expect(newPage).toBeTruthy();
   });
 });

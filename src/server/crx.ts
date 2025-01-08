@@ -49,8 +49,8 @@ export function tabIdFromPage(page: Page): number | undefined {
 
 export class Crx extends SdkObject {
 
-  private _transport!: CrxTransport;
-  private _browserPromise!: Promise<CRBrowser>;
+  private _transport?: CrxTransport;
+  private _browserPromise?: Promise<CRBrowser>;
   private _crxApplicationPromise: Promise<CrxApplication> | undefined;
   private _incognitoCrxApplicationPromise: Promise<CrxApplication> | undefined;
   readonly player: CrxPlayer;
@@ -77,7 +77,7 @@ export class Crx extends SdkObject {
         process: undefined,
         // browser.close() calls this function, and closing transport will trigger
         // Browser.Events.Disconnected and force the browser to resolve the close promise.
-        close: () => this._transport.closeAndWait(),
+        close: () => this._transport!.closeAndWait(),
         kill: () => Promise.resolve(),
       };
       const browserOptions: BrowserOptions = {
@@ -97,17 +97,18 @@ export class Crx extends SdkObject {
       this._transport = new CrxTransport();
       this._browserPromise = CRBrowser.connect(this.attribution.playwright, this._transport, browserOptions);
     }
-    const browser = await this._browserPromise;
+    const browser = await this._browserPromise!;
+    const transport = this._transport!;
 
     if (incognito) {
       if (this._incognitoCrxApplicationPromise)
         throw new Error(`incognito crxApplication is already started`);
-      this._incognitoCrxApplicationPromise = this._startIncognitoCrxApplication(browser, this._transport, newContextOptions);
+      this._incognitoCrxApplicationPromise = this._startIncognitoCrxApplication(browser, transport, newContextOptions);
       return await this._incognitoCrxApplicationPromise;
     } else {
       if (this._crxApplicationPromise)
         throw new Error(`crxApplication is already started`);
-      this._crxApplicationPromise = this._startCrxApplication(browser, this._transport);
+      this._crxApplicationPromise = this._startCrxApplication(browser, transport);
       return await this._crxApplicationPromise;
     }
   }
@@ -117,6 +118,10 @@ export class Crx extends SdkObject {
     const crxApp = new CrxApplication(this, context, transport);
     context.on(BrowserContext.Events.Close, () => {
       this._crxApplicationPromise = undefined;
+    });
+    browser.on(CRBrowser.Events.Disconnected, () => {
+      this._browserPromise = undefined;
+      this._transport = undefined;
     });
     // override factory otherwise it will fail because the default factory tries to launch a new playwright app
     RecorderApp.factory = (): IRecorderAppFactory => {
@@ -159,7 +164,7 @@ export class Crx extends SdkObject {
     context.on(BrowserContext.Events.Close, () => {
       this._incognitoCrxApplicationPromise = undefined;
     });
-    const crxApp = new CrxApplication(this, context, this._transport);
+    const crxApp = new CrxApplication(this, context, transport);
     await crxApp.attach(incognitoTabId);
     return crxApp;
   }
@@ -168,11 +173,6 @@ export class Crx extends SdkObject {
     return options.incognito ?
       await this._incognitoCrxApplicationPromise :
       await this._crxApplicationPromise;
-  }
-
-  async closeAndWait() {
-    if (this._browserPromise)
-      await this._browserPromise.then(browser => browser.close({}));
   }
 }
 
