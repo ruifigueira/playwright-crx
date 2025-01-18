@@ -105,6 +105,9 @@ export default defineConfig({
     rollupOptions: {
       // @ts-ignore
       plugins: [sourcemaps()],
+      output: {
+        exports: 'named',
+      },
     },
     commonjsOptions: {
       transformMixedEsModules: true,
