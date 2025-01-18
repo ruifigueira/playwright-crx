@@ -179,5 +179,12 @@ chrome.runtime.onMessage.addListener((message, _, sendResponse) => {
   }
 });
 
+chrome.runtime.onInstalled.addListener(details => {
+  if ((globalThis as any).__crxTest)
+    return;
+  if ([chrome.runtime.OnInstalledReason.INSTALL, chrome.runtime.OnInstalledReason.UPDATE].includes(details.reason))
+    chrome.tabs.create({ url: `https://github.com/ruifigueira/playwright-crx/releases/tag/v${chrome.runtime.getManifest().version}` }).catch(() => {});
+});
+
 // for testing
 Object.assign(self, { attach, setTestIdAttributeName, getCrxApp, _debug, _setUnderTest });

@@ -131,6 +131,8 @@ export const test = base.extend<CrxFixtureOptions & {
 
           // wait for initialization
           await worker.evaluate(() => new Promise<void>((resolve, reject) => {
+            // best effort to signal asap this extension is in test mode
+            globalThis.__crxTest = true;
             if (serviceWorker.state !== 'activated') {
               serviceWorker.addEventListener('statechange', () => {
                 if (serviceWorker.state === 'activated')
