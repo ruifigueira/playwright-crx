@@ -31,7 +31,6 @@ import type { Browser } from '../client/browser';
 import type { Page } from '../client/page';
 import type { BrowserType } from '../client/browserType';
 import type { BrowserContextOptions, LaunchOptions } from '../client/types';
-import { spawn } from 'child_process';
 import { wrapInASCIIBox, isLikelyNpxGlobal, assert, gracefullyProcessExitDoNotHang, getPackageManagerExecCommand } from '../utils';
 import type { Executable } from '../server';
 import { registry, writeDockerVersion } from '../server';
@@ -66,7 +65,6 @@ commandWithOpenOptions('codegen [url]', 'open page and generate code for user ac
     [
       ['-o, --output <file name>', 'saves the generated script to a file'],
       ['--target <language>', `language to generate, one of javascript, playwright-test, python, python-async, python-pytest, csharp, csharp-mstest, csharp-nunit, java, java-junit`, codegenId()],
-      ['--save-trace <filename>', 'record a trace for the session and save it to a file'],
       ['--test-id-attribute <attributeName>', 'use the specified attribute to generate data test ID selectors'],
     ]).action(function(url, options) {
   codegen(options, url).catch(logErrorAndExit);
@@ -76,21 +74,6 @@ Examples:
   $ codegen
   $ codegen --target=python
   $ codegen -b webkit https://example.com`);
-
-program
-    .command('debug <app> [args...]', { hidden: true })
-    .description('run command in debug mode: disable timeout, open inspector')
-    .allowUnknownOption(true)
-    .action(function(app, options) {
-      spawn(app, options, {
-        env: { ...process.env, PWDEBUG: '1' },
-        stdio: 'inherit'
-      });
-    }).addHelpText('afterAll', `
-Examples:
-
-  $ debug node test.js
-  $ debug npm run test`);
 
 function suggestedBrowsersToInstall() {
   return registry.executables().filter(e => e.installType !== 'none' && e.type !== 'tool').map(e => e.name).join(', ');
@@ -131,6 +114,9 @@ function checkBrowsersToInstall(args: string[], options: { noShell?: boolean, on
       handleArgument(arg);
     }
   }
+
+  if (process.platform === 'win32')
+    executables.push(registry.findExecutable('winldd')!);
 
   if (faultyArguments.length)
     throw new Error(`Invalid installation targets: ${faultyArguments.map(name => `'${name}'`).join(', ')}. Expecting one of: ${suggestedBrowsersToInstall()}`);
@@ -291,7 +277,7 @@ program
     });
 
 program
-    .command('run-server', { hidden: true })
+    .command('run-server')
     .option('--port <port>', 'Server port')
     .option('--host <host>', 'Server host')
     .option('--path <path>', 'Endpoint Path', '/')
@@ -366,7 +352,6 @@ type Options = {
   saveHar?: string;
   saveHarGlob?: string;
   saveStorage?: string;
-  saveTrace?: string;
   timeout: string;
   timezone?: string;
   viewportSize?: string;
@@ -449,10 +434,12 @@ async function launchContext(options: Options, extraOptions: LaunchOptions): Pro
   // Viewport size
   if (options.viewportSize) {
     try {
-      const [width, height] = options.viewportSize.split(',').map(n => parseInt(n, 10));
+      const [width, height] = options.viewportSize.split(',').map(n => +n);
+      if (isNaN(width) || isNaN(height))
+        throw new Error('bad values');
       contextOptions.viewport = { width, height };
     } catch (e) {
-      throw new Error('Invalid viewport size format: use "width, height", for example --viewport-size=800,600');
+      throw new Error('Invalid viewport size format: use "width,height", for example --viewport-size="800,600"');
     }
   }
 
@@ -519,8 +506,6 @@ async function launchContext(options: Options, extraOptions: LaunchOptions): Pro
     if (closingBrowser)
       return;
     closingBrowser = true;
-    if (options.saveTrace)
-      await context.tracing.stop({ path: options.saveTrace });
     if (options.saveStorage)
       await context.storageState({ path: options.saveStorage }).catch(e => null);
     if (options.saveHar)
@@ -546,9 +531,6 @@ async function launchContext(options: Options, extraOptions: LaunchOptions): Pro
   const timeout = options.timeout ? parseInt(options.timeout, 10) : 0;
   context.setDefaultTimeout(timeout);
   context.setDefaultNavigationTimeout(timeout);
-
-  if (options.saveTrace)
-    await context.tracing.start({ screenshots: true, snapshots: true });
 
   // Omit options that we add automatically for presentation purpose.
   delete launchOptions.headless;
@@ -606,7 +588,6 @@ async function codegen(options: Options & { target: string, output?: string, tes
     device: options.device,
     saveStorage: options.saveStorage,
     mode: 'recording',
-    codegenMode: process.env.PW_RECORDER_IS_TRACE_VIEWER ? 'trace-events' : 'actions',
     testIdAttributeName,
     outputFile: outputFile ? path.resolve(outputFile) : undefined,
     handleSIGINT: false,

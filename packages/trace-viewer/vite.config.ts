@@ -41,12 +41,11 @@ export default defineConfig({
   },
   build: {
     outDir: path.resolve(__dirname, '../playwright-core/lib/vite/traceViewer'),
+    emptyOutDir: true,
     rollupOptions: {
       input: {
         index: path.resolve(__dirname, 'index.html'),
         uiMode: path.resolve(__dirname, 'uiMode.html'),
-        embedded: path.resolve(__dirname, 'embedded.html'),
-        recorder: path.resolve(__dirname, 'recorder.html'),
         snapshot: path.resolve(__dirname, 'snapshot.html'),
       },
       output: {

@@ -1767,6 +1767,63 @@ Whether to box the step in the report. Defaults to `false`. When the step is box
 
 Specifies a custom location for the step to be shown in test reports and trace viewer. By default, location of the [`method: Test.step`] call is shown.
 
+## async method: Test.step.skip
+* since: v1.50
+- returns: <[void]>
+
+Mark a test step as "skip" to temporarily disable its execution, useful for steps that are currently failing and planned for a near-term fix. Playwright will not run the step.
+
+**Usage**
+
+You can declare a skipped step, and Playwright will not run it.
+
+```js
+import { test, expect } from '@playwright/test';
+
+test('my test', async ({ page }) => {
+  // ...
+  await test.step.skip('not yet ready', async () => {
+    // ...
+  });
+});
+```
+
+### param: Test.step.skip.title
+* since: v1.50
+- `title` <[string]>
+
+Step name.
+
+### param: Test.step.skip.body
+* since: v1.50
+- `body` <[function]\(\):[Promise]<[any]>>
+
+Step body.
+
+### option: Test.step.skip.box
+* since: v1.50
+- `box` <boolean>
+
+Whether to box the step in the report. Defaults to `false`. When the step is boxed, errors thrown from the step internals point to the step call site. See below for more details.
+
+### option: Test.step.skip.location
+* since: v1.50
+- `location` <[Location]>
+
+Specifies a custom location for the step to be shown in test reports and trace viewer. By default, location of the [`method: Test.step`] call is shown.
+
+### option: Test.step.skip.timeout
+* since: v1.50
+- `timeout` <[float]>
+
+Maximum time in milliseconds for the step to finish. Defaults to `0` (no timeout).
+
+### option: Test.step.timeout
+* since: v1.50
+- `timeout` <[float]>
+
+The maximum time, in milliseconds, allowed for the step to complete. If the step does not complete within the specified timeout, the [`method: Test.step`] method will throw a [TimeoutError]. Defaults to `0` (no timeout).
+
 ## method: Test.use
 * since: v1.10
 

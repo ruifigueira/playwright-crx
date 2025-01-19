@@ -54,11 +54,9 @@ export class ContextRecorder extends EventEmitter {
   private _throttledOutputFile: ThrottledFile | null = null;
   private _orderedLanguages: LanguageGenerator[] = [];
   private _listeners: RegisteredListener[] = [];
-  private _codegenMode: 'actions' | 'trace-events';
 
-  constructor(codegenMode: 'actions' | 'trace-events', context: BrowserContext, params: channels.BrowserContextEnableRecorderParams, delegate: ContextRecorderDelegate) {
+  constructor(context: BrowserContext, params: channels.BrowserContextEnableRecorderParams, delegate: ContextRecorderDelegate) {
     super();
-    this._codegenMode = codegenMode;
     this._context = context;
     this._params = params;
     this._delegate = delegate;
@@ -108,7 +106,7 @@ export class ContextRecorder extends EventEmitter {
     this._listeners.push(eventsHelper.addEventListener(process, 'exit', () => {
       this._throttledOutputFile?.flush();
     }));
-    this.setEnabled(true);
+    this.setEnabled(params.mode === 'recording');
   }
 
   setOutput(codegenId: string, outputFile?: string) {
@@ -150,12 +148,6 @@ export class ContextRecorder extends EventEmitter {
 
   setEnabled(enabled: boolean) {
     this._collection.setEnabled(enabled);
-    if (this._codegenMode === 'trace-events') {
-      if (enabled)
-        this._context.tracing.startChunk({ name: 'trace', title: 'trace' }).catch(() => {});
-      else
-        this._context.tracing.stopChunk({ mode: 'discard' }).catch(() => {});
-    }
   }
 
   dispose() {
@@ -206,6 +198,10 @@ export class ContextRecorder extends EventEmitter {
       for (const page of this._context.pages())
         this._onFrameNavigated(page.mainFrame(), page);
     }
+  }
+
+  runTask(task: string): void {
+    // TODO: implement
   }
 
   private _describeMainFrame(page: Page): actions.FrameDescription {
@@ -296,7 +292,6 @@ async function generateFrameSelectorInParent(parent: Frame, frame: Frame): Promi
       }, frameElement);
       return selector;
     } catch (e) {
-      return e.toString();
     }
   }, monotonicTime() + 2000);
   if (!result.timedOut && result.result)

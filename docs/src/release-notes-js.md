@@ -8,9 +8,14 @@ import LiteYouTube from '@site/src/components/LiteYouTube';
 
 ## Version 1.49
 
+<LiteYouTube
+  id="S5wCft-ImKk"
+  title="Playwright 1.49"
+/>
+
 ### Aria snapshots
 
-New assertion [`method: LocatorAssertions.toMatchAriaSnapshot`] verifies page structure by comparing to an expected accessibility tree, represented as YAML.
+New assertion [`method: LocatorAssertions.toMatchAriaSnapshot#1`] verifies page structure by comparing to an expected accessibility tree, represented as YAML.
 
 ```js
 await page.goto('https://playwright.dev');
@@ -38,7 +43,7 @@ Learn more in the [aria snapshots guide](./aria-snapshots).
 - Added "previous" and "next" buttons to the HTML report to quickly switch between test cases.
 - New properties [`property: TestInfoError.cause`] and [`property: TestError.cause`] mirroring [`Error.cause`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/cause).
 
-### Breaking: channels `chrome`, `msedge` and similar switch to new headless
+### Breaking: `chrome` and `msedge` channels switch to new headless mode
 
 This change affects you if you're using one of the following channels in your `playwright.config.ts`:
 - `chrome`, `chrome-dev`, `chrome-beta`, or `chrome-canary`

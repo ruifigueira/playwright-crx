@@ -117,8 +117,10 @@ export class JavaScriptLanguageGenerator implements LanguageGenerator {
         const assertion = action.value ? `toHaveValue(${quote(action.value)})` : `toBeEmpty()`;
         return `${this._isTest ? '' : '// '}await expect(${subject}.${this._asLocator(action.selector)}).${assertion};`;
       }
-      case 'assertSnapshot':
-        return `${this._isTest ? '' : '// '}await expect(${subject}.${this._asLocator(action.selector)}).toMatchAriaSnapshot(${quoteMultiline(action.snapshot)});`;
+      case 'assertSnapshot': {
+        const commentIfNeeded = this._isTest ? '' : '// ';
+        return `${commentIfNeeded}await expect(${subject}.${this._asLocator(action.selector)}).toMatchAriaSnapshot(${quoteMultiline(action.snapshot, `${commentIfNeeded}  `)});`;
+      }
     }
   }
 
@@ -145,8 +147,10 @@ export class JavaScriptLanguageGenerator implements LanguageGenerator {
       import { test, expect${options.deviceName ? ', devices' : ''} } from '@playwright/test';
 ${useText ? '\ntest.use(' + useText + ');\n' : ''}
       test('test', async ({ page }) => {`);
-    if (options.contextOptions.recordHar)
-      formatter.add(`  await page.routeFromHAR(${quote(options.contextOptions.recordHar.path)});`);
+    if (options.contextOptions.recordHar) {
+      const url = options.contextOptions.recordHar.urlFilter;
+      formatter.add(`  await page.routeFromHAR(${quote(options.contextOptions.recordHar.path)}${url ? `, ${formatOptions({ url }, false)}` : ''});`);
+    }
     return formatter.format();
   }
 

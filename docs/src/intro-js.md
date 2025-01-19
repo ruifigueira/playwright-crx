@@ -80,7 +80,7 @@ The `tests` folder contains a basic example test to help you get started with te
 
 ## Running the Example Test
 
-By default tests will be run on all 3 browsers, chromium, firefox and webkit using 3 workers. This can be configured in the [playwright.config file](./test-configuration.md). Tests are run in headless mode meaning no browser will open up when running the tests. Results of the tests and test logs will be shown in the terminal.
+By default tests will be run on all 3 browsers, Chromium, Firefox and WebKit using 3 workers. This can be configured in the [playwright.config file](./test-configuration.md). Tests are run in headless mode meaning no browser will open up when running the tests. Results of the tests and test logs will be shown in the terminal.
 
 <Tabs
   defaultValue="npm"
@@ -286,7 +286,7 @@ pnpm exec playwright --version
 
 ## System requirements
 
-- Node.js 18+
+- Latest version of Node.js 18, 20 or 22.
 - Windows 10+, Windows Server 2016+ or Windows Subsystem for Linux (WSL).
 - macOS 13 Ventura, or later.
 - Debian 12, Ubuntu 22.04, Ubuntu 24.04, on x86-64 and arm64 architecture.

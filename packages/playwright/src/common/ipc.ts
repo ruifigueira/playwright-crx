@@ -38,7 +38,8 @@ export type ConfigCLIOverrides = {
   timeout?: number;
   tsconfig?: string;
   ignoreSnapshots?: boolean;
-  updateSnapshots?: 'all'|'none'|'missing';
+  updateSnapshots?: 'all' | 'changed' | 'missing' | 'none';
+  updateSourceMethod?: 'overwrite' | 'patch' | '3way';
   workers?: number | string;
   projects?: { name: string, use?: any }[],
   use?: any;
@@ -74,6 +75,7 @@ export type AttachmentPayload = {
   path?: string;
   body?: string;
   contentType: string;
+  stepId?: string;
 };
 
 export type TestInfoErrorImpl = TestInfoError & {

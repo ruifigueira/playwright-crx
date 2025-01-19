@@ -883,9 +883,13 @@ class Overlay {
         this._dragState = { offsetX: this._offsetX, dragStart: { x: (event as MouseEvent).clientX, y: 0 } };
       }),
       addEventListener(this._recordToggle, 'click', () => {
+        if (this._recordToggle.classList.contains('disabled'))
+          return;
         this._recorder.setMode(this._recorder.state.mode === 'none' || this._recorder.state.mode === 'standby' || this._recorder.state.mode === 'inspecting' ? 'recording' : 'standby');
       }),
       addEventListener(this._pickLocatorToggle, 'click', () => {
+        if (this._pickLocatorToggle.classList.contains('disabled'))
+          return;
         const newMode: Record<Mode, Mode> = {
           'inspecting': 'standby',
           'none': 'inspecting',
@@ -929,15 +933,15 @@ class Overlay {
   }
 
   setUIState(state: UIState) {
-    this._recordToggle.classList.toggle('active', state.mode === 'recording' || state.mode === 'assertingText' || state.mode === 'assertingVisibility' || state.mode === 'assertingValue' || state.mode === 'recording-inspecting');
-    this._pickLocatorToggle.classList.toggle('active', state.mode === 'inspecting' || state.mode === 'recording-inspecting');
-    this._assertVisibilityToggle.classList.toggle('active', state.mode === 'assertingVisibility');
+    this._recordToggle.classList.toggle('toggled', state.mode === 'recording' || state.mode === 'assertingText' || state.mode === 'assertingVisibility' || state.mode === 'assertingValue' || state.mode === 'assertingSnapshot' || state.mode === 'recording-inspecting');
+    this._pickLocatorToggle.classList.toggle('toggled', state.mode === 'inspecting' || state.mode === 'recording-inspecting');
+    this._assertVisibilityToggle.classList.toggle('toggled', state.mode === 'assertingVisibility');
     this._assertVisibilityToggle.classList.toggle('disabled', state.mode === 'none' || state.mode === 'standby' || state.mode === 'inspecting');
-    this._assertTextToggle.classList.toggle('active', state.mode === 'assertingText');
+    this._assertTextToggle.classList.toggle('toggled', state.mode === 'assertingText');
     this._assertTextToggle.classList.toggle('disabled', state.mode === 'none' || state.mode === 'standby' || state.mode === 'inspecting');
-    this._assertValuesToggle.classList.toggle('active', state.mode === 'assertingValue');
+    this._assertValuesToggle.classList.toggle('toggled', state.mode === 'assertingValue');
     this._assertValuesToggle.classList.toggle('disabled', state.mode === 'none' || state.mode === 'standby' || state.mode === 'inspecting');
-    this._assertSnapshotToggle.classList.toggle('active', state.mode === 'assertingSnapshot');
+    this._assertSnapshotToggle.classList.toggle('toggled', state.mode === 'assertingSnapshot');
     this._assertSnapshotToggle.classList.toggle('disabled', state.mode === 'none' || state.mode === 'standby' || state.mode === 'inspecting');
     if (this._offsetX !== state.overlay.offsetX) {
       this._offsetX = state.overlay.offsetX;
@@ -1134,30 +1138,31 @@ export class Recorder {
 
     let highlight: HighlightModel | 'clear' | 'noop' = 'noop';
     if (state.actionSelector !== this._lastHighlightedSelector) {
-      this._lastHighlightedSelector = state.actionSelector;
       const model = state.actionSelector ? querySelector(this.injectedScript, state.actionSelector, this.document) : null;
       highlight = model?.elements.length ? model : 'clear';
+      this._lastHighlightedSelector = model?.elements.length ? state.actionSelector : undefined;
     }
 
     const ariaTemplateJSON = JSON.stringify(state.ariaTemplate);
     if (this._lastHighlightedAriaTemplateJSON !== ariaTemplateJSON) {
-      this._lastHighlightedAriaTemplateJSON = ariaTemplateJSON;
-      const template = state.ariaTemplate ? this.injectedScript.utils.parseYamlTemplate(state.ariaTemplate) : undefined;
-      const elements = template ? this.injectedScript.getAllByAria(this.document, template) : [];
-      if (elements.length)
+      const elements = state.ariaTemplate ? this.injectedScript.getAllByAria(this.document, state.ariaTemplate) : [];
+      if (elements.length) {
         highlight = { elements };
-      else
-        highlight = 'clear';
+        this._lastHighlightedAriaTemplateJSON = ariaTemplateJSON;
+      } else {
+        if (!this._lastHighlightedSelector)
+          highlight = 'clear';
+        this._lastHighlightedAriaTemplateJSON = 'undefined';
+      }
     }
 
     if (highlight === 'clear')
       this.clearHighlight();
     else if (highlight !== 'noop')
-      this.updateHighlight(highlight, false);
+      this._updateHighlight(highlight, false);
   }
 
   clearHighlight() {
-    this._currentTool.cleanup?.();
     this.updateHighlight(null, false);
   }
 
@@ -1297,6 +1302,12 @@ export class Recorder {
   }
 
   updateHighlight(model: HighlightModel | null, userGesture: boolean) {
+    this._lastHighlightedSelector = undefined;
+    this._lastHighlightedAriaTemplateJSON = 'undefined';
+    this._updateHighlight(model, userGesture);
+  }
+
+  private _updateHighlight(model: HighlightModel | null, userGesture: boolean) {
     let tooltipText = model?.tooltipText;
     if (tooltipText === undefined && !model?.tooltipList && model?.selector)
       tooltipText = this.injectedScript.utils.asLocator(this.state.language, model.selector);

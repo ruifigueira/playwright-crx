@@ -27,12 +27,11 @@ import { Debugger } from './debugger';
 import type { CallMetadata, InstrumentationListener, SdkObject } from './instrumentation';
 import { ContextRecorder, generateFrameSelector } from './recorder/contextRecorder';
 import type { IRecorderAppFactory, IRecorderApp, IRecorder } from './recorder/recorderFrontend';
-import { metadataToCallLog } from './recorder/recorderUtils';
+import { buildFullSelector, metadataToCallLog } from './recorder/recorderUtils';
 import type * as actions from '@recorder/actions';
-import { buildFullSelector } from '../utils/isomorphic/recorderUtils';
 import { stringifySelector } from '../utils/isomorphic/selectorParser';
 import type { Frame } from './frames';
-import type { ParsedYaml } from '@isomorphic/ariaSnapshot';
+import type { AriaTemplateNode } from '@isomorphic/ariaSnapshot';
 
 const recorderSymbol = Symbol('recorderSymbol');
 
@@ -40,7 +39,7 @@ export class Recorder implements InstrumentationListener, IRecorder {
   readonly handleSIGINT: boolean | undefined;
   private _context: BrowserContext;
   private _mode: Mode;
-  private _highlightedElement: { selector?: string, ariaTemplate?: ParsedYaml } = {};
+  private _highlightedElement: { selector?: string, ariaTemplate?: AriaTemplateNode } = {};
   private _overlayState: OverlayState = { offsetX: 0 };
   private _recorderApp: IRecorderApp | null = null;
   private _currentCallsMetadata = new Map<CallMetadata, SdkObject>();
@@ -54,33 +53,33 @@ export class Recorder implements InstrumentationListener, IRecorder {
   static async showInspector(context: BrowserContext, params: channels.BrowserContextEnableRecorderParams, recorderAppFactory: IRecorderAppFactory) {
     if (isUnderTest())
       params.language = process.env.TEST_INSPECTOR_LANGUAGE;
-    return await Recorder.show('actions', context, recorderAppFactory, params);
+    return await Recorder.show(context, recorderAppFactory, params);
   }
 
   static showInspectorNoReply(context: BrowserContext, recorderAppFactory: IRecorderAppFactory) {
     Recorder.showInspector(context, {}, recorderAppFactory).catch(() => {});
   }
 
-  static show(codegenMode: 'actions' | 'trace-events', context: BrowserContext, recorderAppFactory: IRecorderAppFactory, params: channels.BrowserContextEnableRecorderParams): Promise<Recorder> {
+  static show(context: BrowserContext, recorderAppFactory: IRecorderAppFactory, params: channels.BrowserContextEnableRecorderParams): Promise<Recorder> {
     let recorderPromise = (context as any)[recorderSymbol] as Promise<Recorder>;
     if (!recorderPromise) {
-      recorderPromise = Recorder._create(codegenMode, context, recorderAppFactory, params);
+      recorderPromise = Recorder._create(context, recorderAppFactory, params);
       (context as any)[recorderSymbol] = recorderPromise;
     }
     return recorderPromise;
   }
 
-  private static async _create(codegenMode: 'actions' | 'trace-events', context: BrowserContext, recorderAppFactory: IRecorderAppFactory, params: channels.BrowserContextEnableRecorderParams = {}): Promise<Recorder> {
-    const recorder = new Recorder(codegenMode, context, params);
+  private static async _create(context: BrowserContext, recorderAppFactory: IRecorderAppFactory, params: channels.BrowserContextEnableRecorderParams = {}): Promise<Recorder> {
+    const recorder = new Recorder(context, params);
     const recorderApp = await recorderAppFactory(recorder);
     await recorder._install(recorderApp);
     return recorder;
   }
 
-  constructor(codegenMode: 'actions' | 'trace-events', context: BrowserContext, params: channels.BrowserContextEnableRecorderParams) {
+  constructor(context: BrowserContext, params: channels.BrowserContextEnableRecorderParams) {
     this._mode = params.mode || 'none';
     this.handleSIGINT = params.handleSIGINT;
-    this._contextRecorder = new ContextRecorder(codegenMode, context, params, {});
+    this._contextRecorder = new ContextRecorder(context, params, {});
     this._context = context;
     this._omitCallTracking = !!params.omitCallTracking;
     this._debugger = context.debugger();
@@ -130,6 +129,10 @@ export class Recorder implements InstrumentationListener, IRecorder {
       }
       if (data.event === 'clear') {
         this._contextRecorder.clearScript();
+        return;
+      }
+      if (data.event === 'runTask') {
+        this._contextRecorder.runTask(data.params.task);
         return;
       }
     });
@@ -245,7 +248,7 @@ export class Recorder implements InstrumentationListener, IRecorder {
     this._refreshOverlay();
   }
 
-  setHighlightedAriaTemplate(ariaTemplate: ParsedYaml) {
+  setHighlightedAriaTemplate(ariaTemplate: AriaTemplateNode) {
     this._highlightedElement = { ariaTemplate };
     this._refreshOverlay();
   }
