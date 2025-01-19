@@ -193,7 +193,7 @@ test('test', async ({ page, context }) => {
   await expect(page.locator('div')).toContainText('Some long text');
   await expect(page.getByText('Some long text')).toBeVisible();
   await expect(page.locator('body')).toMatchAriaSnapshot(\`
-    - checkbox: on
+    - checkbox
     - button "button clicked"
     - textbox: Hello world
     - combobox:

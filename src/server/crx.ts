@@ -236,7 +236,7 @@ export class CrxApplication extends SdkObject {
   }
 
   tabIdForPage(page: Page) {
-    const targetId = this._crPages().find(crPage => crPage._initializedPage === page)?._targetId;
+    const targetId = this._crPages().find(crPage => crPage._page === page)?._targetId;
     if (!targetId)
       return;
 
@@ -251,7 +251,7 @@ export class CrxApplication extends SdkObject {
         mode: mode === 'none' ? undefined : mode,
         ...otherOptions
       };
-      Recorder.show('actions', this._context, recorder => this._createRecorderApp(recorder), recorderParams);
+      Recorder.show(this._context, recorder => this._createRecorderApp(recorder), recorderParams);
     }
 
     await this._recorderApp!.open(options);
@@ -275,7 +275,7 @@ export class CrxApplication extends SdkObject {
     }
     const crPage = this._crPageByTargetId(targetId);
     assert(crPage);
-    const pageOrError = await crPage.pageOrError();
+    const pageOrError = await crPage._page.waitForInitializedOrError();
     if (pageOrError instanceof Error)
       throw pageOrError;
     return pageOrError;
@@ -389,7 +389,7 @@ export class CrxApplication extends SdkObject {
     if (!crPage)
       return;
 
-    const pageOrError = await crPage.pageOrError();
+    const pageOrError = await crPage._page.waitForInitializedOrError();
     if (pageOrError instanceof Error)
       throw pageOrError;
 

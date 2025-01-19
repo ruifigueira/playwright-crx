@@ -21,15 +21,17 @@ import { createGuid, isUnderTest, ManualPromise, monotonicTime, serializeExpecte
 import type { Frame } from 'playwright-core/lib/server/frames';
 import type { CallMetadata } from '@protocol/callMetadata';
 import { serializeError } from 'playwright-core/lib/server/errors';
-import { buildFullSelector, traceParamsForAction } from 'playwright-core/lib/utils/isomorphic/recorderUtils';
+import { buildFullSelector } from 'playwright-core/lib/server/recorder/recorderUtils';
 import { toKeyboardModifiers } from 'playwright-core/lib/server/codegen/language';
 import type { ActionInContextWithLocation, Location } from './parser';
 import type { ActionInContext, FrameDescription } from '@recorder/actions';
 import { toClickOptions } from 'playwright-core/lib/server/recorder/recorderRunner';
-import { parseAriaSnapshot } from 'playwright-core/lib/server/ariaSnapshot';
+import { parseAriaSnapshotUnsafe } from 'playwright-core/lib/utils/isomorphic/ariaSnapshot';
 import { serverSideCallMetadata } from 'playwright-core/lib/server';
 import type { Crx } from '../crx';
 import type { InstrumentationListener } from 'playwright-core/lib/server/instrumentation';
+import { traceParamsForAction } from './recorderUtils';
+import { yaml } from 'playwright-core/lib/utilsBundle';
 
 class Stopped extends Error {}
 
@@ -148,14 +150,10 @@ export default class CrxPlayer extends EventEmitter {
     const innerPerformAction = async (mainFrame: Frame | null, actionInContext: PerformAction, cb: (callMetadata: CallMetadata) => Promise<any>): Promise<void> => {
       // we must use the default browser context here!
       const context = mainFrame ?? browserContext;
-      let traceParams: ReturnType<typeof traceParamsForAction>;
 
-      switch (actionInContext.action.name) {
-        case 'pause': traceParams = { method: 'pause', params: {}, apiName: 'page.pause' }; break;
-        case 'openPage': traceParams = { method: 'newPage', params: {}, apiName: 'browserContext.newPage' }; break;
-        case 'closePage': traceParams = { method: 'close', params: {}, apiName: 'page.close' }; break;
-        default: traceParams = traceParamsForAction(actionInContext as ActionInContext); break;
-      }
+      const traceParams = actionInContext.action.name === 'pause' ?
+        { method: 'pause', params: {}, apiName: 'page.pause' } :
+        traceParamsForAction(actionInContext as ActionInContext);
 
       const callMetadata: CallMetadata = {
         id: `call@${createGuid()}`,
@@ -257,6 +255,7 @@ export default class CrxPlayer extends EventEmitter {
       return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.expect(callMetadata, selector, {
         selector,
         expression: 'to.be.checked',
+        expectedValue: { checked: true },
         isNot: !action.checked,
         timeout: kActionTimeout,
       }));
@@ -291,7 +290,7 @@ export default class CrxPlayer extends EventEmitter {
       return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.expect(callMetadata, selector, {
         selector,
         expression: 'to.match.aria',
-        expectedValue: parseAriaSnapshot(action.snapshot),
+        expectedValue: parseAriaSnapshotUnsafe(yaml, action.snapshot),
         isNot: false,
         timeout: kActionTimeout,
       }));
