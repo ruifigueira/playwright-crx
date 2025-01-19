@@ -691,6 +691,7 @@ export interface DebugControllerChannel extends DebugControllerEventTarget, Chan
 export type DebugControllerInspectRequestedEvent = {
   selector: string,
   locator: string,
+  ariaSnapshot: string,
 };
 export type DebugControllerSetModeRequestedEvent = {
   mode: string,
@@ -1771,7 +1772,6 @@ export type BrowserContextPauseResult = void;
 export type BrowserContextEnableRecorderParams = {
   language?: string,
   mode?: 'inspecting' | 'recording',
-  codegenMode?: 'actions' | 'trace-events',
   pauseOnNextStatement?: boolean,
   testIdAttributeName?: string,
   launchOptions?: any,
@@ -1785,7 +1785,6 @@ export type BrowserContextEnableRecorderParams = {
 export type BrowserContextEnableRecorderOptions = {
   language?: string,
   mode?: 'inspecting' | 'recording',
-  codegenMode?: 'actions' | 'trace-events',
   pauseOnNextStatement?: boolean,
   testIdAttributeName?: string,
   launchOptions?: any,
@@ -4982,3 +4981,4 @@ export interface JsonPipeEvents {
   'message': JsonPipeMessageEvent;
   'closed': JsonPipeClosedEvent;
 }
+

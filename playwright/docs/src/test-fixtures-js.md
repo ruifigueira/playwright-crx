@@ -115,8 +115,8 @@ test.describe('todo tests', () => {
 ### With fixtures
 
 Fixtures have a number of advantages over before/after hooks:
-- Fixtures **encapsulate** setup and teardown in the same place so it is easier to write.
-- Fixtures are **reusable** between test files - you can define them once and use in all your tests. That's how Playwright's built-in `page` fixture works.
+- Fixtures **encapsulate** setup and teardown in the same place so it is easier to write. So if you have an after hook that tears down what was created in a before hook, consider turning them into a fixture.
+- Fixtures are **reusable** between test files - you can define them once and use in all your tests. That's how Playwright's built-in `page` fixture works. So if you have a helper function that is used in multiple tests, consider turning it into a fixture.
 - Fixtures are **on-demand** - you can define as many fixtures as you'd like, and Playwright Test will setup only the ones needed by your test and nothing else.
 - Fixtures are **composable** - they can depend on each other to provide complex behaviors.
 - Fixtures are **flexible**. Tests can use any combinations of the fixtures to tailor precise environment they need, without affecting other tests.
@@ -695,7 +695,7 @@ test('passes', async ({ database, page, a11y }) => {
 
 ## Box fixtures
 
-Usually, custom fixtures are reported as separate steps in in the UI mode, Trace Viewer and various test reports. They also appear in error messages from the test runner. For frequently-used fixtures, this can mean lots of noise. You can stop the fixtures steps from being shown in the UI by "boxing" it.
+Usually, custom fixtures are reported as separate steps in the UI mode, Trace Viewer and various test reports. They also appear in error messages from the test runner. For frequently-used fixtures, this can mean lots of noise. You can stop the fixtures steps from being shown in the UI by "boxing" it.
 
 ```js
 import { test as base } from '@playwright/test';

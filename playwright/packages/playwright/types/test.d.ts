@@ -1665,11 +1665,12 @@ interface TestConfig<TestArgs = {}, WorkerArgs = {}> {
 
   /**
    * Whether to update expected snapshots with the actual results produced by the test run. Defaults to `'missing'`.
-   * - `'all'` - All tests that are executed will update snapshots that did not match. Matching snapshots will not be
-   *   updated.
-   * - `'none'` - No snapshots are updated.
+   * - `'all'` - All tests that are executed will update snapshots.
+   * - `'changed'` - All tests that are executed will update snapshots that did not match. Matching snapshots will not
+   *   be updated.
    * - `'missing'` - Missing snapshots are created, for example when authoring a new test and running it for the first
    *   time. This is the default.
+   * - `'none'` - No snapshots are updated.
    *
    * Learn more about [snapshots](https://playwright.dev/docs/test-snapshots).
    *
@@ -1685,7 +1686,16 @@ interface TestConfig<TestArgs = {}, WorkerArgs = {}> {
    * ```
    *
    */
-  updateSnapshots?: "all"|"none"|"missing";
+  updateSnapshots?: "all"|"changed"|"missing"|"none";
+
+  /**
+   * Defines how to update snapshots in the source code.
+   * - `'patch'` - Create a unified diff file that can be used to update the source code later. This is the default.
+   * - `'3way'` - Generate merge conflict markers in source code. This allows user to manually pick relevant changes,
+   *   as if they are resolving a merge conflict in the IDE.
+   * - `'overwrite'` - Overwrite the source code with the new snapshot values.
+   */
+  updateSourceMethod?: "overwrite"|"3way"|"patch";
 
   /**
    * The maximum number of concurrent worker processes to use for parallelizing tests. Can also be set as percentage of
@@ -1834,7 +1844,13 @@ export interface FullConfig<TestArgs = {}, WorkerArgs = {}> {
   /**
    * See [testConfig.updateSnapshots](https://playwright.dev/docs/api/class-testconfig#test-config-update-snapshots).
    */
-  updateSnapshots: "all"|"none"|"missing";
+  updateSnapshots: "all"|"changed"|"missing"|"none";
+
+  /**
+   * See
+   * [testConfig.updateSourceMethod](https://playwright.dev/docs/api/class-testconfig#test-config-update-source-method).
+   */
+  updateSourceMethod: "overwrite"|"3way"|"patch";
 
   /**
    * Playwright version.
@@ -1849,7 +1865,7 @@ export interface FullConfig<TestArgs = {}, WorkerArgs = {}> {
 
 export type TestStatus = 'passed' | 'failed' | 'timedOut' | 'skipped' | 'interrupted';
 
-type TestDetailsAnnotation = {
+export type TestDetailsAnnotation = {
   type: string;
   description?: string;
 };
@@ -1876,7 +1892,7 @@ type ConditionBody<TestArgs> = (args: TestArgs) => boolean;
  * ```
  *
  */
-export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue> {
+export interface TestType<TestArgs extends {}, WorkerArgs extends {}> {
   /**
    * Declares a test.
    * - `test(title, body)`
@@ -5536,7 +5552,191 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
    * @param body Step body.
    * @param options
    */
-  step<T>(title: string, body: () => T | Promise<T>, options?: { box?: boolean, location?: Location }): Promise<T>;
+  step: {
+    /**
+   * Declares a test step that is shown in the report.
+   *
+   * **Usage**
+   *
+   * ```js
+   * import { test, expect } from '@playwright/test';
+   *
+   * test('test', async ({ page }) => {
+   *   await test.step('Log in', async () => {
+   *     // ...
+   *   });
+   *
+   *   await test.step('Outer step', async () => {
+   *     // ...
+   *     // You can nest steps inside each other.
+   *     await test.step('Inner step', async () => {
+   *       // ...
+   *     });
+   *   });
+   * });
+   * ```
+   *
+   * **Details**
+   *
+   * The method returns the value returned by the step callback.
+   *
+   * ```js
+   * import { test, expect } from '@playwright/test';
+   *
+   * test('test', async ({ page }) => {
+   *   const user = await test.step('Log in', async () => {
+   *     // ...
+   *     return 'john';
+   *   });
+   *   expect(user).toBe('john');
+   * });
+   * ```
+   *
+   * **Decorator**
+   *
+   * You can use TypeScript method decorators to turn a method into a step. Each call to the decorated method will show
+   * up as a step in the report.
+   *
+   * ```js
+   * function step(target: Function, context: ClassMethodDecoratorContext) {
+   *   return function replacementMethod(...args: any) {
+   *     const name = this.constructor.name + '.' + (context.name as string);
+   *     return test.step(name, async () => {
+   *       return await target.call(this, ...args);
+   *     });
+   *   };
+   * }
+   *
+   * class LoginPage {
+   *   constructor(readonly page: Page) {}
+   *
+   *   @step
+   *   async login() {
+   *     const account = { username: 'Alice', password: 's3cr3t' };
+   *     await this.page.getByLabel('Username or email address').fill(account.username);
+   *     await this.page.getByLabel('Password').fill(account.password);
+   *     await this.page.getByRole('button', { name: 'Sign in' }).click();
+   *     await expect(this.page.getByRole('button', { name: 'View profile and more' })).toBeVisible();
+   *   }
+   * }
+   *
+   * test('example', async ({ page }) => {
+   *   const loginPage = new LoginPage(page);
+   *   await loginPage.login();
+   * });
+   * ```
+   *
+   * **Boxing**
+   *
+   * When something inside a step fails, you would usually see the error pointing to the exact action that failed. For
+   * example, consider the following login step:
+   *
+   * ```js
+   * async function login(page) {
+   *   await test.step('login', async () => {
+   *     const account = { username: 'Alice', password: 's3cr3t' };
+   *     await page.getByLabel('Username or email address').fill(account.username);
+   *     await page.getByLabel('Password').fill(account.password);
+   *     await page.getByRole('button', { name: 'Sign in' }).click();
+   *     await expect(page.getByRole('button', { name: 'View profile and more' })).toBeVisible();
+   *   });
+   * }
+   *
+   * test('example', async ({ page }) => {
+   *   await page.goto('https://github.com/login');
+   *   await login(page);
+   * });
+   * ```
+   *
+   * ```txt
+   * Error: Timed out 5000ms waiting for expect(locator).toBeVisible()
+   *   ... error details omitted ...
+   *
+   *    8 |     await page.getByRole('button', { name: 'Sign in' }).click();
+   * >  9 |     await expect(page.getByRole('button', { name: 'View profile and more' })).toBeVisible();
+   *      |                                                                               ^
+   *   10 |   });
+   * ```
+   *
+   * As we see above, the test may fail with an error pointing inside the step. If you would like the error to highlight
+   * the "login" step instead of its internals, use the `box` option. An error inside a boxed step points to the step
+   * call site.
+   *
+   * ```js
+   * async function login(page) {
+   *   await test.step('login', async () => {
+   *     // ...
+   *   }, { box: true });  // Note the "box" option here.
+   * }
+   * ```
+   *
+   * ```txt
+   * Error: Timed out 5000ms waiting for expect(locator).toBeVisible()
+   *   ... error details omitted ...
+   *
+   *   14 |   await page.goto('https://github.com/login');
+   * > 15 |   await login(page);
+   *      |         ^
+   *   16 | });
+   * ```
+   *
+   * You can also create a TypeScript decorator for a boxed step, similar to a regular step decorator above:
+   *
+   * ```js
+   * function boxedStep(target: Function, context: ClassMethodDecoratorContext) {
+   *   return function replacementMethod(...args: any) {
+   *     const name = this.constructor.name + '.' + (context.name as string);
+   *     return test.step(name, async () => {
+   *       return await target.call(this, ...args);
+   *     }, { box: true });  // Note the "box" option here.
+   *   };
+   * }
+   *
+   * class LoginPage {
+   *   constructor(readonly page: Page) {}
+   *
+   *   @boxedStep
+   *   async login() {
+   *     // ....
+   *   }
+   * }
+   *
+   * test('example', async ({ page }) => {
+   *   const loginPage = new LoginPage(page);
+   *   await loginPage.login();  // <-- Error will be reported on this line.
+   * });
+   * ```
+   *
+   * @param title Step name.
+   * @param body Step body.
+   * @param options
+   */
+  <T>(title: string, body: () => T | Promise<T>, options?: { box?: boolean, location?: Location, timeout?: number }): Promise<T>;
+    /**
+   * Mark a test step as "skip" to temporarily disable its execution, useful for steps that are currently failing and
+   * planned for a near-term fix. Playwright will not run the step.
+   *
+   * **Usage**
+   *
+   * You can declare a skipped step, and Playwright will not run it.
+   *
+   * ```js
+   * import { test, expect } from '@playwright/test';
+   *
+   * test('my test', async ({ page }) => {
+   *   // ...
+   *   await test.step.skip('not yet ready', async () => {
+   *     // ...
+   *   });
+   * });
+   * ```
+   *
+   * @param title Step name.
+   * @param body Step body.
+   * @param options
+   */
+  skip(title: string, body: () => any | Promise<any>, options?: { box?: boolean, location?: Location, timeout?: number }): Promise<void>;
+  }
   /**
    * `expect` function can be used to create test assertions. Read more about [test assertions](https://playwright.dev/docs/test-assertions).
    *
@@ -5617,7 +5817,7 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
    * Learn more about [fixtures](https://playwright.dev/docs/test-fixtures) and [parametrizing tests](https://playwright.dev/docs/test-parameterize).
    * @param fixtures An object containing fixtures and/or options. Learn more about [fixtures format](https://playwright.dev/docs/test-fixtures).
    */
-  extend<T extends KeyValue, W extends KeyValue = {}>(fixtures: Fixtures<T, W, TestArgs, WorkerArgs>): TestType<TestArgs & T, WorkerArgs & W>;
+  extend<T extends {}, W extends {} = {}>(fixtures: Fixtures<T, W, TestArgs, WorkerArgs>): TestType<TestArgs & T, WorkerArgs & W>;
   /**
    * Returns information about the currently running test. This method can only be called during the test execution,
    * otherwise it throws.
@@ -5638,19 +5838,18 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
   info(): TestInfo;
 }
 
-type KeyValue = { [key: string]: any };
-export type TestFixture<R, Args extends KeyValue> = (args: Args, use: (r: R) => Promise<void>, testInfo: TestInfo) => any;
-export type WorkerFixture<R, Args extends KeyValue> = (args: Args, use: (r: R) => Promise<void>, workerInfo: WorkerInfo) => any;
-type TestFixtureValue<R, Args extends KeyValue> = Exclude<R, Function> | TestFixture<R, Args>;
-type WorkerFixtureValue<R, Args extends KeyValue> = Exclude<R, Function> | WorkerFixture<R, Args>;
-export type Fixtures<T extends KeyValue = {}, W extends KeyValue = {}, PT extends KeyValue = {}, PW extends KeyValue = {}> = {
+export type TestFixture<R, Args extends {}> = (args: Args, use: (r: R) => Promise<void>, testInfo: TestInfo) => any;
+export type WorkerFixture<R, Args extends {}> = (args: Args, use: (r: R) => Promise<void>, workerInfo: WorkerInfo) => any;
+type TestFixtureValue<R, Args extends {}> = Exclude<R, Function> | TestFixture<R, Args>;
+type WorkerFixtureValue<R, Args extends {}> = Exclude<R, Function> | WorkerFixture<R, Args>;
+export type Fixtures<T extends {} = {}, W extends {} = {}, PT extends {} = {}, PW extends {} = {}> = {
   [K in keyof PW]?: WorkerFixtureValue<PW[K], W & PW> | [WorkerFixtureValue<PW[K], W & PW>, { scope: 'worker', timeout?: number | undefined, title?: string, box?: boolean }];
 } & {
   [K in keyof PT]?: TestFixtureValue<PT[K], T & W & PT & PW> | [TestFixtureValue<PT[K], T & W & PT & PW>, { scope: 'test', timeout?: number | undefined, title?: string, box?: boolean }];
 } & {
-  [K in keyof W]?: [WorkerFixtureValue<W[K], W & PW>, { scope: 'worker', auto?: boolean, option?: boolean, timeout?: number | undefined, title?: string, box?: boolean }];
+  [K in Exclude<keyof W, keyof PW | keyof PT>]?: [WorkerFixtureValue<W[K], W & PW>, { scope: 'worker', auto?: boolean, option?: boolean, timeout?: number | undefined, title?: string, box?: boolean }];
 } & {
-  [K in keyof T]?: TestFixtureValue<T[K], T & W & PT & PW> | [TestFixtureValue<T[K], T & W & PT & PW>, { scope?: 'test', auto?: boolean, option?: boolean, timeout?: number | undefined, title?: string, box?: boolean }];
+  [K in Exclude<keyof T, keyof PW | keyof PT>]?: TestFixtureValue<T[K], T & W & PT & PW> | [TestFixtureValue<T[K], T & W & PT & PW>, { scope?: 'test', auto?: boolean, option?: boolean, timeout?: number | undefined, title?: string, box?: boolean }];
 };
 
 type BrowserName = 'chromium' | 'firefox' | 'webkit';
@@ -5776,9 +5975,12 @@ export interface PlaywrightWorkerOptions {
    */
   headless: boolean;
   /**
-   * Browser distribution channel.  Supported values are "chrome", "chrome-beta", "chrome-dev", "chrome-canary",
-   * "msedge", "msedge-beta", "msedge-dev", "msedge-canary". Read more about using
-   * [Google Chrome and Microsoft Edge](https://playwright.dev/docs/browsers#google-chrome--microsoft-edge).
+   * Browser distribution channel.
+   *
+   * Use "chromium" to [opt in to new headless mode](https://playwright.dev/docs/browsers#chromium-new-headless-mode).
+   *
+   * Use "chrome", "chrome-beta", "chrome-dev", "chrome-canary", "msedge", "msedge-beta", "msedge-dev", or
+   * "msedge-canary" to use branded [Google Chrome and Microsoft Edge](https://playwright.dev/docs/browsers#google-chrome--microsoft-edge).
    *
    * **Usage**
    *
@@ -6229,8 +6431,8 @@ export interface PlaywrightTestOptions {
   javaScriptEnabled: boolean;
   /**
    * Specify user locale, for example `en-GB`, `de-DE`, etc. Locale will affect `navigator.language` value,
-   * `Accept-Language` request header value as well as number and date formatting rules. Defaults to the system default
-   * locale. Learn more about emulation in our [emulation guide](https://playwright.dev/docs/emulation#locale--timezone).
+   * `Accept-Language` request header value as well as number and date formatting rules. Defaults to `en-US`. Learn more
+   * about emulation in our [emulation guide](https://playwright.dev/docs/emulation#locale--timezone).
    *
    * **Usage**
    *
@@ -7469,8 +7671,8 @@ export function defineConfig(config: PlaywrightTestConfig): PlaywrightTestConfig
 export function defineConfig<T>(config: PlaywrightTestConfig<T>): PlaywrightTestConfig<T>;
 export function defineConfig<T, W>(config: PlaywrightTestConfig<T, W>): PlaywrightTestConfig<T, W>;
 export function defineConfig(config: PlaywrightTestConfig, ...configs: PlaywrightTestConfig[]): PlaywrightTestConfig;
-export function defineConfig<T>(config: PlaywrightTestConfig<T>, ...configs: PlaywrightTestConfig[]): PlaywrightTestConfig<T>;
-export function defineConfig<T, W>(config: PlaywrightTestConfig<T, W>, ...configs: PlaywrightTestConfig[]): PlaywrightTestConfig<T, W>;
+export function defineConfig<T>(config: PlaywrightTestConfig<T>, ...configs: PlaywrightTestConfig<T>[]): PlaywrightTestConfig<T>;
+export function defineConfig<T, W>(config: PlaywrightTestConfig<T, W>, ...configs: PlaywrightTestConfig<T, W>[]): PlaywrightTestConfig<T, W>;
 
 type MergedT<List> = List extends [TestType<infer T, any>, ...(infer Rest)] ? T & MergedT<Rest> : {};
 type MergedW<List> = List extends [TestType<any, infer W>, ...(infer Rest)] ? W & MergedW<Rest> : {};
@@ -7586,7 +7788,20 @@ interface LocatorAssertions {
    * @param options
    */
   toBeChecked(options?: {
+    /**
+     * Provides state to assert for. Asserts for input to be checked by default. This option can't be used when
+     * [`indeterminate`](https://playwright.dev/docs/api/class-locatorassertions#locator-assertions-to-be-checked-option-indeterminate)
+     * is set to true.
+     */
     checked?: boolean;
+
+    /**
+     * Asserts that the element is in the indeterminate (mixed) state. Only supported for checkboxes and radio buttons.
+     * This option can't be true when
+     * [`checked`](https://playwright.dev/docs/api/class-locatorassertions#locator-assertions-to-be-checked-option-checked)
+     * is provided.
+     */
+    indeterminate?: boolean;
 
     /**
      * Time to retry the assertion for in milliseconds. Defaults to `timeout` in `TestConfig.expect`.
@@ -7887,6 +8102,34 @@ interface LocatorAssertions {
 
   /**
    * Ensures the [Locator](https://playwright.dev/docs/api/class-locator) points to an element with a given
+   * [aria errormessage](https://w3c.github.io/aria/#aria-errormessage).
+   *
+   * **Usage**
+   *
+   * ```js
+   * const locator = page.getByTestId('username-input');
+   * await expect(locator).toHaveAccessibleErrorMessage('Username is required.');
+   * ```
+   *
+   * @param errorMessage Expected accessible error message.
+   * @param options
+   */
+  toHaveAccessibleErrorMessage(errorMessage: string|RegExp, options?: {
+    /**
+     * Whether to perform case-insensitive match.
+     * [`ignoreCase`](https://playwright.dev/docs/api/class-locatorassertions#locator-assertions-to-have-accessible-error-message-option-ignore-case)
+     * option takes precedence over the corresponding regular expression flag if specified.
+     */
+    ignoreCase?: boolean;
+
+    /**
+     * Time to retry the assertion for in milliseconds. Defaults to `timeout` in `TestConfig.expect`.
+     */
+    timeout?: number;
+  }): Promise<void>;
+
+  /**
+   * Ensures the [Locator](https://playwright.dev/docs/api/class-locator) points to an element with a given
    * [accessible name](https://w3c.github.io/accname/#dfn-accessible-name).
    *
    * **Usage**
@@ -7964,21 +8207,24 @@ interface LocatorAssertions {
 
   /**
    * Ensures the [Locator](https://playwright.dev/docs/api/class-locator) points to an element with given CSS classes.
-   * This needs to be a full match or using a relaxed regular expression.
+   * When a string is provided, it must fully match the element's `class` attribute. To match individual classes or
+   * perform partial matches, use a regular expression:
    *
    * **Usage**
    *
    * ```html
-   * <div class='selected row' id='component'></div>
+   * <div class='middle selected row' id='component'></div>
    * ```
    *
    * ```js
    * const locator = page.locator('#component');
-   * await expect(locator).toHaveClass(/selected/);
-   * await expect(locator).toHaveClass('selected row');
+   * await expect(locator).toHaveClass('middle selected row');
+   * await expect(locator).toHaveClass(/(^|\s)selected(\s|$)/);
    * ```
    *
-   * Note that if array is passed as an expected value, entire lists of elements can be asserted:
+   * When an array is passed, the method asserts that the list of elements located matches the corresponding list of
+   * expected class values. Each element's class attribute is matched against the corresponding string or regular
+   * expression in the array:
    *
    * ```js
    * const locator = page.locator('list > .component');
@@ -8430,6 +8676,32 @@ interface LocatorAssertions {
    * @param options
    */
   toMatchAriaSnapshot(expected: string, options?: {
+    /**
+     * Time to retry the assertion for in milliseconds. Defaults to `timeout` in `TestConfig.expect`.
+     */
+    timeout?: number;
+  }): Promise<void>;
+
+  /**
+   * Asserts that the target element matches the given [accessibility snapshot](https://playwright.dev/docs/aria-snapshots).
+   *
+   * **Usage**
+   *
+   * ```js
+   * await expect(page.locator('body')).toMatchAriaSnapshot();
+   * await expect(page.locator('body')).toMatchAriaSnapshot({ name: 'snapshot' });
+   * await expect(page.locator('body')).toMatchAriaSnapshot({ path: '/path/to/snapshot.yml' });
+   * ```
+   *
+   * @param options
+   */
+  toMatchAriaSnapshot(options?: {
+    /**
+     * Name of the snapshot to store in the snapshot (screenshot) folder corresponding to this test. Generates sequential
+     * names if not specified.
+     */
+    name?: string;
+
     /**
      * Time to retry the assertion for in milliseconds. Defaults to `timeout` in `TestConfig.expect`.
      */
@@ -9370,6 +9642,18 @@ interface TestConfigWebServer {
    * How long to wait for the process to start up and be available in milliseconds. Defaults to 60000.
    */
   timeout?: number;
+
+  /**
+   * How to shut down the process. If unspecified, the process group is forcefully `SIGKILL`ed. If set to `{ signal:
+   * 'SIGINT', timeout: 500 }`, the process group is sent a `SIGINT` signal, followed by `SIGKILL` if it doesn't exit
+   * within 500ms. You can also use `SIGTERM` instead. A `0` timeout means no `SIGKILL` will be sent. Windows doesn't
+   * support `SIGINT` and `SIGTERM` signals, so this option is ignored.
+   */
+  gracefulShutdown?: {
+    signal: "SIGINT"|"SIGTERM";
+
+    timeout: number;
+  };
 
   /**
    * The url on your http server that is expected to return a 2xx, 3xx, 400, 401, 402, or 403 status code when the

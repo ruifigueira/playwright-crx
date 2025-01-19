@@ -56,6 +56,7 @@ export class FullConfigInternal {
   cliFailOnFlakyTests?: boolean;
   cliLastFailed?: boolean;
   testIdMatcher?: Matcher;
+  lastFailedTestIdMatcher?: Matcher;
   defineConfigWasUsed = false;
 
   globalSetups: string[] = [];
@@ -97,6 +98,7 @@ export class FullConfigInternal {
       projects: [],
       shard: takeFirst(configCLIOverrides.shard, userConfig.shard, null),
       updateSnapshots: takeFirst(configCLIOverrides.updateSnapshots, userConfig.updateSnapshots, 'missing'),
+      updateSourceMethod: takeFirst(configCLIOverrides.updateSourceMethod, userConfig.updateSourceMethod, 'patch'),
       version: require('../../package.json').version,
       workers: 0,
       webServer: null,

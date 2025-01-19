@@ -28,7 +28,6 @@ import { ToolbarButton } from '@web/components/toolbarButton';
 import { Toolbar } from '@web/components/toolbar';
 import type { XtermDataSource } from '@web/components/xtermWrapper';
 import { XtermWrapper } from '@web/components/xtermWrapper';
-import { useDarkModeSetting } from '@web/theme';
 import { clsx, settings, useSetting } from '@web/uiUtils';
 import { statusEx, TestTree } from '@testIsomorphic/testTree';
 import type { TreeItem  } from '@testIsomorphic/testTree';
@@ -37,6 +36,7 @@ import { FiltersView } from './uiModeFiltersView';
 import { TestListView } from './uiModeTestListView';
 import { TraceView } from './uiModeTraceView';
 import { SettingsView } from './settingsView';
+import { DefaultSettingsView } from './defaultSettingsView';
 
 let xtermSize = { cols: 80, rows: 24 };
 const xtermDataSource: XtermDataSource = {
@@ -47,9 +47,9 @@ const xtermDataSource: XtermDataSource = {
 };
 
 const searchParams = new URLSearchParams(window.location.search);
-const guid = searchParams.get('ws');
-const wsURL = new URL(`../${guid}`, window.location.toString());
-wsURL.protocol = (window.location.protocol === 'https:' ? 'wss:' : 'ws:');
+const testServerBaseUrl = new URL(searchParams.get('server') ?? '../', window.location.href);
+const wsURL = new URL(searchParams.get('ws')!, testServerBaseUrl);
+wsURL.protocol = (wsURL.protocol === 'https:' ? 'wss:' : 'ws:');
 const queryParams = {
   args: searchParams.getAll('arg'),
   grep: searchParams.get('grep') || undefined,
@@ -104,12 +104,14 @@ export const UIModeView: React.FC<{}> = ({
   const [singleWorker, setSingleWorker] = React.useState(false);
   const [showBrowser, setShowBrowser] = React.useState(false);
   const [updateSnapshots, setUpdateSnapshots] = React.useState(false);
-  const [darkMode, setDarkMode] = useDarkModeSetting();
 
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const reloadTests = React.useCallback(() => {
-    setTestServerConnection(new TestServerConnection(new WebSocketTestServerTransport(wsURL)));
+    setTestServerConnection(prevConnection => {
+      prevConnection?.close();
+      return new TestServerConnection(new WebSocketTestServerTransport(wsURL));
+    });
   }, []);
 
   // Load tests on startup.
@@ -224,7 +226,7 @@ export const UIModeView: React.FC<{}> = ({
         newFilter.set(projectSuite.title, !!selectedProjects?.includes(projectSuite.title));
     }
     if (!selectedProjects && newFilter.size && ![...newFilter.values()].includes(true))
-      newFilter.set(newFilter.entries().next().value[0], true);
+      newFilter.set(newFilter.entries().next().value![0], true);
     if (projectFilters.size !== newFilter.size || [...projectFilters].some(([k, v]) => newFilter.get(k) !== v))
       setProjectFilters(newFilter);
   }, [projectFilters, testModel]);
@@ -505,9 +507,9 @@ export const UIModeView: React.FC<{}> = ({
             <div className='section-title'>Testing Options</div>
           </Toolbar>
           {testingOptionsVisible && <SettingsView settings={[
-            { value: singleWorker, set: setSingleWorker, title: 'Single worker' },
-            { value: showBrowser, set: setShowBrowser, title: 'Show browser' },
-            { value: updateSnapshots, set: setUpdateSnapshots, title: 'Update snapshots' },
+            { value: singleWorker, set: setSingleWorker, name: 'Single worker' },
+            { value: showBrowser, set: setShowBrowser, name: 'Show browser' },
+            { value: updateSnapshots, set: setUpdateSnapshots, name: 'Update snapshots' },
           ]} />}
         </>}
         <Toolbar noShadow={true} noMinHeight={true} className='settings-toolbar' onClick={() => setSettingsVisible(!settingsVisible)}>
@@ -518,9 +520,7 @@ export const UIModeView: React.FC<{}> = ({
           />
           <div className='section-title'>Settings</div>
         </Toolbar>
-        {settingsVisible && <SettingsView settings={[
-          { value: darkMode, set: setDarkMode, title: 'Dark mode' },
-        ]} />}
+        {settingsVisible && <DefaultSettingsView />}
       </div>
       }
     />

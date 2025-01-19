@@ -570,12 +570,13 @@ export default defineConfig({
 
 ## property: TestConfig.updateSnapshots
 * since: v1.10
-- type: ?<[UpdateSnapshots]<"all"|"none"|"missing">>
+- type: ?<[UpdateSnapshots]<"all"|"changed"|"missing"|"none">>
 
 Whether to update expected snapshots with the actual results produced by the test run. Defaults to `'missing'`.
-* `'all'` - All tests that are executed will update snapshots that did not match. Matching snapshots will not be updated.
-* `'none'` - No snapshots are updated.
+* `'all'` - All tests that are executed will update snapshots.
+* `'changed'` - All tests that are executed will update snapshots that did not match. Matching snapshots will not be updated.
 * `'missing'` - Missing snapshots are created, for example when authoring a new test and running it for the first time. This is the default.
+* `'none'` - No snapshots are updated.
 
 Learn more about [snapshots](../test-snapshots.md).
 
@@ -588,6 +589,15 @@ export default defineConfig({
   updateSnapshots: 'missing',
 });
 ```
+
+## property: TestConfig.updateSourceMethod
+* since: v1.50
+- type: ?<[UpdateSourceMethod]<"overwrite"|"3way"|"patch">>
+
+Defines how to update snapshots in the source code.
+* `'patch'` - Create a unified diff file that can be used to update the source code later. This is the default.
+* `'3way'` - Generate merge conflict markers in source code. This allows user to manually pick relevant changes, as if they are resolving a merge conflict in the IDE.
+* `'overwrite'` - Overwrite the source code with the new snapshot values.
 
 ## property: TestConfig.use
 * since: v1.10
@@ -619,6 +629,9 @@ export default defineConfig({
   - `stdout` ?<["pipe"|"ignore"]> If `"pipe"`, it will pipe the stdout of the command to the process stdout. If `"ignore"`, it will ignore the stdout of the command. Default to `"ignore"`.
   - `stderr` ?<["pipe"|"ignore"]> Whether to pipe the stderr of the command to the process stderr or ignore it. Defaults to `"pipe"`.
   - `timeout` ?<[int]> How long to wait for the process to start up and be available in milliseconds. Defaults to 60000.
+  - `gracefulShutdown` ?<[Object]> How to shut down the process. If unspecified, the process group is forcefully `SIGKILL`ed. If set to `{ signal: 'SIGINT', timeout: 500 }`, the process group is sent a `SIGINT` signal, followed by `SIGKILL` if it doesn't exit within 500ms. You can also use `SIGTERM` instead. A `0` timeout means no `SIGKILL` will be sent. Windows doesn't support `SIGINT` and `SIGTERM` signals, so this option is ignored.
+    - `signal` <["SIGINT"|"SIGTERM"]>
+    - `timeout` <[int]> 
   - `url` ?<[string]> The url on your http server that is expected to return a 2xx, 3xx, 400, 401, 402, or 403 status code when the server is ready to accept connections. Redirects (3xx status codes) are being followed and the new location is checked. Either `port` or `url` should be specified.
 
 Launch a development web server (or multiple) during the tests.
