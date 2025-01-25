@@ -3,10 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build && tsc",
-    "build-sw": "vite --config vite.sw.config.ts build && tsc",
-    "preview": "vite preview"
+  "dependencies": {
+    "yaml": "^2.6.0"
   }
 }

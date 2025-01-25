@@ -13,20 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 import type * as recorderActions from '@recorder/actions';
 import type * as channels from '@protocol/channels';
-import type * as types from '../../server/types';
-
-export function buildFullSelector(framePath: string[], selector: string) {
-  return [...framePath, selector].join(' >> internal:control=enter-frame >> ');
-}
+import { toKeyboardModifiers } from 'playwright-core/lib/server/codegen/language';
+import { buildFullSelector } from 'playwright-core/lib/server/recorder/recorderUtils';
 
 const kDefaultTimeout = 5_000;
 
 export function traceParamsForAction(actionInContext: recorderActions.ActionInContext): { method: string, apiName: string, params: any } {
   const { action } = actionInContext;
-
   switch (action.name) {
     case 'navigate': {
       const params: channels.FrameGotoParams = {
@@ -34,13 +29,16 @@ export function traceParamsForAction(actionInContext: recorderActions.ActionInCo
       };
       return { method: 'goto', apiName: 'page.goto', params };
     }
-    case 'openPage':
-    case 'closePage':
-      throw new Error('Not reached');
+    case 'openPage': {
+      return { method: 'newPage', params: {}, apiName: 'browserContext.newPage' };
+    }
+    case 'closePage': {
+      return { method: 'close', params: {}, apiName: 'page.close' };
+    }
   }
-
   const selector = buildFullSelector(actionInContext.frame.framePath, action.selector);
   switch (action.name) {
+
     case 'click': {
       const params: channels.FrameClickParams = {
         selector,
@@ -139,25 +137,11 @@ export function traceParamsForAction(actionInContext: recorderActions.ActionInCo
     case 'assertSnapshot': {
       const params: channels.FrameExpectParams = {
         selector,
-        expression: 'to.match.snapshot',
-        expectedText: [],
+        expression: 'to.match.aria',
         isNot: false,
         timeout: kDefaultTimeout,
       };
       return { method: 'expect', apiName: 'expect.toMatchAriaSnapshot', params };
     }
   }
-}
-
-export function toKeyboardModifiers(modifiers: number): types.SmartKeyboardModifier[] {
-  const result: types.SmartKeyboardModifier[] = [];
-  if (modifiers & 1)
-    result.push('Alt');
-  if (modifiers & 2)
-    result.push('ControlOrMeta');
-  if (modifiers & 4)
-    result.push('ControlOrMeta');
-  if (modifiers & 8)
-    result.push('Shift');
-  return result;
 }

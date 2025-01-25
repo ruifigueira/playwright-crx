@@ -521,10 +521,7 @@ test('should report error in YAML', async ({ page }) => {
     const error = await expect(page.locator('body')).toMatchAriaSnapshot(`
       heading "title"
     `).catch(e => e);
-    expect.soft(error.message).toBe(`expect.toMatchAriaSnapshot: Expected object key starting with "- ":
-
-heading "title"
-`);
+    expect.soft(error.message).toBe(`expect.toMatchAriaSnapshot: Aria snapshot must be a YAML sequence, elements starting with " -"`);
   }
 
   {
@@ -658,4 +655,30 @@ test('should parse attributes', async ({ page }) => {
       - heading [level =  -3 ]
     `);
   }
+});
+
+test('should not unshift actual template text', async ({ page }) => {
+  await page.setContent(`
+    <h1>title</h1>
+    <h1>title 2</h1>
+  `);
+  const error = await expect(page.locator('body')).toMatchAriaSnapshot(`
+        - heading "title" [level=1]
+    - heading "title 2" [level=1]
+  `, { timeout: 1000 }).catch(e => e);
+  expect(stripAnsi(error.message)).toContain(`
+    - heading "title" [level=1]
+- heading "title 2" [level=1]`);
+});
+
+test('should not match what is not matched', async ({ page }) => {
+  await page.setContent(`<p>Text</p>`);
+  const error = await expect(page.locator('body')).toMatchAriaSnapshot(`
+    - paragraph:
+      - button "bogus"
+  `).catch(e => e);
+  expect(stripAnsi(error.message)).toContain(`
+- - paragraph:
+-   - button "bogus"
++ - paragraph: Text`);
 });

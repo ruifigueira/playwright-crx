@@ -385,6 +385,7 @@ scheme.DebugControllerInitializer = tOptional(tObject({}));
 scheme.DebugControllerInspectRequestedEvent = tObject({
   selector: tString,
   locator: tString,
+  ariaSnapshot: tString,
 });
 scheme.DebugControllerSetModeRequestedEvent = tObject({
   mode: tString,
@@ -969,7 +970,6 @@ scheme.BrowserContextPauseResult = tOptional(tObject({}));
 scheme.BrowserContextEnableRecorderParams = tObject({
   language: tOptional(tString),
   mode: tOptional(tEnum(['inspecting', 'recording'])),
-  codegenMode: tOptional(tEnum(['actions', 'trace-events'])),
   pauseOnNextStatement: tOptional(tBoolean),
   testIdAttributeName: tOptional(tString),
   launchOptions: tOptional(tAny),

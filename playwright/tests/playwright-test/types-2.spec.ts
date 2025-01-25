@@ -204,3 +204,19 @@ test('step should inherit return type from its callback ', async ({ runTSC }) =>
   });
   expect(result.exitCode).toBe(0);
 });
+
+test('step.skip returns void ', async ({ runTSC }) => {
+  const result = await runTSC({
+    'a.spec.ts': `
+      import { test, expect } from '@playwright/test';
+      test('test step.skip', async ({ }) => {
+        // @ts-expect-error
+        const bad1: string = await test.step.skip('my step', () => { return ''; });
+        const good: void = await test.step.skip('my step', async () => {
+          return 2024;
+        });
+      });
+    `
+  });
+  expect(result.exitCode).toBe(0);
+});

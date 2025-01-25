@@ -27,7 +27,6 @@ function unshift(snapshot: string): string {
     const match = line.match(/^(\s*)/);
     if (match && match[1].length < whitespacePrefixLength)
       whitespacePrefixLength = match[1].length;
-    break;
   }
   return lines.filter(t => t.trim()).map(line => line.substring(whitespacePrefixLength)).join('\n');
 }
@@ -422,6 +421,18 @@ it('should treat input value as text in templates', async ({ page }) => {
   `);
 });
 
+it('should not use on as checkbox value', async ({ page }) => {
+  await page.setContent(`
+    <input type='checkbox'>
+    <input type='radio'>
+  `);
+
+  await checkAndMatchSnapshot(page.locator('body'), `
+    - checkbox
+    - radio
+  `);
+});
+
 it('should respect aria-owns', async ({ page }) => {
   await page.setContent(`
     <a href='about:blank' aria-owns='input p'>
@@ -465,6 +476,13 @@ it('should escape yaml text in text nodes', async ({ page }) => {
     <details>
       <summary>one: <a href="#">link1</a> "two <a href="#">link2</a> 'three <a href="#">link3</a> \`four</summary>
     </details>
+    <ul>
+      <a href="#">one</a>,<a href="#">two</a>
+      (<a href="#">three</a>)
+      {<a href="#">four</a>}
+      [<a href="#">five</a>]
+    </ul>
+    <div>[Select all]</div>
   `);
 
   await checkAndMatchSnapshot(page.locator('body'), `
@@ -476,6 +494,44 @@ it('should escape yaml text in text nodes', async ({ page }) => {
       - text: "'three"
       - link "link3"
       - text: "\`four"
+    - list:
+      - link "one"
+      - text: ","
+      - link "two"
+      - text: (
+      - link "three"
+      - text: ") {"
+      - link "four"
+      - text: "} ["
+      - link "five"
+      - text: "]"
+    - text: "[Select all]"
+  `);
+});
+
+it('should normalize whitespace', async ({ page }) => {
+  await page.setContent(`
+    <details>
+      <summary> one  \n two <a href="#"> link &nbsp;\n  1 </a> </summary>
+    </details>
+    <input value='  hello   &nbsp; world '>
+  `);
+
+  await checkAndMatchSnapshot(page.locator('body'), `
+    - group:
+      - text: one two
+      - link "link 1"
+    - textbox: hello world
+  `);
+
+  // Weird whitespace in the template should be normalized.
+  await expect(page.locator('body')).toMatchAriaSnapshot(`
+    - group:
+      - text: |
+          one
+          two
+      - link "  link     1 "
+    - textbox:        hello  world
   `);
 });
 
@@ -490,5 +546,62 @@ it('should handle long strings', async ({ page }) => {
   await checkAndMatchSnapshot(page.locator('body'), `
     - link:
       - region: ${s}
+  `);
+});
+
+it('should escape special yaml characters', async ({ page }) => {
+  await page.setContent(`
+    <a href="#">@hello</a>@hello
+    <a href="#">]hello</a>]hello
+    <a href="#">hello\n</a>
+    hello\n<a href="#">\n hello</a>\n hello
+    <a href="#">#hello</a>#hello
+  `);
+
+  await checkAndMatchSnapshot(page.locator('body'), `
+    - link "@hello"
+    - text: "@hello"
+    - link "]hello"
+    - text: "]hello"
+    - link "hello"
+    - text: hello
+    - link "hello"
+    - text: hello
+    - link "#hello"
+    - text: "#hello"
+  `);
+});
+
+it('should escape special yaml values', async ({ page }) => {
+  await page.setContent(`
+    <a href="#">true</a>False
+    <a href="#">NO</a>yes
+    <a href="#">y</a>N
+    <a href="#">on</a>Off
+    <a href="#">null</a>NULL
+    <a href="#">123</a>123
+    <a href="#">-1.2</a>-1.2
+    <a href="#">-</a>-
+    <input type=text value="555">
+  `);
+
+  await checkAndMatchSnapshot(page.locator('body'), `
+    - link "true"
+    - text: "False"
+    - link "NO"
+    - text: "yes"
+    - link "y"
+    - text: "N"
+    - link "on"
+    - text: "Off"
+    - link "null"
+    - text: "NULL"
+    - link "123"
+    - text: "123"
+    - link "-1.2"
+    - text: "-1.2"
+    - link "-"
+    - text: "-"
+    - textbox: "555"
   `);
 });

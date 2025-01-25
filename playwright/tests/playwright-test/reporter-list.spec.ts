@@ -111,17 +111,17 @@ for (const useIntermediateMergeReport of [false, true] as const) {
       lines.pop(); // Remove last item that contains [v] and time in ms.
       expect(lines).toEqual([
         '#0 :      1 a.test.ts:3:11 › passes',
-        '#0 :      1 a.test.ts:4:20 › passes › outer 1.0',
-        '#0 :      1 a.test.ts:5:22 › passes › outer 1.0 › inner 1.1',
-        '#0 :      1 a.test.ts:4:20 › passes › outer 1.0',
-        '#0 :      1 a.test.ts:6:22 › passes › outer 1.0 › inner 1.2',
-        '#0 :      1 a.test.ts:4:20 › passes › outer 1.0',
+        '#0 :      1 a.test.ts:3:11 › passes › outer 1.0',
+        '#0 :      1 a.test.ts:3:11 › passes › outer 1.0 › inner 1.1',
+        '#0 :      1 a.test.ts:3:11 › passes › outer 1.0',
+        '#0 :      1 a.test.ts:3:11 › passes › outer 1.0 › inner 1.2',
+        '#0 :      1 a.test.ts:3:11 › passes › outer 1.0',
         '#0 :      1 a.test.ts:3:11 › passes',
-        '#0 :      1 a.test.ts:8:20 › passes › outer 2.0',
-        '#0 :      1 a.test.ts:9:22 › passes › outer 2.0 › inner 2.1',
-        '#0 :      1 a.test.ts:8:20 › passes › outer 2.0',
-        '#0 :      1 a.test.ts:10:22 › passes › outer 2.0 › inner 2.2',
-        '#0 :      1 a.test.ts:8:20 › passes › outer 2.0',
+        '#0 :      1 a.test.ts:3:11 › passes › outer 2.0',
+        '#0 :      1 a.test.ts:3:11 › passes › outer 2.0 › inner 2.1',
+        '#0 :      1 a.test.ts:3:11 › passes › outer 2.0',
+        '#0 :      1 a.test.ts:3:11 › passes › outer 2.0 › inner 2.2',
+        '#0 :      1 a.test.ts:3:11 › passes › outer 2.0',
         '#0 :      1 a.test.ts:3:11 › passes',
       ]);
     });
@@ -145,12 +145,12 @@ for (const useIntermediateMergeReport of [false, true] as const) {
       const text = result.output;
       const lines = text.split('\n').filter(l => l.match(/^#.* :/)).map(l => l.replace(/[.\d]+m?s/, 'Xms'));
       expect(lines).toEqual([
-        '#0 :      1.1 a.test.ts:5:26 › passes › outer 1.0 › inner 1.1 (Xms)',
-        '#1 :      1.2 a.test.ts:6:26 › passes › outer 1.0 › inner 1.2 (Xms)',
-        '#2 :      1.3 a.test.ts:4:24 › passes › outer 1.0 (Xms)',
-        '#3 :      1.4 a.test.ts:9:26 › passes › outer 2.0 › inner 2.1 (Xms)',
-        '#4 :      1.5 a.test.ts:10:26 › passes › outer 2.0 › inner 2.2 (Xms)',
-        '#5 :      1.6 a.test.ts:8:24 › passes › outer 2.0 (Xms)',
+        '#0 :      1.1 a.test.ts:3:15 › passes › outer 1.0 › inner 1.1 (Xms)',
+        '#1 :      1.2 a.test.ts:3:15 › passes › outer 1.0 › inner 1.2 (Xms)',
+        '#2 :      1.3 a.test.ts:3:15 › passes › outer 1.0 (Xms)',
+        '#3 :      1.4 a.test.ts:3:15 › passes › outer 2.0 › inner 2.1 (Xms)',
+        '#4 :      1.5 a.test.ts:3:15 › passes › outer 2.0 › inner 2.2 (Xms)',
+        '#5 :      1.6 a.test.ts:3:15 › passes › outer 2.0 (Xms)',
         `#6 :   ${POSITIVE_STATUS_MARK} 1 a.test.ts:3:15 › passes (Xms)`,
       ]);
     });
@@ -258,6 +258,51 @@ for (const useIntermediateMergeReport of [false, true] as const) {
       expect(text).toContain('1) a.test.ts:3:15 › passes › outer 1.0 › inner 1.1 ──');
       expect(result.exitCode).toBe(1);
     });
+
+    test('print stdio', async ({ runInlineTest }) => {
+      const result = await runInlineTest({
+        'a.test.ts': `
+          import { test, expect } from '@playwright/test';
+          test('passes', async ({}) => {
+            await new Promise(resolve => process.stdout.write('line1', () => resolve()));
+            await new Promise(resolve => process.stdout.write('line2\\n', () => resolve()));
+            await new Promise(resolve => process.stderr.write(Buffer.from(''), () => resolve()));
+          });
+
+          test('passes 2', async ({}) => {
+            await new Promise(resolve => process.stdout.write('partial', () => resolve()));
+          });
+
+          test('passes 3', async ({}) => {
+            await new Promise(resolve => process.stdout.write('full\\n', () => resolve()));
+          });
+
+          test('passes 4', async ({}) => {
+          });
+        `,
+      }, { reporter: 'list' }, { PW_TEST_DEBUG_REPORTERS: '1', PLAYWRIGHT_FORCE_TTY: '80' });
+      expect(result.exitCode).toBe(0);
+      expect(result.passed).toBe(4);
+      const expected = [
+        '#0 :      1 a.test.ts:3:15 › passes',
+        'line1line2',
+        `#0 :   ${POSITIVE_STATUS_MARK} 1 a.test.ts:3:15 › passes`,
+        '',
+        '#3 :      2 a.test.ts:9:15 › passes 2',
+        `partial#3 :   ${POSITIVE_STATUS_MARK} 2 a.test.ts:9:15 › passes 2`,
+        '',
+        '#5 :      3 a.test.ts:13:15 › passes 3',
+        'full',
+        `#5 :   ${POSITIVE_STATUS_MARK} 3 a.test.ts:13:15 › passes 3`,
+        '#7 :      4 a.test.ts:17:15 › passes 4',
+        `#7 :   ${POSITIVE_STATUS_MARK} 4 a.test.ts:17:15 › passes 4`,
+      ];
+      const lines = result.output.split('\n');
+      const firstIndex = lines.indexOf(expected[0]);
+      expect(firstIndex, 'first line should be there').not.toBe(-1);
+      for (let i = 0; i < expected.length; ++i)
+        expect(lines[firstIndex + i]).toContain(expected[i]);
+    });
   });
 }
 
@@ -319,4 +364,3 @@ function simpleAnsiRenderer(text, ttyWidth) {
 
   return screenLines.map(line => line.join('')).join('\n');
 }
-

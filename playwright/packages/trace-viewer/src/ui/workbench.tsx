@@ -42,6 +42,7 @@ import './workbench.css';
 import { testStatusIcon, testStatusText } from './testUtils';
 import type { UITestStatus } from './testUtils';
 import type { AfterActionTraceEventAttachment } from '@trace/trace';
+import type { HighlightedElement } from './snapshotTab';
 
 export const Workbench: React.FunctionComponent<{
   model?: modelUtil.MultiTraceModel,
@@ -53,20 +54,19 @@ export const Workbench: React.FunctionComponent<{
   status?: UITestStatus,
   annotations?: { type: string; description?: string; }[];
   inert?: boolean,
-  openPage?: (url: string, target?: string) => Window | any,
   onOpenExternally?: (location: modelUtil.SourceLocation) => void,
   revealSource?: boolean,
-}> = ({ model, showSourcesFirst, rootDir, fallbackLocation, isLive, hideTimeline, status, annotations, inert, openPage, onOpenExternally, revealSource }) => {
+}> = ({ model, showSourcesFirst, rootDir, fallbackLocation, isLive, hideTimeline, status, annotations, inert, onOpenExternally, revealSource }) => {
   const [selectedCallId, setSelectedCallId] = React.useState<string | undefined>(undefined);
   const [revealedError, setRevealedError] = React.useState<ErrorDescription | undefined>(undefined);
-  const [revealedAttachment, setRevealedAttachment] = React.useState<AfterActionTraceEventAttachment | undefined>(undefined);
+  const [revealedAttachment, setRevealedAttachment] = React.useState<[attachment: AfterActionTraceEventAttachment, renderCounter: number] | undefined>(undefined);
   const [highlightedCallId, setHighlightedCallId] = React.useState<string | undefined>();
   const [highlightedEntry, setHighlightedEntry] = React.useState<Entry | undefined>();
   const [highlightedConsoleMessage, setHighlightedConsoleMessage] = React.useState<ConsoleEntry | undefined>();
   const [selectedNavigatorTab, setSelectedNavigatorTab] = React.useState<string>('actions');
   const [selectedPropertiesTab, setSelectedPropertiesTab] = useSetting<string>('propertiesTab', showSourcesFirst ? 'source' : 'call');
   const [isInspecting, setIsInspectingState] = React.useState(false);
-  const [highlightedLocator, setHighlightedLocator] = React.useState<string>('');
+  const [highlightedElement, setHighlightedElement] = React.useState<HighlightedElement>({ lastEdited: 'none' });
   const [selectedTime, setSelectedTime] = React.useState<Boundaries | undefined>();
   const [sidebarLocation, setSidebarLocation] = useSetting<'bottom' | 'right'>('propertiesSidebarLocation', 'bottom');
 
@@ -141,14 +141,19 @@ export const Workbench: React.FunctionComponent<{
     setIsInspectingState(value);
   }, [setIsInspectingState, selectPropertiesTab, isInspecting]);
 
-  const locatorPicked = React.useCallback((locator: string) => {
-    setHighlightedLocator(locator);
+  const elementPicked = React.useCallback((element: HighlightedElement) => {
+    setHighlightedElement(element);
     selectPropertiesTab('inspector');
   }, [selectPropertiesTab]);
 
   const revealAttachment = React.useCallback((attachment: AfterActionTraceEventAttachment) => {
     selectPropertiesTab('attachments');
-    setRevealedAttachment(attachment);
+    setRevealedAttachment(currentValue => {
+      if (!currentValue)
+        return [attachment, 0];
+      const revealCounter = currentValue[1];
+      return [attachment, revealCounter + 1];
+    });
   }, [selectPropertiesTab]);
 
   React.useEffect(() => {
@@ -171,13 +176,13 @@ export const Workbench: React.FunctionComponent<{
     render: () => <InspectorTab
       sdkLanguage={sdkLanguage}
       setIsInspecting={setIsInspecting}
-      highlightedLocator={highlightedLocator}
-      setHighlightedLocator={setHighlightedLocator} />,
+      highlightedElement={highlightedElement}
+      setHighlightedElement={setHighlightedElement} />,
   };
   const callTab: TabbedPaneTabModel = {
     id: 'call',
     title: 'Call',
-    render: () => <CallTab action={activeAction} sdkLanguage={sdkLanguage} />
+    render: () => <CallTab action={activeAction} startTimeOffset={model?.startTime ?? 0} sdkLanguage={sdkLanguage} />
   };
   const logTab: TabbedPaneTabModel = {
     id: 'log',
@@ -232,13 +237,13 @@ export const Workbench: React.FunctionComponent<{
     id: 'network',
     title: 'Network',
     count: networkModel.resources.length,
-    render: () => <NetworkTab boundaries={boundaries} networkModel={networkModel} onEntryHovered={setHighlightedEntry}/>
+    render: () => <NetworkTab boundaries={boundaries} networkModel={networkModel} onEntryHovered={setHighlightedEntry} sdkLanguage={model?.sdkLanguage ?? 'javascript'} />
   };
   const attachmentsTab: TabbedPaneTabModel = {
     id: 'attachments',
     title: 'Attachments',
     count: attachments.length,
-    render: () => <AttachmentsTab model={model} selectedAction={selectedAction} revealedAttachment={revealedAttachment} />
+    render: () => <AttachmentsTab model={model} revealedAttachment={revealedAttachment} />
   };
 
   const tabs: TabbedPaneTabModel[] = [
@@ -343,9 +348,8 @@ export const Workbench: React.FunctionComponent<{
           testIdAttributeName={model?.testIdAttributeName || 'data-testid'}
           isInspecting={isInspecting}
           setIsInspecting={setIsInspecting}
-          highlightedLocator={highlightedLocator}
-          setHighlightedLocator={locatorPicked}
-          openPage={openPage} />}
+          highlightedElement={highlightedElement}
+          setHighlightedElement={elementPicked} />}
         sidebar={
           <TabbedPane
             tabs={[actionsTab, metadataTab]}

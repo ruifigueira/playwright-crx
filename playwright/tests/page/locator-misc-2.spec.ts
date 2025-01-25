@@ -42,9 +42,8 @@ it('should scroll into view', async ({ page, server, isAndroid }) => {
   }
 });
 
-it('should scroll zero-sized element into view', async ({ page, isAndroid, isElectron, browserName, isMac, macVersion }) => {
+it('should scroll zero-sized element into view', async ({ page, isAndroid, isElectron }) => {
   it.fixme(isAndroid || isElectron);
-  it.skip(browserName === 'webkit' && isMac && macVersion < 11, 'WebKit for macOS 10.15 is frozen.');
 
   await page.setContent(`
     <style>
@@ -174,4 +173,3 @@ it('Locator.locator() and FrameLocator.locator() should accept locator', async (
   expect(await divLocator.locator('input').inputValue()).toBe('outer');
   expect(await page.frameLocator('iframe').locator(divLocator).locator('input').inputValue()).toBe('inner');
 });
-

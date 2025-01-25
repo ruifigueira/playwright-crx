@@ -17,6 +17,7 @@
 import * as React from 'react';
 import './treeItem.css';
 import * as icons from './icons';
+import { clsx } from '@web/uiUtils';
 
 export const TreeItem: React.FunctionComponent<{
   title: JSX.Element,
@@ -24,13 +25,12 @@ export const TreeItem: React.FunctionComponent<{
   onClick?: () => void,
   expandByDefault?: boolean,
   depth: number,
-  selected?: boolean,
   style?:  React.CSSProperties,
-}> = ({ title, loadChildren, onClick, expandByDefault, depth, selected, style }) => {
+  flash?: boolean
+}> = ({ title, loadChildren, onClick, expandByDefault, depth, style, flash }) => {
   const [expanded, setExpanded] = React.useState(expandByDefault || false);
-  const className = selected ? 'tree-item-title selected' : 'tree-item-title';
-  return <div className={'tree-item'} style={style}>
-    <span className={className} style={{ whiteSpace: 'nowrap', paddingLeft: depth * 22 + 4 }} onClick={() => { onClick?.(); setExpanded(!expanded); }} >
+  return <div className={clsx('tree-item', flash && 'yellow-flash')} style={style}>
+    <span className='tree-item-title' style={{ whiteSpace: 'nowrap', paddingLeft: depth * 22 + 4 }} onClick={() => { onClick?.(); setExpanded(!expanded); }} >
       {loadChildren && !!expanded && icons.downArrow()}
       {loadChildren && !expanded && icons.rightArrow()}
       {!loadChildren && <span style={{ visibility: 'hidden' }}>{icons.rightArrow()}</span>}

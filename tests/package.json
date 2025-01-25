@@ -1,6 +1,6 @@
 {
   "name": "playwright-crx-tests",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "keywords": [],
   "author": "",
   "scripts": {
@@ -8,7 +8,7 @@
     "serve": "vite ./server --host 127.0.0.1 --port 3000"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.0",
+    "@playwright/test": "^1.50.0",
     "yauzl": "^3.2.0"
   }
 }
