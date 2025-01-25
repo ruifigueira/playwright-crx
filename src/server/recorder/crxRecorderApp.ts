@@ -183,7 +183,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     this._editedCode?.stopLoad();
     this._editedCode = undefined;
 
-    if (!code || this._recorder._isRecording())
+    if (!code)
       return;
 
     this._editedCode = new EditedCode(this._recorder, code, () => this._updateLocator(this._currentCursorPosition));
