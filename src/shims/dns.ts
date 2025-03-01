@@ -19,3 +19,5 @@ function noop() {}
 export const promises = {
   lookup: noop()
 };
+
+export default promises;

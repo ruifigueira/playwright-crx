@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Microsoft Corporation.
+ * Copyright (c) Rui Figueira.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 import type * as recorderActions from '@recorder/actions';
 import type * as channels from '@protocol/channels';
 import { toKeyboardModifiers } from 'playwright-core/lib/server/codegen/language';

@@ -16,7 +16,7 @@
 
 import { EventEmitter } from 'events';
 import { ChannelOwner } from 'playwright-core/lib/client/channelOwner';
-import type * as api from '../types/types';
+import type api from '../types/types';
 import type * as channels from '../protocol/channels';
 import { Page } from 'playwright-core/lib/client/page';
 import type { BrowserContext } from 'playwright-core/lib/client/browserContext';

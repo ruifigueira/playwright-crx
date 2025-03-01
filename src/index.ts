@@ -26,6 +26,8 @@ import { CrxPlaywrightDispatcher } from './server/dispatchers/crxPlaywrightDispa
 import { PageBinding } from 'playwright-core/lib/server/page';
 
 import { wrapClientApis } from './client/crxZone';
+import { nodePlatform } from 'playwright-core/lib/utils';
+import { setPlatformForSelectors } from 'playwright-core/lib/client/selectors';
 
 export { debug as _debug } from 'debug';
 export { setUnderTest as _setUnderTest, isUnderTest as _isUnderTest } from 'playwright-core/lib/utils';
@@ -33,9 +35,10 @@ export { setUnderTest as _setUnderTest, isUnderTest as _isUnderTest } from 'play
 // avoid conflicts with playwright when testing
 PageBinding.kPlaywrightBinding = '__crx__binding__';
 
+setPlatformForSelectors(nodePlatform);
 const playwright = new CrxPlaywright();
 
-const clientConnection = new CrxConnection();
+const clientConnection = new CrxConnection(nodePlatform);
 const dispatcherConnection = new DispatcherConnection(true /* local */);
 
 // Dispatch synchronously at first.

@@ -19,9 +19,11 @@ function noop() {}
 export const spawn = noop;
 export const spawnSync = noop;
 export const execSync = noop;
+export const fork = noop;
 
 export default {
   spawn,
   spawnSync,
   execSync,
+  fork,
 };

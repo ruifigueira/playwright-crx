@@ -25,6 +25,7 @@ import type { Logger } from './types';
 import type { ValidatorContext } from '../protocol/validator';
 import type { Platform } from './platform';
 import type * as channels from '@protocol/channels';
+import { currentZone } from '../utils';
 
 type Listener = (...args: any[]) => void;
 
@@ -186,7 +187,7 @@ export abstract class ChannelOwner<T extends channels.Channel = channels.Channel
     if (existingApiZone)
       return await func(existingApiZone);
 
-    const crxZone = zones.zoneData<{ apiName: string }>('crxZone');
+    const crxZone = currentZone().data<{ apiName: string }>('crxZone');
 
     if (isInternal === undefined)
       isInternal = this._isInternalType;

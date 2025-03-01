@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import type { LogName } from 'playwright-core/lib/utils/debugLogger';
-import { debugLogger } from 'playwright-core/lib/utils/debugLogger';
+import type { LogName } from 'playwright-core/lib/server/utils/debugLogger';
+import { debugLogger } from 'playwright-core/lib/server/utils/debugLogger';
 import type { Protocol } from 'playwright-core/lib/server/chromium/protocol';
 import type { Progress } from 'playwright-core/lib/server/progress';
 import type { ConnectionTransport, ProtocolRequest, ProtocolResponse } from 'playwright-core/lib/server/transport';
@@ -235,13 +235,8 @@ export class CrxTransport implements ConnectionTransport {
     method: T,
     commandParams?: Protocol.CommandParameters[T]
   ) {
-
-    if (!debuggee.tabId)
-      console.trace(`No tabId provided for ${method}`);
-
     if (debugLogger.isEnabled('chromedebugger' as LogName))
       debugLogger.log('chromedebugger' as LogName, `SEND> ${method} #${debuggee.tabId}`);
-
 
     return await chrome.debugger.sendCommand(debuggee, method, commandParams) as
       Protocol.CommandReturnValues[T];

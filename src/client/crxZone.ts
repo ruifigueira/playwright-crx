@@ -58,8 +58,7 @@ import {
   CrxApplication,
   CrxRecorder,
 } from './crx';
-
-import { zones } from 'playwright-core/lib/utils';
+import { currentZone } from 'playwright-core/lib/utils';
 
 type ApiTypeMap = {
   'accessibility': Accessibility,
@@ -409,10 +408,10 @@ export function wrapClientApis() {
         continue;
 
       const wrapFn = async function(this: any, ...args: any[]) {
-        const apiName = zones.zoneData<{ apiName: string }>('crxZone');
+        const apiName = currentZone().data<{ apiName: string }>('crxZone');
         if (apiName)
           return await originalFn.apply(this, args);
-        return await zones.run('crxZone', { apiName: `${typeName}.${key}` }, async () => await originalFn.apply(this, args));
+        return await currentZone().with('crxZone', { apiName: `${typeName}.${key}` }).run(async () => await originalFn.apply(this, args));
       };
       wrapFn[kCrxZoneWrapped] = true;
       (proto as any)[key!] = wrapFn;
