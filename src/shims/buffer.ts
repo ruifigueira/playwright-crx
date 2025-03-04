@@ -14,6 +14,6 @@
  * limitations under the License.
  */
 
-import buffer from 'buffer';
+import buffer from 'node:buffer';
 
 self.Buffer = buffer.Buffer;

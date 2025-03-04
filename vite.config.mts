@@ -43,7 +43,7 @@ export default defineConfig({
 
       'async_hooks': path.resolve(__dirname, './src/shims/async_hooks'),
       'assert': path.resolve(__dirname, './node_modules/assert'),
-      'buffer': path.resolve(__dirname, './node_modules/buffer'),
+      'buffer': 'node:buffer',
       'child_process': path.resolve(__dirname, './src/shims/child_process'),
       'chokidar': path.resolve(__dirname, './src/shims/chokidar'),
       'constants': path.resolve(__dirname, './node_modules/constants-browserify'),
@@ -58,7 +58,7 @@ export default defineConfig({
       'https': path.resolve(__dirname, './node_modules/https-browserify'),
       'module': path.resolve(__dirname, './src/shims/module'),
       'net': path.resolve(__dirname, './src/shims/net'),
-      'os': path.resolve(__dirname, './node_modules/os-browserify/browser'),
+      'os': path.resolve(__dirname, './src/shims/os'),
       'path': path.resolve(__dirname, './node_modules/path'),
       'process': path.resolve(__dirname, './node_modules/process'),
       'readline': path.resolve(__dirname, './src/shims/readline'),
@@ -72,6 +72,11 @@ export default defineConfig({
       'node:module': path.resolve(__dirname, './src/shims/module'),
       'node:stream': path.resolve(__dirname, './node_modules/readable-stream'),
       'node:string_decoder': path.resolve(__dirname, './node_modules/string_decoder'),
+
+      '../playwright': path.resolve(__dirname, './src/shims/noop'),
+      './bidiOverCdp': path.resolve(__dirname, './src/shims/noop'),
+      'electron/index.js': path.resolve(__dirname, './src/shims/noop'),
+
     },
   },
   define: {
@@ -108,6 +113,7 @@ export default defineConfig({
       output: {
         exports: 'named',
       },
+      external: ['node:buffer']
     },
     commonjsOptions: {
       transformMixedEsModules: true,
@@ -115,10 +121,6 @@ export default defineConfig({
       exclude: [
         path.resolve(__dirname, './playwright/packages/playwright/src/index.ts'),
         path.resolve(__dirname, './playwright/packages/playwright-core/src/cli/**/*.ts'),
-        // prevent from resolving require('../playwright')
-        path.resolve(__dirname, './playwright/packages/playwright-core/src/server/recorder/recorderApp.ts'),
-        // prevent from resolving require('./bidiOverCdp')
-        path.resolve(__dirname, './playwright/packages/playwright-core/src/server/bidi/bidiChromium.ts'),
       ],
       include: [
         path.resolve(__dirname, './playwright/packages/playwright/src/**/*'),

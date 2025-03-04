@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Microsoft Corporation.
+ * Copyright (c) Rui Figueira.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,6 @@
  * limitations under the License.
  */
 
-import type { BrowserType, Crx } from './src/types/types';
+const noop = {};
 
-export * from './src/types/types';
-
-export const chromium: BrowserType;
-export const crx: Crx;
-export function _setUnderTest(): void;
-export function _isUnderTest(): boolean;
-export const _debug: {
-  enable(namespaces: string): void;
-  enabled(namespaces: string): boolean;
-  disable(): void;
-};
+export default noop;

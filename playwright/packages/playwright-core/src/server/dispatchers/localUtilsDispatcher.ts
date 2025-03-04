@@ -41,6 +41,7 @@ import type { Playwright } from '../playwright';
 import { SdkObject } from '../../server/instrumentation';
 import { serializeClientSideCallMetadata } from '../../utils';
 import { deviceDescriptors as descriptors }  from '../deviceDescriptors';
+import { WorkersWebSocketTransport } from '../chromium/cloudflare/workersWebSocketTransport';
 
 export class LocalUtilsDispatcher extends Dispatcher<{ guid: string }, channels.LocalUtilsChannel, RootDispatcher> implements channels.LocalUtilsChannel {
   _type_LocalUtils: boolean;
@@ -207,10 +208,15 @@ export class LocalUtilsDispatcher extends Dispatcher<{ guid: string }, channels.
         'x-playwright-proxy': params.exposeNetwork ?? '',
         ...params.headers,
       };
-      const wsEndpoint = await urlToWSEndpoint(progress, params.wsEndpoint);
-
-      const transport = await WebSocketTransport.connect(progress, wsEndpoint, wsHeaders, true, 'x-playwright-debug-log');
-      const socksInterceptor = new SocksInterceptor(transport, params.exposeNetwork, params.socksProxyRedirectPortForTest);
+      let transport: ConnectionTransport & { closeAndWait: () => Promise<void> };
+      const endpoint = (globalThis as any).env?.MYBROWSER;
+      if (endpoint) {
+        transport = await WorkersWebSocketTransport.create(endpoint);
+      } else {
+        const wsEndpoint = await urlToWSEndpoint(progress, params.wsEndpoint);
+        transport = await WebSocketTransport.connect(progress, wsEndpoint, wsHeaders, true, 'x-playwright-debug-log');
+      }      
+      const socksInterceptor = new SocksInterceptor(transport as WebSocketTransport, params.exposeNetwork, params.socksProxyRedirectPortForTest);
       const pipe = new JsonPipeDispatcher(this);
       transport.onmessage = json => {
         if (socksInterceptor.interceptMessage(json))
