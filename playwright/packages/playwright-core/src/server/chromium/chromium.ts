@@ -84,9 +84,9 @@ export class Chromium extends BrowserType {
     const artifactsDir = await fs.promises.mkdtemp(ARTIFACTS_FOLDER);
 
     let chromeTransport: ConnectionTransport & { closeAndWait: () => Promise<void> };
-    const endpoint = (globalThis as any).env?.MYBROWSER;
+    const { endpoint, options: cfOptions } = (this as any)['__cloudflare_params'];
     if (endpoint) {
-      chromeTransport = await WorkersWebSocketTransport.create(endpoint);
+      chromeTransport = await WorkersWebSocketTransport.create(endpoint, cfOptions);
     } else {
       const wsEndpoint = await urlToWSEndpoint(progress, endpointURL, headersMap);
       chromeTransport = await WebSocketTransport.connect(progress, wsEndpoint, headersMap);

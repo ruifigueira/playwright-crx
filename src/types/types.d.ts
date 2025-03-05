@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-import { Page, BrowserContext } from '../../playwright/packages/playwright-core/types/types';
+import { Page, BrowserContext, Browser } from '../../playwright/packages/playwright-core/types/types';
 import { IFs } from 'memfs';
 export * from '../../playwright/packages/playwright-core/types/types';
+import type { Fetcher } from '@cloudflare/workers-types';
 
 export type CrxFs = IFs;
 
@@ -35,6 +36,17 @@ export type CrxBrowserContextOptions = {
   permissions?: string[];
   serviceWorkers?: 'allow' | 'block'; 
 };
+
+export type BrowserWorker = Fetcher;
+
+export interface WorkersLaunchOptions {
+  keepAlive?: number; // milliseconds to keep browser alive even if it has no activity (from 10_000ms to 600_000ms, default is 60_000)
+  sessionId?: string;
+}
+
+export interface CrxPlaywright {
+  launch(endpoint: BrowserWorker, options?: WorkersLaunchOptions): Promise<Browser>;
+}
 
 export interface Crx {
   

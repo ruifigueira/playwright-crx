@@ -16,13 +16,17 @@
 
 import { ConnectionTransport, ProtocolRequest, ProtocolResponse } from '../../transport';
 import { chunksToMessage, messageToChunks } from './chunking';
-
-interface BrowserWorker {
-  fetch: typeof fetch;
-}
+import type { Fetcher } from '@cloudflare/workers-types';
 
 interface AcquireResponse {
   sessionId: string;
+}
+
+type BrowserWorker = Fetcher;
+
+interface WorkersLaunchOptions {
+  keepAlive?: number; // milliseconds to keep browser alive even if it has no activity (from 10_000ms to 600_000ms, default is 60_000)
+  sessionId?: string;
 }
 
 declare global {
@@ -46,10 +50,9 @@ export class WorkersWebSocketTransport implements ConnectionTransport {
 
   static async create(
     endpoint: BrowserWorker,
-    sessionId?: string
+    options?: WorkersLaunchOptions
   ): Promise<WorkersWebSocketTransport> {
-    if (!sessionId)
-      sessionId = await connect(endpoint);
+    const sessionId = options?.sessionId ?? await connect(endpoint, options);
     const path = `${FAKE_HOST}/v1/connectDevtools?browser_session=${sessionId}`;
     const response = await endpoint.fetch(path, {
       headers: {
@@ -108,8 +111,11 @@ export class WorkersWebSocketTransport implements ConnectionTransport {
   }
 }
 
-async function connect(endpoint: BrowserWorker) {
+async function connect(endpoint: BrowserWorker, options?: WorkersLaunchOptions) {
   let acquireUrl = `${FAKE_HOST}/v1/acquire`;
+  if (options?.keepAlive) {
+    acquireUrl = `${acquireUrl}?keep_alive=${options.keepAlive}`;
+  }
   const res = await endpoint.fetch(acquireUrl);
   const status = res.status;
   const text = await res.text();

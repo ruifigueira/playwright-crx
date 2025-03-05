@@ -28,7 +28,7 @@ import { ZipFile } from '../../utils/zipFile';
 import type * as har from '@trace/har';
 import type { HeadersArray } from '../types';
 import { JsonPipeDispatcher } from '../dispatchers/jsonPipeDispatcher';
-import { WebSocketTransport } from '../transport';
+import { ConnectionTransport, WebSocketTransport } from '../transport';
 import { SocksInterceptor } from '../socksInterceptor';
 import type { CallMetadata } from '../instrumentation';
 import { getUserAgent } from '../../utils/userAgent';
@@ -208,10 +208,10 @@ export class LocalUtilsDispatcher extends Dispatcher<{ guid: string }, channels.
         'x-playwright-proxy': params.exposeNetwork ?? '',
         ...params.headers,
       };
-      let transport: ConnectionTransport & { closeAndWait: () => Promise<void> };
-      const endpoint = (globalThis as any).env?.MYBROWSER;
+      let transport: ConnectionTransport;
+      const { endpoint, options: cfOptions } = (this as any)['__cloudflare_params'];
       if (endpoint) {
-        transport = await WorkersWebSocketTransport.create(endpoint);
+        transport = await WorkersWebSocketTransport.create(endpoint, cfOptions);
       } else {
         const wsEndpoint = await urlToWSEndpoint(progress, params.wsEndpoint);
         transport = await WebSocketTransport.connect(progress, wsEndpoint, wsHeaders, true, 'x-playwright-debug-log');
