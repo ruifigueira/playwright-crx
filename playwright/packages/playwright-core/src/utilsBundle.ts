@@ -53,10 +53,8 @@ export function parseStackTraceLine(line: string): StackFrame | null {
     return null;
   if (!frame.file)
     return null;
-  // url.fileURLToPath not available in cloudflare?
-  const fileURLToPath = url.fileURLToPath ?? ((path: string) => new URL(path).pathname);
   // ESM files return file:// URLs, see here: https://github.com/tapjs/stack-utils/issues/60
-  const file = frame.file.startsWith('file://') ? fileURLToPath(frame.file) : path.resolve(process.cwd(), frame.file);
+  const file = frame.file.startsWith('file://') ? url.fileURLToPath(frame.file) : path.resolve(process.cwd(), frame.file);
   return {
     file,
     line: frame.line || 0,

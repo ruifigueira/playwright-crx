@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import 'setimmediate';
+import { setImmediate } from 'node:timers';
 
 // @ts-ignore
 self.setImmediate = setImmediate;
