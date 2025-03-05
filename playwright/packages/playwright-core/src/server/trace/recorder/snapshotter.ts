@@ -86,7 +86,8 @@ export class Snapshotter {
     ];
 
     const { javaScriptEnabled } = this._context._options;
-    const initScript = `(${frameSnapshotStreamer})("${this._snapshotStreamer}", ${javaScriptEnabled || javaScriptEnabled === undefined})`;
+    // TODO cloudflare wraps inner functions with __name, quick fix for it
+    const initScript = `const __name = (fn, name) => fn;(${frameSnapshotStreamer})("${this._snapshotStreamer}", ${javaScriptEnabled || javaScriptEnabled === undefined})`;
     await this._context.addInitScript(initScript);
     await this._runInAllFrames(initScript);
   }

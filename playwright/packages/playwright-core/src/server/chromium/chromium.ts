@@ -49,6 +49,7 @@ import { ManualPromise } from '../../utils/manualPromise';
 import { validateBrowserContextOptions } from '../browserContext';
 import { chromiumSwitches } from './chromiumSwitches';
 import type { ProtocolError } from '../protocolError';
+import { WorkersWebSocketTransport } from './cloudflare/workersWebSocketTransport';
 
 const ARTIFACTS_FOLDER = path.join(os.tmpdir(), 'playwright-artifacts-');
 
@@ -82,10 +83,16 @@ export class Chromium extends BrowserType {
 
     const artifactsDir = await fs.promises.mkdtemp(ARTIFACTS_FOLDER);
 
-    const wsEndpoint = await urlToWSEndpoint(progress, endpointURL, headersMap);
+    let chromeTransport: ConnectionTransport & { closeAndWait: () => Promise<void> };
+    const { endpoint, options: cfOptions } = (this as any)['__cloudflare_params'];
+    if (endpoint) {
+      chromeTransport = await WorkersWebSocketTransport.create(endpoint, cfOptions);
+    } else {
+      const wsEndpoint = await urlToWSEndpoint(progress, endpointURL, headersMap);
+      chromeTransport = await WebSocketTransport.connect(progress, wsEndpoint, headersMap);
+    }
     progress.throwIfAborted();
 
-    const chromeTransport = await WebSocketTransport.connect(progress, wsEndpoint, headersMap);
     const cleanedUp = new ManualPromise<void>();
     const doCleanup = async () => {
       await removeFolders([artifactsDir]);

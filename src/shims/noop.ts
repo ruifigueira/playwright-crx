@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import { setImmediate } from 'node:timers';
+const noop = {};
 
-// @ts-ignore
-self.setImmediate = setImmediate;
+export default noop;

@@ -299,8 +299,8 @@ export function normalizeEvaluationExpression(expression: string, isFunction: bo
     try {
       new Function('(' + expression + ')');
     } catch (e1) {
-      // check if CSP doesn't allow 'unsafe-eval'
-      if (!(e1 instanceof EvalError) || !e1.message.includes('unsafe-eval')) {
+      // check if CSP doesn't allow 'unsafe-eval' or if in cloudflare context
+      if (!(e1 instanceof EvalError && e1.message.includes('unsafe-eval')) && navigator.userAgent !== 'Cloudflare-Workers') {
         // This means we might have a function shorthand. Try another
         // time prefixing 'function '.
         if (expression.startsWith('async '))

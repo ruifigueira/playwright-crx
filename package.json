@@ -59,6 +59,7 @@
     "./package.json": "./package.json"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250303.0",
     "@rollup/plugin-replace": "^6.0.1",
     "@types/chrome": "^0.0.281",
     "@types/debug": "^4.1.12",

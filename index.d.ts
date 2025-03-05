@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-import type { Crx } from './src/types/types';
+import type { BrowserType, Crx, CrxPlaywright } from './src/types/types';
 
 export * from './src/types/types';
 
+export const chromium: BrowserType;
 export const crx: Crx;
 export function _setUnderTest(): void;
 export function _isUnderTest(): boolean;
@@ -26,3 +27,4 @@ export const _debug: {
   enabled(namespaces: string): boolean;
   disable(): void;
 };
+export const launch: CrxPlaywright['launch'];

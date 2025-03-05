@@ -56,6 +56,7 @@ clientConnection.toImpl = (x: any) => x ? dispatcherConnection._dispatchers.get(
 (playwrightAPI as any)._toImpl = clientConnection.toImpl;
 
 export const { _crx: crx, selectors, errors } = playwrightAPI;
+export const launch = playwrightAPI.launch.bind(playwrightAPI);
 export default playwrightAPI;
 
 wrapClientApis();
