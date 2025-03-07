@@ -123,8 +123,8 @@ export const test = base.extend<CrxFixtureOptions & {
             const extensionId = worker.url().split('/')[2];
             const page = await context.newPage();
             await page.goto(`chrome://extensions/?id=${extensionId}`);
+            await page.locator('#devMode').click();
             await page.locator('#allow-incognito').getByRole('button').click();
-            await page.getByRole('button', { name: 'Keep' }).click();
             await page.close();
             worker = await incognitoWorker;
           }
