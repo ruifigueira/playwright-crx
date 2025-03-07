@@ -15,7 +15,8 @@
  */
 
 import { TerminalReporter } from './base';
-import type { TestCase, Suite, TestResult, FullResult, TestStep, TestError } from '../../types/testReporter';
+
+import type { FullResult, Suite, TestCase, TestError, TestResult, TestStep } from '../../types/testReporter';
 
 class LineReporter extends TerminalReporter {
   private _current = 0;
@@ -68,12 +69,12 @@ class LineReporter extends TerminalReporter {
   }
 
   onStepBegin(test: TestCase, result: TestResult, step: TestStep) {
-    if (step.category === 'test.step')
+    if (this.screen.isTTY && step.category === 'test.step')
       this._updateLine(test, result, step);
   }
 
   onStepEnd(test: TestCase, result: TestResult, step: TestStep) {
-    if (step.category === 'test.step')
+    if (this.screen.isTTY && step.category === 'test.step')
       this._updateLine(test, result, step.parent);
   }
 

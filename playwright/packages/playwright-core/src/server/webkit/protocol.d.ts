@@ -193,142 +193,6 @@ export module Protocol {
     }
   }
   
-  export module ApplicationCache {
-    /**
-     * Detailed application cache resource information.
-     */
-    export interface ApplicationCacheResource {
-      /**
-       * Resource url.
-       */
-      url: string;
-      /**
-       * Resource size.
-       */
-      size: number;
-      /**
-       * Resource type.
-       */
-      type: string;
-    }
-    /**
-     * Detailed application cache information.
-     */
-    export interface ApplicationCache {
-      /**
-       * Manifest URL.
-       */
-      manifestURL: string;
-      /**
-       * Application cache size.
-       */
-      size: number;
-      /**
-       * Application cache creation time.
-       */
-      creationTime: number;
-      /**
-       * Application cache update time.
-       */
-      updateTime: number;
-      /**
-       * Application cache resources.
-       */
-      resources: ApplicationCacheResource[];
-    }
-    /**
-     * Frame identifier - manifest URL pair.
-     */
-    export interface FrameWithManifest {
-      /**
-       * Frame identifier.
-       */
-      frameId: Network.FrameId;
-      /**
-       * Manifest URL.
-       */
-      manifestURL: string;
-      /**
-       * Application cache status.
-       */
-      status: number;
-    }
-    
-    export type applicationCacheStatusUpdatedPayload = {
-      /**
-       * Identifier of the frame containing document whose application cache updated status.
-       */
-      frameId: Network.FrameId;
-      /**
-       * Manifest URL.
-       */
-      manifestURL: string;
-      /**
-       * Updated application cache status.
-       */
-      status: number;
-    }
-    export type networkStateUpdatedPayload = {
-      isNowOnline: boolean;
-    }
-    
-    /**
-     * Returns array of frame identifiers with manifest urls for each frame containing a document associated with some application cache.
-     */
-    export type getFramesWithManifestsParameters = {
-    }
-    export type getFramesWithManifestsReturnValue = {
-      /**
-       * Array of frame identifiers with manifest urls for each frame containing a document associated with some application cache.
-       */
-      frameIds: FrameWithManifest[];
-    }
-    /**
-     * Enables application cache domain notifications.
-     */
-    export type enableParameters = {
-    }
-    export type enableReturnValue = {
-    }
-    /**
-     * Disable application cache domain notifications.
-     */
-    export type disableParameters = {
-    }
-    export type disableReturnValue = {
-    }
-    /**
-     * Returns manifest URL for document in the given frame.
-     */
-    export type getManifestForFrameParameters = {
-      /**
-       * Identifier of the frame containing document whose manifest is retrieved.
-       */
-      frameId: Network.FrameId;
-    }
-    export type getManifestForFrameReturnValue = {
-      /**
-       * Manifest URL for document in the given frame.
-       */
-      manifestURL: string;
-    }
-    /**
-     * Returns relevant application cache data for the document in given frame.
-     */
-    export type getApplicationCacheForFrameParameters = {
-      /**
-       * Identifier of the frame containing document whose application cache is retrieved.
-       */
-      frameId: Network.FrameId;
-    }
-    export type getApplicationCacheForFrameReturnValue = {
-      /**
-       * Relevant application cache data for the document in given frame.
-       */
-      applicationCache: ApplicationCache;
-    }
-  }
-  
   export module Audit {
     
     
@@ -3641,81 +3505,6 @@ might return multiple quads for inline nodes.
       storageId: StorageId;
     }
     export type clearDOMStorageItemsReturnValue = {
-    }
-  }
-  
-  export module Database {
-    /**
-     * Unique identifier of Database object.
-     */
-    export type DatabaseId = string;
-    /**
-     * Database object.
-     */
-    export interface Database {
-      /**
-       * Database ID.
-       */
-      id: DatabaseId;
-      /**
-       * Database domain.
-       */
-      domain: string;
-      /**
-       * Database name.
-       */
-      name: string;
-      /**
-       * Database version.
-       */
-      version: string;
-    }
-    /**
-     * Database error.
-     */
-    export interface Error {
-      /**
-       * Error message.
-       */
-      message: string;
-      /**
-       * Error code.
-       */
-      code: number;
-    }
-    
-    export type addDatabasePayload = {
-      database: Database;
-    }
-    
-    /**
-     * Enables database tracking, database events will now be delivered to the client.
-     */
-    export type enableParameters = {
-    }
-    export type enableReturnValue = {
-    }
-    /**
-     * Disables database tracking, prevents database events from being sent to the client.
-     */
-    export type disableParameters = {
-    }
-    export type disableReturnValue = {
-    }
-    export type getDatabaseTableNamesParameters = {
-      databaseId: DatabaseId;
-    }
-    export type getDatabaseTableNamesReturnValue = {
-      tableNames: string[];
-    }
-    export type executeSQLParameters = {
-      databaseId: DatabaseId;
-      query: string;
-    }
-    export type executeSQLReturnValue = {
-      columnNames?: string[];
-      values?: any[];
-      sqlError?: Error;
     }
   }
   
@@ -7782,6 +7571,18 @@ the top of the viewport and Y increases as it proceeds towards the bottom of the
     export type setIgnoreCertificateErrorsReturnValue = {
     }
     /**
+     * Changes page zoom factor.
+     */
+    export type setPageZoomFactorParameters = {
+      /**
+       * Unique identifier of the page proxy.
+       */
+      pageProxyId: PageProxyID;
+      zoomFactor: number;
+    }
+    export type setPageZoomFactorReturnValue = {
+    }
+    /**
      * Returns all cookies in the given browser context.
      */
     export type getAllCookiesParameters = {
@@ -9273,8 +9074,6 @@ the top of the viewport and Y increases as it proceeds towards the bottom of the
     "Animation.trackingStart": Animation.trackingStartPayload;
     "Animation.trackingUpdate": Animation.trackingUpdatePayload;
     "Animation.trackingComplete": Animation.trackingCompletePayload;
-    "ApplicationCache.applicationCacheStatusUpdated": ApplicationCache.applicationCacheStatusUpdatedPayload;
-    "ApplicationCache.networkStateUpdated": ApplicationCache.networkStateUpdatedPayload;
     "Browser.extensionsEnabled": Browser.extensionsEnabledPayload;
     "Browser.extensionsDisabled": Browser.extensionsDisabledPayload;
     "CPUProfiler.trackingStart": CPUProfiler.trackingStartPayload;
@@ -9324,7 +9123,6 @@ the top of the viewport and Y increases as it proceeds towards the bottom of the
     "DOMStorage.domStorageItemRemoved": DOMStorage.domStorageItemRemovedPayload;
     "DOMStorage.domStorageItemAdded": DOMStorage.domStorageItemAddedPayload;
     "DOMStorage.domStorageItemUpdated": DOMStorage.domStorageItemUpdatedPayload;
-    "Database.addDatabase": Database.addDatabasePayload;
     "Debugger.globalObjectCleared": Debugger.globalObjectClearedPayload;
     "Debugger.scriptParsed": Debugger.scriptParsedPayload;
     "Debugger.scriptFailedToParse": Debugger.scriptFailedToParsePayload;
@@ -9406,11 +9204,6 @@ the top of the viewport and Y increases as it proceeds towards the bottom of the
     "Animation.resolveAnimation": Animation.resolveAnimationParameters;
     "Animation.startTracking": Animation.startTrackingParameters;
     "Animation.stopTracking": Animation.stopTrackingParameters;
-    "ApplicationCache.getFramesWithManifests": ApplicationCache.getFramesWithManifestsParameters;
-    "ApplicationCache.enable": ApplicationCache.enableParameters;
-    "ApplicationCache.disable": ApplicationCache.disableParameters;
-    "ApplicationCache.getManifestForFrame": ApplicationCache.getManifestForFrameParameters;
-    "ApplicationCache.getApplicationCacheForFrame": ApplicationCache.getApplicationCacheForFrameParameters;
     "Audit.setup": Audit.setupParameters;
     "Audit.run": Audit.runParameters;
     "Audit.teardown": Audit.teardownParameters;
@@ -9520,10 +9313,6 @@ the top of the viewport and Y increases as it proceeds towards the bottom of the
     "DOMStorage.setDOMStorageItem": DOMStorage.setDOMStorageItemParameters;
     "DOMStorage.removeDOMStorageItem": DOMStorage.removeDOMStorageItemParameters;
     "DOMStorage.clearDOMStorageItems": DOMStorage.clearDOMStorageItemsParameters;
-    "Database.enable": Database.enableParameters;
-    "Database.disable": Database.disableParameters;
-    "Database.getDatabaseTableNames": Database.getDatabaseTableNamesParameters;
-    "Database.executeSQL": Database.executeSQLParameters;
     "Debugger.enable": Debugger.enableParameters;
     "Debugger.disable": Debugger.disableParameters;
     "Debugger.setAsyncStackTraceDepth": Debugger.setAsyncStackTraceDepthParameters;
@@ -9658,6 +9447,7 @@ the top of the viewport and Y increases as it proceeds towards the bottom of the
     "Playwright.grantFileReadAccess": Playwright.grantFileReadAccessParameters;
     "Playwright.takePageScreenshot": Playwright.takePageScreenshotParameters;
     "Playwright.setIgnoreCertificateErrors": Playwright.setIgnoreCertificateErrorsParameters;
+    "Playwright.setPageZoomFactor": Playwright.setPageZoomFactorParameters;
     "Playwright.getAllCookies": Playwright.getAllCookiesParameters;
     "Playwright.setCookies": Playwright.setCookiesParameters;
     "Playwright.deleteAllCookies": Playwright.deleteAllCookiesParameters;
@@ -9718,11 +9508,6 @@ the top of the viewport and Y increases as it proceeds towards the bottom of the
     "Animation.resolveAnimation": Animation.resolveAnimationReturnValue;
     "Animation.startTracking": Animation.startTrackingReturnValue;
     "Animation.stopTracking": Animation.stopTrackingReturnValue;
-    "ApplicationCache.getFramesWithManifests": ApplicationCache.getFramesWithManifestsReturnValue;
-    "ApplicationCache.enable": ApplicationCache.enableReturnValue;
-    "ApplicationCache.disable": ApplicationCache.disableReturnValue;
-    "ApplicationCache.getManifestForFrame": ApplicationCache.getManifestForFrameReturnValue;
-    "ApplicationCache.getApplicationCacheForFrame": ApplicationCache.getApplicationCacheForFrameReturnValue;
     "Audit.setup": Audit.setupReturnValue;
     "Audit.run": Audit.runReturnValue;
     "Audit.teardown": Audit.teardownReturnValue;
@@ -9832,10 +9617,6 @@ the top of the viewport and Y increases as it proceeds towards the bottom of the
     "DOMStorage.setDOMStorageItem": DOMStorage.setDOMStorageItemReturnValue;
     "DOMStorage.removeDOMStorageItem": DOMStorage.removeDOMStorageItemReturnValue;
     "DOMStorage.clearDOMStorageItems": DOMStorage.clearDOMStorageItemsReturnValue;
-    "Database.enable": Database.enableReturnValue;
-    "Database.disable": Database.disableReturnValue;
-    "Database.getDatabaseTableNames": Database.getDatabaseTableNamesReturnValue;
-    "Database.executeSQL": Database.executeSQLReturnValue;
     "Debugger.enable": Debugger.enableReturnValue;
     "Debugger.disable": Debugger.disableReturnValue;
     "Debugger.setAsyncStackTraceDepth": Debugger.setAsyncStackTraceDepthReturnValue;
@@ -9970,6 +9751,7 @@ the top of the viewport and Y increases as it proceeds towards the bottom of the
     "Playwright.grantFileReadAccess": Playwright.grantFileReadAccessReturnValue;
     "Playwright.takePageScreenshot": Playwright.takePageScreenshotReturnValue;
     "Playwright.setIgnoreCertificateErrors": Playwright.setIgnoreCertificateErrorsReturnValue;
+    "Playwright.setPageZoomFactor": Playwright.setPageZoomFactorReturnValue;
     "Playwright.getAllCookies": Playwright.getAllCookiesReturnValue;
     "Playwright.setCookies": Playwright.setCookiesReturnValue;
     "Playwright.deleteAllCookies": Playwright.deleteAllCookiesReturnValue;

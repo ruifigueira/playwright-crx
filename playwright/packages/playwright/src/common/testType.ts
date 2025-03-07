@@ -14,15 +14,19 @@
  * limitations under the License.
  */
 
-import { expect } from '../matchers/expect';
-import { currentlyLoadingFileSuite, currentTestInfo, setCurrentlyLoadingFileSuite } from './globals';
-import { TestCase, Suite } from './test';
-import { wrapFunctionWithLocation } from '../transform/transform';
-import type { FixturesWithLocation } from './config';
-import type { Fixtures, TestType, TestDetails } from '../../types/test';
-import type { Location } from '../../types/testReporter';
-import { getPackageManagerExecCommand, monotonicTime, raceAgainstDeadline, zones } from 'playwright-core/lib/utils';
 import { errors } from 'playwright-core';
+import { getPackageManagerExecCommand, monotonicTime, raceAgainstDeadline, currentZone } from 'playwright-core/lib/utils';
+
+import { currentTestInfo, currentlyLoadingFileSuite, setCurrentlyLoadingFileSuite } from './globals';
+import { Suite, TestCase } from './test';
+import { expect } from '../matchers/expect';
+import { wrapFunctionWithLocation } from '../transform/transform';
+
+import type { FixturesWithLocation } from './config';
+import type { Fixtures, TestDetails, TestStepInfo, TestType } from '../../types/test';
+import type { Location } from '../../types/testReporter';
+import type { TestInfoImpl } from '../worker/testInfo';
+
 
 const testTypeSymbol = Symbol('testType');
 
@@ -258,22 +262,21 @@ export class TestTypeImpl {
     suite._use.push({ fixtures, location });
   }
 
-  async _step<T>(expectation: 'pass'|'skip', title: string, body: () => T | Promise<T>, options: {box?: boolean, location?: Location, timeout?: number } = {}): Promise<T> {
+  _step<T>(expectation: 'pass'|'skip', title: string, body: (step: TestStepInfo) => T | Promise<T>, options: {box?: boolean, location?: Location, timeout?: number } = {}): Promise<T> {
     const testInfo = currentTestInfo();
     if (!testInfo)
       throw new Error(`test.step() can only be called from a test`);
-    if (expectation === 'skip') {
-      const step = testInfo._addStep({ category: 'test.step.skip', title, location: options.location, box: options.box });
-      step.complete({});
-      return undefined as T;
-    }
+    return testInfo._floatingPromiseScope.wrapPromiseAPIResult(this._stepInternal(expectation, testInfo, title, body, options));
+  }
+
+  private async _stepInternal<T>(expectation: 'pass'|'skip', testInfo: TestInfoImpl, title: string, body: (step: TestStepInfo) => T | Promise<T>, options: {box?: boolean, location?: Location, timeout?: number } = {}): Promise<T> {
     const step = testInfo._addStep({ category: 'test.step', title, location: options.location, box: options.box });
-    return await zones.run('stepZone', step, async () => {
+    return await currentZone().with('stepZone', step).run(async () => {
       try {
         let result: Awaited<ReturnType<typeof raceAgainstDeadline<T>>> | undefined = undefined;
         result = await raceAgainstDeadline(async () => {
           try {
-            return await body();
+            return await step.info._runStepBody(expectation === 'skip', body);
           } catch (e) {
             // If the step timed out, the test fixtures will tear down, which in turn
             // will abort unfinished actions in the step body. Record such errors here.

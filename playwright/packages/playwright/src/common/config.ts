@@ -15,14 +15,16 @@
  */
 
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
-import type { Config, Fixtures, Project, ReporterDescription } from '../../types/test';
-import type { Location } from '../../types/testReporter';
-import type { TestRunnerPluginRegistration } from '../plugins';
+import path from 'path';
+
 import { getPackageJsonPath, mergeObjects } from '../util';
+
+import type { Config, Fixtures, Metadata, Project, ReporterDescription } from '../../types/test';
+import type { TestRunnerPluginRegistration } from '../plugins';
 import type { Matcher } from '../util';
 import type { ConfigCLIOverrides } from './ipc';
+import type { Location } from '../../types/testReporter';
 import type { FullConfig, FullProject } from '../../types/testReporter';
 
 export type ConfigLocation = {
@@ -46,6 +48,7 @@ export class FullConfigInternal {
   readonly plugins: TestRunnerPluginRegistration[];
   readonly projects: FullProjectInternal[] = [];
   readonly singleTSConfigPath?: string;
+  readonly captureGitInfo: Config['captureGitInfo'];
   cliArgs: string[] = [];
   cliGrep: string | undefined;
   cliGrepInvert: string | undefined;
@@ -62,7 +65,7 @@ export class FullConfigInternal {
   globalSetups: string[] = [];
   globalTeardowns: string[] = [];
 
-  constructor(location: ConfigLocation, userConfig: Config, configCLIOverrides: ConfigCLIOverrides) {
+  constructor(location: ConfigLocation, userConfig: Config, configCLIOverrides: ConfigCLIOverrides, metadata?: Metadata) {
     if (configCLIOverrides.projects && userConfig.projects)
       throw new Error(`Cannot use --browser option when configuration file defines projects. Specify browserName in the projects instead.`);
 
@@ -75,9 +78,14 @@ export class FullConfigInternal {
     const privateConfiguration = (userConfig as any)['@playwright/test'];
     this.plugins = (privateConfiguration?.plugins || []).map((p: any) => ({ factory: p }));
     this.singleTSConfigPath = pathResolve(configDir, userConfig.tsconfig);
+    this.captureGitInfo = userConfig.captureGitInfo;
 
     this.globalSetups = (Array.isArray(userConfig.globalSetup) ? userConfig.globalSetup : [userConfig.globalSetup]).map(s => resolveScript(s, configDir)).filter(script => script !== undefined);
     this.globalTeardowns = (Array.isArray(userConfig.globalTeardown) ? userConfig.globalTeardown : [userConfig.globalTeardown]).map(s => resolveScript(s, configDir)).filter(script => script !== undefined);
+
+    // Make sure we reuse same metadata instance between FullConfigInternal instances,
+    // so that plugins such as gitCommitInfoPlugin can populate metadata once.
+    userConfig.metadata = userConfig.metadata || {};
 
     this.config = {
       configFile: resolvedConfigFile,
@@ -86,14 +94,14 @@ export class FullConfigInternal {
       fullyParallel: takeFirst(configCLIOverrides.fullyParallel, userConfig.fullyParallel, false),
       globalSetup: this.globalSetups[0] ?? null,
       globalTeardown: this.globalTeardowns[0] ?? null,
-      globalTimeout: takeFirst(configCLIOverrides.globalTimeout, userConfig.globalTimeout, 0),
+      globalTimeout: takeFirst(configCLIOverrides.debug ? 0 : undefined, configCLIOverrides.globalTimeout, userConfig.globalTimeout, 0),
       grep: takeFirst(userConfig.grep, defaultGrep),
       grepInvert: takeFirst(userConfig.grepInvert, null),
       maxFailures: takeFirst(configCLIOverrides.debug ? 1 : undefined, configCLIOverrides.maxFailures, userConfig.maxFailures, 0),
-      metadata: takeFirst(userConfig.metadata, {}),
+      metadata: metadata ?? userConfig.metadata,
       preserveOutput: takeFirst(userConfig.preserveOutput, 'always'),
       reporter: takeFirst(configCLIOverrides.reporter, resolveReporters(userConfig.reporter, configDir), [[defaultReporter]]),
-      reportSlowTests: takeFirst(userConfig.reportSlowTests, { max: 5, threshold: 15000 }),
+      reportSlowTests: takeFirst(userConfig.reportSlowTests, { max: 5, threshold: 300_000 /* 5 minutes */ }),
       quiet: takeFirst(configCLIOverrides.quiet, userConfig.quiet, false),
       projects: [],
       shard: takeFirst(configCLIOverrides.shard, userConfig.shard, null),
@@ -164,7 +172,7 @@ export class FullProjectInternal {
   readonly fullyParallel: boolean;
   readonly expect: Project['expect'];
   readonly respectGitIgnore: boolean;
-  readonly snapshotPathTemplate: string;
+  readonly snapshotPathTemplate: string | undefined;
   readonly ignoreSnapshots: boolean;
   id = '';
   deps: FullProjectInternal[] = [];
@@ -173,8 +181,7 @@ export class FullProjectInternal {
   constructor(configDir: string, config: Config, fullConfig: FullConfigInternal, projectConfig: Project, configCLIOverrides: ConfigCLIOverrides, packageJsonDir: string) {
     this.fullConfig = fullConfig;
     const testDir = takeFirst(pathResolve(configDir, projectConfig.testDir), pathResolve(configDir, config.testDir), fullConfig.configDir);
-    const defaultSnapshotPathTemplate = '{snapshotDir}/{testFileDir}/{testFileName}-snapshots/{arg}{-projectName}{-snapshotSuffix}{ext}';
-    this.snapshotPathTemplate = takeFirst(projectConfig.snapshotPathTemplate, config.snapshotPathTemplate, defaultSnapshotPathTemplate);
+    this.snapshotPathTemplate = takeFirst(projectConfig.snapshotPathTemplate, config.snapshotPathTemplate);
 
     this.project = {
       grep: takeFirst(projectConfig.grep, config.grep, defaultGrep),

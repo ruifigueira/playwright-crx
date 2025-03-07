@@ -17,7 +17,7 @@
 import os from 'os';
 import url from 'url';
 import { contextTest as it, expect } from '../config/browserTest';
-import { hostPlatform } from '../../packages/playwright-core/src/utils/hostPlatform';
+import { hostPlatform } from '../../packages/playwright-core/src/server/utils/hostPlatform';
 
 it('SharedArrayBuffer should work @smoke', async function({ contextFactory, httpsServer }) {
   const context = await contextFactory({ ignoreHTTPSErrors: true });
@@ -427,6 +427,22 @@ it('should not crash when clicking a label with a <input type="file"/>', {
   await page.getByText('A second file').click();
   const fileChooser = await fileChooserPromise;
   expect(fileChooser.page()).toBe(page);
+});
+
+it('should not crash when clicking a color input', {
+  annotation: {
+    type: 'issue',
+    description: 'https://github.com/microsoft/playwright/issues/33864'
+  }
+}, async ({ page, browserMajorVersion, browserName }) => {
+  it.skip(browserName === 'firefox' && browserMajorVersion < 135);
+
+  await page.setContent('<input type="color">');
+  const input = page.locator('input');
+
+  await expect(input).toBeVisible();
+  await input.click();
+  await expect(input).toBeVisible();
 });
 
 it('should not auto play audio', {

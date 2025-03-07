@@ -51,6 +51,12 @@ it('should support forcedColors option', async ({ launchPersistent, browserName 
   expect(await page.evaluate(() => matchMedia('(forced-colors: none)').matches)).toBe(false);
 });
 
+it('should support contrast option', async ({ launchPersistent }) => {
+  const { page } = await launchPersistent({ contrast: 'more' });
+  expect.soft(await page.evaluate(() => matchMedia('(prefers-contrast: more)').matches)).toBe(true);
+  expect.soft(await page.evaluate(() => matchMedia('(prefers-contrast: no-preference)').matches)).toBe(false);
+});
+
 it('should support timezoneId option', async ({ launchPersistent, browserName }) => {
   const { page } = await launchPersistent({ locale: 'en-US', timezoneId: 'America/Jamaica' });
   expect(await page.evaluate(() => new Date(1479579154987).toString())).toBe('Sat Nov 19 2016 13:12:34 GMT-0500 (Eastern Standard Time)');
@@ -93,6 +99,13 @@ it('should accept userDataDir', async ({ createUserDataDir, browserType }) => {
   expect(fs.readdirSync(userDataDir).length).toBeGreaterThan(0);
   await context.close();
   expect(fs.readdirSync(userDataDir).length).toBeGreaterThan(0);
+});
+
+it('should accept relative userDataDir', async ({ createUserDataDir, browserType }) => {
+  const userDataDir = await createUserDataDir();
+  const context = await browserType.launchPersistentContext(path.relative(process.cwd(), path.join(userDataDir, 'foobar')));
+  expect(fs.readdirSync(path.join(userDataDir, 'foobar')).length).toBeGreaterThan(0);
+  await context.close();
 });
 
 it('should restore state from userDataDir', async ({ browserType, server, createUserDataDir, isMac, browserName }) => {
@@ -144,7 +157,7 @@ it('should have passed URL when launching with ignoreDefaultArgs: true', async (
   it.skip(mode !== 'default');
 
   const userDataDir = await createUserDataDir();
-  const args = toImpl(browserType).defaultArgs((browserType as any)._defaultLaunchOptions, 'persistent', userDataDir, 0).filter(a => a !== 'about:blank');
+  const args = toImpl(browserType).defaultArgs((browserType as any)._playwright._defaultLaunchOptions, 'persistent', userDataDir, 0).filter(a => a !== 'about:blank');
   const options = {
     args: browserName === 'firefox' ? [...args, '-new-tab', server.EMPTY_PAGE] : [...args, server.EMPTY_PAGE],
     ignoreDefaultArgs: true,

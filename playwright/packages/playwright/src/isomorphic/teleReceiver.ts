@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import type { Annotation } from '../common/config';
 import type { Metadata } from '../../types/test';
 import type * as reporterTypes from '../../types/testReporter';
+import type { Annotation } from '../common/config';
 import type { ReporterV2 } from '../reporters/reporterV2';
 
 export type StringIntern = (s: string) => string;
@@ -52,6 +52,7 @@ export type JsonProject = {
   testIgnore: JsonPattern[];
   testMatch: JsonPattern[];
   timeout: number;
+  use: { [key: string]: any };
 };
 
 export type JsonSuite = {
@@ -109,6 +110,7 @@ export type JsonTestStepEnd = {
   duration: number;
   error?: reporterTypes.TestError;
   attachments?: number[]; // index of JsonTestResultEnd.attachments
+  annotations?: Annotation[];
 };
 
 export type JsonFullResult = {
@@ -325,7 +327,7 @@ export class TeleReporterReceiver {
       dependencies: project.dependencies,
       teardown: project.teardown,
       snapshotDir: this._absolutePath(project.snapshotDir),
-      use: {},
+      use: project.use,
     };
   }
 
@@ -546,6 +548,10 @@ class TeleTestStep implements reporterTypes.TestStep {
   get attachments() {
     return this._endPayload?.attachments?.map(index => this._result.attachments[index]) ?? [];
   }
+
+  get annotations() {
+    return this._endPayload?.annotations ?? [];
+  }
 }
 
 export class TeleTestResult implements reporterTypes.TestResult {
@@ -599,7 +605,7 @@ export const baseFullConfig: reporterTypes.FullConfig = {
   preserveOutput: 'always',
   projects: [],
   reporter: [[process.env.CI ? 'dot' : 'list']],
-  reportSlowTests: { max: 5, threshold: 15000 },
+  reportSlowTests: { max: 5, threshold: 300_000 /* 5 minutes */ },
   configFile: '',
   rootDir: '',
   quiet: false,

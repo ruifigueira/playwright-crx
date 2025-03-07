@@ -14,12 +14,16 @@
  * limitations under the License.
  */
 
-import { debug } from '../../utilsBundle';
-import type * as channels from '@protocol/channels';
-import * as net from 'net';
 import { EventEmitter } from 'events';
+import net from 'net';
+
+import { assert } from '../../utils/isomorphic/assert';
+import { createGuid } from '../utils/crypto';
+import { debug } from '../../utilsBundle';
+
 import type { Backend, DeviceBackend, SocketBackend } from './android';
-import { assert, createGuid } from '../../utils';
+import type * as channels from '@protocol/channels';
+
 
 export class AdbBackend implements Backend {
   async devices(options: channels.AndroidDevicesOptions = {}): Promise<DeviceBackend[]> {

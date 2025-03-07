@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
-import { visitAllSelectorParts, InvalidSelectorError, type ParsedSelector, parseSelector, stringifySelector } from '../utils/isomorphic/selectorParser';
-import { createGuid } from '../utils';
+import { createGuid } from './utils/crypto';
+import { InvalidSelectorError,  parseSelector, stringifySelector, visitAllSelectorParts } from '../utils/isomorphic/selectorParser';
+
+import type { ParsedSelector } from '../utils/isomorphic/selectorParser';
 
 export class Selectors {
   private readonly _builtinEngines: Set<string>;
@@ -39,7 +41,7 @@ export class Selectors {
       'internal:has', 'internal:has-not',
       'internal:has-text', 'internal:has-not-text',
       'internal:and', 'internal:or', 'internal:chain',
-      'role', 'internal:attr', 'internal:label', 'internal:text', 'internal:role', 'internal:testid',
+      'role', 'internal:attr', 'internal:label', 'internal:text', 'internal:role', 'internal:testid', 'internal:aria-id'
     ]);
     this._builtinEnginesInMainWorld = new Set([
       '_react', '_vue',

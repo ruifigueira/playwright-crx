@@ -78,6 +78,12 @@ async function doFetch(event: FetchEvent): Promise<Response> {
   if (event.request.url.startsWith('chrome-extension://'))
     return fetch(event.request);
 
+  if (event.request.headers.get('x-pw-serviceworker') === 'forward') {
+    const request = new Request(event.request);
+    request.headers.delete('x-pw-serviceworker');
+    return fetch(request);
+  }
+
   const request = event.request;
   const client = await self.clients.get(event.clientId);
 
@@ -120,14 +126,16 @@ async function doFetch(event: FetchEvent): Promise<Response> {
       const { snapshotServer } = loadedTraces.get(traceUrl!) || {};
       if (!snapshotServer)
         return new Response(null, { status: 404 });
-      return snapshotServer.serveSnapshotInfo(relativePath, url.searchParams);
+      const pageOrFrameId = relativePath.substring('/snapshotInfo/'.length);
+      return snapshotServer.serveSnapshotInfo(pageOrFrameId, url.searchParams);
     }
 
     if (relativePath.startsWith('/snapshot/')) {
       const { snapshotServer } = loadedTraces.get(traceUrl!) || {};
       if (!snapshotServer)
         return new Response(null, { status: 404 });
-      const response = snapshotServer.serveSnapshot(relativePath, url.searchParams, url.href);
+      const pageOrFrameId = relativePath.substring('/snapshot/'.length);
+      const response = snapshotServer.serveSnapshot(pageOrFrameId, url.searchParams, url.href);
       if (isDeployedAsHttps)
         response.headers.set('Content-Security-Policy', 'upgrade-insecure-requests');
       return response;
@@ -137,7 +145,8 @@ async function doFetch(event: FetchEvent): Promise<Response> {
       const { snapshotServer } = loadedTraces.get(traceUrl!) || {};
       if (!snapshotServer)
         return new Response(null, { status: 404 });
-      return snapshotServer.serveClosestScreenshot(relativePath, url.searchParams);
+      const pageOrFrameId = relativePath.substring('/closest-screenshot/'.length);
+      return snapshotServer.serveClosestScreenshot(pageOrFrameId, url.searchParams);
     }
 
     if (relativePath.startsWith('/sha1/')) {

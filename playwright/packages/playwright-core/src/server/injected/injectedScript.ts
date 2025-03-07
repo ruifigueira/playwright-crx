@@ -14,30 +14,36 @@
  * limitations under the License.
  */
 
-import type { SelectorEngine, SelectorRoot } from './selectorEngine';
-import { XPathEngine } from './xpathSelectorEngine';
-import { ReactEngine } from './reactSelectorEngine';
-import { VueEngine } from './vueSelectorEngine';
-import { createRoleEngine } from './roleSelectorEngine';
-import { parseAttributeSelector } from '../../utils/isomorphic/selectorParser';
-import type { NestedSelectorBody, ParsedSelector, ParsedSelectorPart } from '../../utils/isomorphic/selectorParser';
-import { visitAllSelectorParts, parseSelector, stringifySelector } from '../../utils/isomorphic/selectorParser';
-import { type TextMatcher, elementMatchesText, elementText, type ElementText, getElementLabels } from './selectorUtils';
-import { SelectorEvaluatorImpl, sortInDOMOrder } from './selectorEvaluator';
-import { enclosingShadowRootOrDocument, isElementVisible, isInsideScope, parentElementOrShadowHost, setBrowserName } from './domUtils';
-import type { CSSComplexSelectorList } from '../../utils/isomorphic/cssParser';
-import { generateSelector, type GenerateSelectorOptions } from './selectorGenerator';
-import type * as channels from '@protocol/channels';
-import { Highlight } from './highlight';
-import { getAriaDisabled, getAriaRole, getElementAccessibleName, getElementAccessibleDescription, getReadonly, getElementAccessibleErrorMessage, getCheckedAllowMixed, getCheckedWithoutMixed } from './roleUtils';
-import { kLayoutSelectorNames, type LayoutSelectorName, layoutSelectorScore } from './layoutSelectorUtils';
-import { asLocator } from '../../utils/isomorphic/locatorGenerators';
-import type { Language } from '../../utils/isomorphic/locatorGenerators';
-import { cacheNormalizedWhitespaces, normalizeWhiteSpace, trimStringWithEllipsis } from '../../utils/isomorphic/stringUtils';
-import { matchesAriaTree, getAllByAria, generateAriaTree, renderAriaTree } from './ariaSnapshot';
-import type { AriaNode, AriaSnapshot } from './ariaSnapshot';
-import type { AriaTemplateNode } from '@isomorphic/ariaSnapshot';
 import { parseAriaSnapshot } from '@isomorphic/ariaSnapshot';
+
+import { generateAriaTree, getAllByAria, matchesAriaTree, renderAriaTree } from './ariaSnapshot';
+import { enclosingShadowRootOrDocument, isElementVisible, isInsideScope, parentElementOrShadowHost, setBrowserName } from './domUtils';
+import { Highlight } from './highlight';
+import { kLayoutSelectorNames,  layoutSelectorScore } from './layoutSelectorUtils';
+import { ReactEngine } from './reactSelectorEngine';
+import { createRoleEngine } from './roleSelectorEngine';
+import { getAriaDisabled, getAriaRole, getCheckedAllowMixed, getCheckedWithoutMixed, getElementAccessibleDescription, getElementAccessibleErrorMessage, getElementAccessibleName, getReadonly } from './roleUtils';
+import { SelectorEvaluatorImpl, sortInDOMOrder } from './selectorEvaluator';
+import { generateSelector  } from './selectorGenerator';
+import {  elementMatchesText, elementText,  getElementLabels } from './selectorUtils';
+import { VueEngine } from './vueSelectorEngine';
+import { XPathEngine } from './xpathSelectorEngine';
+import { asLocator } from '../../utils/isomorphic/locatorGenerators';
+import { parseAttributeSelector } from '../../utils/isomorphic/selectorParser';
+import { parseSelector, stringifySelector, visitAllSelectorParts } from '../../utils/isomorphic/selectorParser';
+import { cacheNormalizedWhitespaces, normalizeWhiteSpace, trimStringWithEllipsis } from '../../utils/isomorphic/stringUtils';
+
+import type { AriaNode, AriaSnapshot } from './ariaSnapshot';
+import type { LayoutSelectorName } from './layoutSelectorUtils';
+import type { SelectorEngine, SelectorRoot } from './selectorEngine';
+import type { GenerateSelectorOptions } from './selectorGenerator';
+import type { ElementText, TextMatcher } from './selectorUtils';
+import type { CSSComplexSelectorList } from '../../utils/isomorphic/cssParser';
+import type { Language } from '../../utils/isomorphic/locatorGenerators';
+import type { NestedSelectorBody, ParsedSelector, ParsedSelectorPart } from '../../utils/isomorphic/selectorParser';
+import type { AriaTemplateNode } from '@isomorphic/ariaSnapshot';
+import type * as channels from '@protocol/channels';
+
 
 export type FrameExpectParams = Omit<channels.FrameExpectParams, 'expectedValue'> & { expectedValue?: any };
 
@@ -72,6 +78,7 @@ export class InjectedScript {
   // eslint-disable-next-line no-restricted-globals
   readonly window: Window & typeof globalThis;
   readonly document: Document;
+  private _ariaElementById: Map<number, Element> | undefined;
 
   // Recorder must use any external dependencies through InjectedScript.
   // Otherwise it will end up with a copy of all modules it uses, and any
@@ -130,6 +137,7 @@ export class InjectedScript {
     this._engines.set('internal:attr', this._createNamedAttributeEngine());
     this._engines.set('internal:testid', this._createNamedAttributeEngine());
     this._engines.set('internal:role', createRoleEngine(true));
+    this._engines.set('internal:aria-id', this._createAriaIdEngine());
 
     for (const { name, engine } of customEngines)
       this._engines.set(name, engine);
@@ -221,7 +229,8 @@ export class InjectedScript {
     if (node.nodeType !== Node.ELEMENT_NODE)
       throw this.createStacklessError('Can only capture aria snapshot of Element nodes.');
     const ariaSnapshot = generateAriaTree(node as Element);
-    return renderAriaTree(ariaSnapshot.root, options);
+    this._ariaElementById = ariaSnapshot.elements;
+    return renderAriaTree(ariaSnapshot.root, { ...options, ids: options?.id ? ariaSnapshot.ids : undefined });
   }
 
   ariaSnapshotAsObject(node: Node): AriaSnapshot {
@@ -607,6 +616,15 @@ export class InjectedScript {
     this.builtinRequestAnimationFrame(raf);
 
     return result;
+  }
+
+  _createAriaIdEngine() {
+    const queryAll = (root: SelectorRoot, selector: string): Element[] => {
+      const ariaId = parseInt(selector, 10);
+      const result = this._ariaElementById?.get(ariaId);
+      return result && result.isConnected ? [result] : [];
+    };
+    return { queryAll };
   }
 
   elementState(node: Node, state: ElementStateWithoutStable): ElementStateQueryResult {

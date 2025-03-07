@@ -16,9 +16,10 @@
 
 import fs from 'fs';
 import url from 'url';
+
 import { addToCompilationCache, currentFileDepsCollector, serializeCompilationCache, startCollectingFileDeps, stopCollectingFileDeps } from './compilationCache';
-import { transformHook, resolveHook, setTransformConfig, shouldTransform, setSingleTSConfig } from './transform';
 import { PortTransport } from './portTransport';
+import { resolveHook, setSingleTSConfig, setTransformConfig, shouldTransform, transformHook } from './transform';
 import { fileIsModule } from '../util';
 
 // Node < 18.6: defaultResolve takes 3 arguments.
@@ -120,4 +121,4 @@ function createTransport(port: MessagePort) {
 }
 
 
-module.exports = { resolve, load, globalPreload, initialize };
+module.exports = { globalPreload, initialize, load, resolve };

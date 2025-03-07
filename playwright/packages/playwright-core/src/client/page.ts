@@ -15,38 +15,45 @@
  * limitations under the License.
  */
 
-import fs from 'fs';
-import path from 'path';
-import type * as structs from '../../types/structs';
-import type * as api from '../../types/types';
-import { serializeError, isTargetClosedError, TargetClosedError } from './errors';
-import { TimeoutSettings } from '../common/timeoutSettings';
-import type * as channels from '@protocol/channels';
-import { assert, headersObjectToArray, isObject, isRegExp, isString, LongStandingScope, urlMatches, urlMatchesEqual, mkdirIfNeeded, trimStringWithEllipsis, type URLMatch } from '../utils';
 import { Accessibility } from './accessibility';
 import { Artifact } from './artifact';
-import type { BrowserContext } from './browserContext';
 import { ChannelOwner } from './channelOwner';
 import { evaluationScript } from './clientHelper';
 import { Coverage } from './coverage';
 import { Download } from './download';
-import { determineScreenshotType, ElementHandle } from './elementHandle';
+import { ElementHandle, determineScreenshotType } from './elementHandle';
+import { TargetClosedError, isTargetClosedError, serializeError } from './errors';
 import { Events } from './events';
-import type { APIRequestContext } from './fetch';
 import { FileChooser } from './fileChooser';
-import type { WaitForNavigationOptions } from './frame';
 import { Frame, verifyLoadState } from './frame';
+import { HarRouter } from './harRouter';
 import { Keyboard, Mouse, Touchscreen } from './input';
-import { assertMaxArguments, JSHandle, parseResult, serializeArgument } from './jsHandle';
-import type { FrameLocator, Locator, LocatorOptions } from './locator';
-import type { ByRoleOptions } from '../utils/isomorphic/locatorUtils';
-import { type RouteHandlerCallback, type Request, Response, Route, RouteHandler, validateHeaders, WebSocket, type WebSocketRouteHandlerCallback, WebSocketRoute, WebSocketRouteHandler } from './network';
-import type { FilePayload, Headers, LifecycleEvent, SelectOption, SelectOptionOptions, Size, WaitForEventOptions, WaitForFunctionOptions } from './types';
+import { JSHandle, assertMaxArguments, parseResult, serializeArgument } from './jsHandle';
+import { Response, Route, RouteHandler, WebSocket,  WebSocketRoute, WebSocketRouteHandler, validateHeaders } from './network';
 import { Video } from './video';
 import { Waiter } from './waiter';
 import { Worker } from './worker';
-import { HarRouter } from './harRouter';
+import { TimeoutSettings } from './timeoutSettings';
+import { assert } from '../utils/isomorphic/assert';
+import { mkdirIfNeeded } from './fileUtils';
+import { headersObjectToArray } from '../utils/isomorphic/headers';
+import { trimStringWithEllipsis  } from '../utils/isomorphic/stringUtils';
+import { urlMatches, urlMatchesEqual } from '../utils/isomorphic/urlMatch';
+import { LongStandingScope } from '../utils/isomorphic/manualPromise';
+import { isObject, isRegExp, isString } from '../utils/isomorphic/rtti';
+
+import type { BrowserContext } from './browserContext';
 import type { Clock } from './clock';
+import type { APIRequestContext } from './fetch';
+import type { WaitForNavigationOptions } from './frame';
+import type { FrameLocator, Locator, LocatorOptions } from './locator';
+import type { Request, RouteHandlerCallback, WebSocketRouteHandlerCallback } from './network';
+import type { FilePayload, Headers, LifecycleEvent, SelectOption, SelectOptionOptions, Size, WaitForEventOptions, WaitForFunctionOptions } from './types';
+import type * as structs from '../../types/structs';
+import type * as api from '../../types/types';
+import type { ByRoleOptions } from '../utils/isomorphic/locatorUtils';
+import type { URLMatch } from '../utils/isomorphic/urlMatch';
+import type * as channels from '@protocol/channels';
 
 type PDFOptions = Omit<channels.PagePdfParams, 'width' | 'height' | 'margin'> & {
   width?: string | number,
@@ -111,7 +118,7 @@ export class Page extends ChannelOwner<channels.PageChannel> implements api.Page
   constructor(parent: ChannelOwner, type: string, guid: string, initializer: channels.PageInitializer) {
     super(parent, type, guid, initializer);
     this._browserContext = parent as unknown as BrowserContext;
-    this._timeoutSettings = new TimeoutSettings(this._browserContext._timeoutSettings);
+    this._timeoutSettings = new TimeoutSettings(this._platform, this._browserContext._timeoutSettings);
 
     this.accessibility = new Accessibility(this._channel);
     this.keyboard = new Keyboard(this);
@@ -270,15 +277,15 @@ export class Page extends ChannelOwner<channels.PageChannel> implements api.Page
   setDefaultNavigationTimeout(timeout: number) {
     this._timeoutSettings.setDefaultNavigationTimeout(timeout);
     this._wrapApiCall(async () => {
-      this._channel.setDefaultNavigationTimeoutNoReply({ timeout }).catch(() => {});
-    }, true);
+      await this._channel.setDefaultNavigationTimeoutNoReply({ timeout });
+    }, true).catch(() => {});
   }
 
   setDefaultTimeout(timeout: number) {
     this._timeoutSettings.setDefaultTimeout(timeout);
     this._wrapApiCall(async () => {
-      this._channel.setDefaultTimeoutNoReply({ timeout }).catch(() => {});
-    }, true);
+      await this._channel.setDefaultTimeoutNoReply({ timeout });
+    }, true).catch(() => {});
   }
 
   private _forceVideo(): Video {
@@ -483,12 +490,13 @@ export class Page extends ChannelOwner<channels.PageChannel> implements api.Page
     await this._channel.requestGC();
   }
 
-  async emulateMedia(options: { media?: 'screen' | 'print' | null, colorScheme?: 'dark' | 'light' | 'no-preference' | null, reducedMotion?: 'reduce' | 'no-preference' | null, forcedColors?: 'active' | 'none' | null } = {}) {
+  async emulateMedia(options: { media?: 'screen' | 'print' | null, colorScheme?: 'dark' | 'light' | 'no-preference' | null, reducedMotion?: 'reduce' | 'no-preference' | null, forcedColors?: 'active' | 'none' | null, contrast?: 'no-preference' | 'more' | null } = {}) {
     await this._channel.emulateMedia({
       media: options.media === null ? 'no-override' : options.media,
       colorScheme: options.colorScheme === null ? 'no-override' : options.colorScheme,
       reducedMotion: options.reducedMotion === null ? 'no-override' : options.reducedMotion,
       forcedColors: options.forcedColors === null ? 'no-override' : options.forcedColors,
+      contrast: options.contrast === null ? 'no-override' : options.contrast,
     });
   }
 
@@ -507,21 +515,24 @@ export class Page extends ChannelOwner<channels.PageChannel> implements api.Page
   }
 
   async addInitScript(script: Function | string | { path?: string, content?: string }, arg?: any) {
-    const source = await evaluationScript(script, arg);
+    const source = await evaluationScript(this._platform, script, arg);
     await this._channel.addInitScript({ source });
   }
 
   async route(url: URLMatch, handler: RouteHandlerCallback, options: { times?: number } = {}): Promise<void> {
-    this._routes.unshift(new RouteHandler(this._browserContext._options.baseURL, url, handler, options.times));
+    this._routes.unshift(new RouteHandler(this._platform, this._browserContext._options.baseURL, url, handler, options.times));
     await this._updateInterceptionPatterns();
   }
 
   async routeFromHAR(har: string, options: { url?: string | RegExp, notFound?: 'abort' | 'fallback', update?: boolean, updateContent?: 'attach' | 'embed', updateMode?: 'minimal' | 'full'} = {}): Promise<void> {
+    const localUtils = this._connection.localUtils();
+    if (!localUtils)
+      throw new Error('Route from har is not supported in thin clients');
     if (options.update) {
       await this._browserContext._recordIntoHAR(har, this, options);
       return;
     }
-    const harRouter = await HarRouter.create(this._connection.localUtils(), har, options.notFound || 'abort', { urlMatch: options.url });
+    const harRouter = await HarRouter.create(localUtils, har, options.notFound || 'abort', { urlMatch: options.url });
     this._harRouters.push(harRouter);
     await harRouter.addPageRoute(this);
   }
@@ -572,20 +583,21 @@ export class Page extends ChannelOwner<channels.PageChannel> implements api.Page
     await this._channel.setWebSocketInterceptionPatterns({ patterns });
   }
 
-  async screenshot(options: Omit<channels.PageScreenshotOptions, 'mask'> & { path?: string, mask?: Locator[] } = {}): Promise<Buffer> {
+  async screenshot(options: Omit<channels.PageScreenshotOptions, 'mask'> & { path?: string, mask?: api.Locator[] } = {}): Promise<Buffer> {
+    const mask = options.mask as Locator[] | undefined;
     const copy: channels.PageScreenshotOptions = { ...options, mask: undefined };
     if (!copy.type)
       copy.type = determineScreenshotType(options);
-    if (options.mask) {
-      copy.mask = options.mask.map(locator => ({
+    if (mask) {
+      copy.mask = mask.map(locator => ({
         frame: locator._frame._channel,
         selector: locator._selector,
       }));
     }
     const result = await this._channel.screenshot(copy);
     if (options.path) {
-      await mkdirIfNeeded(options.path);
-      await fs.promises.writeFile(options.path, result.binary);
+      await mkdirIfNeeded(this._platform, options.path);
+      await this._platform.fs().promises.writeFile(options.path, result.binary);
     }
     return result.binary;
   }
@@ -787,7 +799,7 @@ export class Page extends ChannelOwner<channels.PageChannel> implements api.Page
   }
 
   async pause(_options?: { __testHookKeepTestTimeout: boolean }) {
-    if (require('inspector').url())
+    if (this._platform.isJSDebuggerAttached())
       return;
     const defaultNavigationTimeout = this._browserContext._timeoutSettings.defaultNavigationTimeout();
     const defaultTimeout = this._browserContext._timeoutSettings.defaultTimeout();
@@ -814,8 +826,9 @@ export class Page extends ChannelOwner<channels.PageChannel> implements api.Page
     }
     const result = await this._channel.pdf(transportOptions);
     if (options.path) {
-      await fs.promises.mkdir(path.dirname(options.path), { recursive: true });
-      await fs.promises.writeFile(options.path, result.pdf);
+      const platform = this._platform;
+      await platform.fs().promises.mkdir(platform.path().dirname(options.path), { recursive: true });
+      await platform.fs().promises.writeFile(options.path, result.pdf);
     }
     return result.pdf;
   }

@@ -15,34 +15,39 @@
  * limitations under the License.
  */
 
-import { TimeoutSettings } from '../common/timeoutSettings';
-import { createGuid, debugMode } from '../utils';
-import { mkdirIfNeeded } from '../utils/fileUtils';
-import type { Browser, BrowserOptions } from './browser';
-import type { Download } from './download';
-import type * as frames from './frames';
+import fs from 'fs';
+import path from 'path';
+
+import { TimeoutSettings } from './timeoutSettings';
+import { createGuid } from './utils/crypto';
+import { debugMode } from './utils/debug';
+import { Clock } from './clock';
+import { Debugger } from './debugger';
+import { BrowserContextAPIRequestContext } from './fetch';
+import { mkdirIfNeeded } from './utils/fileUtils';
+import { HarRecorder } from './har/harRecorder';
 import { helper } from './helper';
+import { SdkObject, serverSideCallMetadata } from './instrumentation';
+import * as utilityScriptSerializers from './isomorphic/utilityScriptSerializers';
 import * as network from './network';
 import { InitScript } from './page';
 import { Page, PageBinding } from './page';
+import { Recorder } from './recorder';
+import { RecorderApp } from './recorder/recorderApp';
+import * as storageScript from './storageScript';
+import * as consoleApiSource from '../generated/consoleApiSource';
+import { Tracing } from './trace/recorder/tracing';
+
+import type { Artifact } from './artifact';
+import type { Browser, BrowserOptions } from './browser';
+import type { Download } from './download';
+import type * as frames from './frames';
+import type { CallMetadata } from './instrumentation';
 import type { Progress, ProgressController } from './progress';
 import type { Selectors } from './selectors';
+import type { ClientCertificatesProxy } from './socksClientCertificatesInterceptor';
 import type * as types from './types';
 import type * as channels from '@protocol/channels';
-import path from 'path';
-import fs from 'fs';
-import type { CallMetadata } from './instrumentation';
-import { serverSideCallMetadata, SdkObject } from './instrumentation';
-import { Debugger } from './debugger';
-import { Tracing } from './trace/recorder/tracing';
-import { HarRecorder } from './har/harRecorder';
-import { Recorder } from './recorder';
-import * as consoleApiSource from '../generated/consoleApiSource';
-import { BrowserContextAPIRequestContext } from './fetch';
-import type { Artifact } from './artifact';
-import { Clock } from './clock';
-import type { ClientCertificatesProxy } from './socksClientCertificatesInterceptor';
-import { RecorderApp } from './recorder/recorderApp';
 
 export abstract class BrowserContext extends SdkObject {
   static Events = {
@@ -506,12 +511,14 @@ export abstract class BrowserContext extends SdkObject {
     this._origins.add(origin);
   }
 
-  async storageState(): Promise<channels.BrowserContextStorageStateResult> {
+  async storageState(indexedDB = false): Promise<channels.BrowserContextStorageStateResult> {
     const result: channels.BrowserContextStorageStateResult = {
       cookies: await this.cookies(),
       origins: []
     };
     const originsToSave = new Set(this._origins);
+
+    const collectScript = `(${storageScript.collect})((${utilityScriptSerializers.source})(), ${this._browser.options.name === 'firefox'}, ${indexedDB})`;
 
     // First try collecting storage stage from existing pages.
     for (const page of this.pages()) {
@@ -519,11 +526,9 @@ export abstract class BrowserContext extends SdkObject {
       if (!origin || !originsToSave.has(origin))
         continue;
       try {
-        const storage = await page.mainFrame().nonStallingEvaluateInExistingContext(`({
-          localStorage: Object.keys(localStorage).map(name => ({ name, value: localStorage.getItem(name) })),
-        })`, 'utility');
-        if (storage.localStorage.length)
-          result.origins.push({ origin, localStorage: storage.localStorage } as channels.OriginStorage);
+        const storage: storageScript.Storage = await page.mainFrame().nonStallingEvaluateInExistingContext(collectScript, 'utility');
+        if (storage.localStorage.length || storage.indexedDB?.length)
+          result.origins.push({ origin, localStorage: storage.localStorage, indexedDB: storage.indexedDB });
         originsToSave.delete(origin);
       } catch {
         // When failed on the live page, we'll retry on the blank page below.
@@ -539,15 +544,11 @@ export abstract class BrowserContext extends SdkObject {
         return true;
       });
       for (const origin of originsToSave) {
-        const originStorage: channels.OriginStorage = { origin, localStorage: [] };
         const frame = page.mainFrame();
         await frame.goto(internalMetadata, origin);
-        const storage = await frame.evaluateExpression(`({
-          localStorage: Object.keys(localStorage).map(name => ({ name, value: localStorage.getItem(name) })),
-        })`, { world: 'utility' });
-        originStorage.localStorage = storage.localStorage;
-        if (storage.localStorage.length)
-          result.origins.push(originStorage);
+        const storage: storageScript.Storage = await frame.evaluateExpression(collectScript, { world: 'utility' });
+        if (storage.localStorage.length || storage.indexedDB?.length)
+          result.origins.push({ origin, localStorage: storage.localStorage, indexedDB: storage.indexedDB });
       }
       await page.close(internalMetadata);
     }
@@ -610,11 +611,7 @@ export abstract class BrowserContext extends SdkObject {
         for (const originState of state.origins) {
           const frame = page.mainFrame();
           await frame.goto(metadata, originState.origin);
-          await frame.evaluateExpression(`
-            originState => {
-              for (const { name, value } of (originState.localStorage || []))
-                localStorage.setItem(name, value);
-            }`, { isFunction: true, world: 'utility' }, originState);
+          await frame.evaluateExpression(`(${storageScript.restore})(${JSON.stringify(originState)}, (${utilityScriptSerializers.source})())`, { world: 'utility' });
         }
         await page.close(internalMetadata);
       }
@@ -762,6 +759,7 @@ const paramsThatAllowContextReuse: (keyof channels.BrowserNewContextForReusePara
   'colorScheme',
   'forcedColors',
   'reducedMotion',
+  'contrast',
   'screen',
   'userAgent',
   'viewport',

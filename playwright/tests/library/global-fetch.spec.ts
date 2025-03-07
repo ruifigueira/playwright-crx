@@ -16,7 +16,7 @@
 
 import os from 'os';
 import * as util from 'util';
-import { getPlaywrightVersion } from '../../packages/playwright-core/lib/utils/userAgent';
+import { getPlaywrightVersion } from '../../packages/playwright-core/lib/server/utils/userAgent';
 import { expect, playwrightTest as base } from '../config/browserTest';
 import { kTargetClosedErrorMessage } from 'tests/config/errors';
 
@@ -255,7 +255,7 @@ it('should set playwright as user-agent', async ({ playwright, server, isWindows
 });
 
 it('should be able to construct with context options', async ({ playwright, browserType, server }) => {
-  const request = await playwright.request.newContext((browserType as any)._defaultContextOptions);
+  const request = await playwright.request.newContext((browserType as any)._playwright._defaultContextOptions);
   const response = await request.get(server.EMPTY_PAGE);
   expect(response.ok()).toBeTruthy();
   await request.dispose();
@@ -534,5 +534,29 @@ it('should retry ECONNRESET', {
   expect(response.status()).toBe(200);
   expect(await response.text()).toBe('Hello!');
   expect(requestCount).toBe(4);
+  await request.dispose();
+});
+
+it('should throw when failOnStatusCode is set to true inside APIRequest context options', async ({ playwright, server }) => {
+  it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/34204' });
+  const request = await playwright.request.newContext({ failOnStatusCode: true });
+  server.setRoute('/empty.html', (req, res) => {
+    res.writeHead(404, { 'Content-Length': 10, 'Content-Type': 'text/plain' });
+    res.end('Not found.');
+  });
+  const error = await request.fetch(server.EMPTY_PAGE).catch(e => e);
+  expect(error.message).toContain('404 Not Found');
+  await request.dispose();
+});
+
+it('should not throw when failOnStatusCode is set to false inside APIRequest context options', async ({ playwright, server }) => {
+  it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/34204' });
+  const request = await playwright.request.newContext({ failOnStatusCode: false });
+  server.setRoute('/empty.html', (req, res) => {
+    res.writeHead(404, { 'Content-Length': 10, 'Content-Type': 'text/plain' });
+    res.end('Not found.');
+  });
+  const response = await request.fetch(server.EMPTY_PAGE);
+  expect(response.status()).toBe(404);
   await request.dispose();
 });

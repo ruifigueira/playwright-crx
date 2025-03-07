@@ -15,12 +15,15 @@
  * limitations under the License.
  */
 
+import fs from 'fs';
+
+import { splitErrorMessage } from '../../utils/isomorphic/stackTrace';
+import { mkdirIfNeeded } from '../utils/fileUtils';
+
 import type { CRSession } from './crConnection';
 import type { Protocol } from './protocol';
-import fs from 'fs';
 import type * as types from '../types';
-import { mkdirIfNeeded } from '../../utils/fileUtils';
-import { splitErrorMessage } from '../../utils/stackTrace';
+
 
 export function getExceptionMessage(exceptionDetails: Protocol.Runtime.ExceptionDetails): string {
   if (exceptionDetails.exception)

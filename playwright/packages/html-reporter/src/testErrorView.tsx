@@ -23,9 +23,43 @@ import { ImageDiffView } from '@web/shared/imageDiffView';
 export const TestErrorView: React.FC<{
   error: string;
   testId?: string;
-}> = ({ error, testId }) => {
-  const html = React.useMemo(() => ansiErrorToHtml(error), [error]);
-  return <div className='test-error-view test-error-text' data-testid={testId} dangerouslySetInnerHTML={{ __html: html || '' }}></div>;
+  prompt?: string;
+}> = ({ error, testId, prompt }) => {
+  return (
+    <CodeSnippet code={error} testId={testId}>
+      {prompt && (
+        <div style={{ float: 'right', margin: 10 }}>
+          <PromptButton prompt={prompt} />
+        </div>
+      )}
+    </CodeSnippet>
+  );
+};
+
+export const CodeSnippet = ({ code, children, testId }: React.PropsWithChildren<{ code: string; testId?: string; }>) => {
+  const html = React.useMemo(() => ansiErrorToHtml(code), [code]);
+  return (
+    <div className='test-error-container test-error-text' data-testid={testId}>
+      {children}
+      <div className='test-error-view' dangerouslySetInnerHTML={{ __html: html || '' }}></div>
+    </div>
+  );
+};
+
+const PromptButton: React.FC<{ prompt: string }> = ({ prompt }) => {
+  const [copied, setCopied] = React.useState(false);
+  return <button
+    className='button'
+    style={{ minWidth: 100 }}
+    onClick={async () => {
+      await navigator.clipboard.writeText(prompt);
+      setCopied(true);
+      setTimeout(() => {
+        setCopied(false);
+      }, 3000);
+    }}>
+    {copied ? 'Copied' : 'Copy prompt'}
+  </button>;
 };
 
 export const TestScreenshotErrorView: React.FC<{

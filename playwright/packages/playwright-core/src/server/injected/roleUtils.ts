@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-import type { AriaRole } from '@isomorphic/ariaSnapshot';
 import { closestCrossShadow, elementSafeTagName, enclosingShadowRootOrDocument, getElementComputedStyle, isElementStyleVisibilityVisible, isVisibleTextNode, parentElementOrShadowHost } from './domUtils';
+
+import type { AriaRole } from '@isomorphic/ariaSnapshot';
 
 function hasExplicitAccessibleName(e: Element) {
   return e.hasAttribute('aria-label') || e.hasAttribute('aria-labelledby');
@@ -336,7 +337,7 @@ function trimFlatString(s: string): string {
 function asFlatString(s: string): string {
   // "Flat string" at https://w3c.github.io/accname/#terminology
   // Note that non-breaking spaces are preserved.
-  return s.split('\u00A0').map(chunk => chunk.replace(/\r\n/g, '\n').replace(/\s\s*/g, ' ')).join('\u00A0').trim();
+  return s.split('\u00A0').map(chunk => chunk.replace(/\r\n/g, '\n').replace(/[\u200b\u00ad]/g, '').replace(/\s\s*/g, ' ')).join('\u00A0').trim();
 }
 
 function queryInAriaOwned(element: Element, selector: string): Element[] {
@@ -354,27 +355,34 @@ export function getPseudoContent(element: Element, pseudo: '::before' | '::after
   if (cache?.has(element))
     return cache?.get(element) || '';
   const pseudoStyle = getElementComputedStyle(element, pseudo);
-  const content = getPseudoContentImpl(pseudoStyle);
+  const content = getPseudoContentImpl(element, pseudoStyle);
   if (cache)
     cache.set(element, content);
   return content;
 }
 
-function getPseudoContentImpl(pseudoStyle: CSSStyleDeclaration | undefined) {
+function getPseudoContentImpl(element: Element, pseudoStyle: CSSStyleDeclaration | undefined) {
   // Note: all browsers ignore display:none and visibility:hidden pseudos.
   if (!pseudoStyle || pseudoStyle.display === 'none' || pseudoStyle.visibility === 'hidden')
     return '';
   const content = pseudoStyle.content;
+  let resolvedContent: string | undefined;
   if ((content[0] === '\'' && content[content.length - 1] === '\'') ||
     (content[0] === '"' && content[content.length - 1] === '"')) {
-    const unquoted = content.substring(1, content.length - 1);
+    resolvedContent = content.substring(1, content.length - 1);
+  } else if (content.startsWith('attr(') && content.endsWith(')')) {
+    // Firefox does not resolve attribute accessors in content.
+    const attrName = content.substring('attr('.length, content.length - 1).trim();
+    resolvedContent = element.getAttribute(attrName) || '';
+  }
+  if (resolvedContent !== undefined) {
     // SPEC DIFFERENCE.
     // Spec says "CSS textual content, without a space", but we account for display
     // to pass "name_file-label-inline-block-styles-manual.html"
     const display = pseudoStyle.display || 'inline';
     if (display !== 'inline')
-      return ' ' + unquoted + ' ';
-    return unquoted;
+      return ' ' + resolvedContent + ' ';
+    return resolvedContent;
   }
   return '';
 }

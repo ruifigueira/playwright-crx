@@ -17,28 +17,35 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { NameValue } from '../../../common/types';
-import type { TracingTracingStopChunkParams, StackFrame } from '@protocol/channels';
+
+import { Snapshotter } from './snapshotter';
 import { commandsWithTracingSnapshots } from '../../../protocol/debug';
-import { assert, createGuid, monotonicTime, SerializedFS, removeFolders, eventsHelper, type RegisteredListener } from '../../../utils';
+import { assert } from '../../../utils/isomorphic/assert';
+import { monotonicTime } from '../../../utils/isomorphic/time';
+import { eventsHelper  } from '../../utils/eventsHelper';
+import { createGuid  } from '../../utils/crypto';
 import { Artifact } from '../../artifact';
 import { BrowserContext } from '../../browserContext';
-import type { APIRequestContext } from '../../fetch';
-import type { CallMetadata, InstrumentationListener } from '../../instrumentation';
-import { SdkObject } from '../../instrumentation';
-import { Page } from '../../page';
-import type * as har from '@trace/har';
-import type { HarTracerDelegate } from '../../har/harTracer';
-import { HarTracer } from '../../har/harTracer';
-import type { FrameSnapshot } from '@trace/snapshot';
-import type * as trace from '@trace/trace';
-import type { SnapshotterBlob, SnapshotterDelegate } from './snapshotter';
-import { Snapshotter } from './snapshotter';
-import type { ConsoleMessage } from '../../console';
 import { Dispatcher } from '../../dispatchers/dispatcher';
 import { serializeError } from '../../errors';
+import { SerializedFS, removeFolders  } from '../../utils/fileUtils';
+import { HarTracer } from '../../har/harTracer';
+import { SdkObject } from '../../instrumentation';
+import { Page } from '../../page';
+
+import type { SnapshotterBlob, SnapshotterDelegate } from './snapshotter';
+import type { NameValue } from '../../../utils/isomorphic/types';
+import type { RegisteredListener } from '../../../utils';
+import type { ConsoleMessage } from '../../console';
 import type { Dialog } from '../../dialog';
 import type { Download } from '../../download';
+import type { APIRequestContext } from '../../fetch';
+import type { HarTracerDelegate } from '../../har/harTracer';
+import type { CallMetadata, InstrumentationListener } from '../../instrumentation';
+import type { StackFrame, TracingTracingStopChunkParams } from '@protocol/channels';
+import type * as har from '@trace/har';
+import type { FrameSnapshot } from '@trace/snapshot';
+import type * as trace from '@trace/trace';
 
 const version: trace.VERSION = 7;
 
@@ -103,7 +110,8 @@ export class Tracing extends SdkObject implements InstrumentationListener, Snaps
       wallTime: 0,
       monotonicTime: 0,
       sdkLanguage: context.attribution.playwright.options.sdkLanguage,
-      testIdAttributeName
+      testIdAttributeName,
+      contextId: context.guid,
     };
     if (context instanceof BrowserContext) {
       this._snapshotter = new Snapshotter(context, this);
@@ -170,10 +178,16 @@ export class Tracing extends SdkObject implements InstrumentationListener, Snaps
     this._state.recording = true;
     this._state.callIds.clear();
 
+    // - Browser context network trace is shared across chunks as it contains resources
+    // used to serve page snapshots, so make a copy with the new name.
+    // - APIRequestContext network traces are chunk-specific, always start from scratch.
+    const preserveNetworkResources = this._context instanceof BrowserContext;
     if (options.name && options.name !== this._state.traceName)
-      this._changeTraceName(this._state, options.name);
+      this._changeTraceName(this._state, options.name, preserveNetworkResources);
     else
       this._allocateNewTraceFile(this._state);
+    if (!preserveNetworkResources)
+      this._fs.writeFile(this._state.networkFile, '');
 
     this._fs.mkdir(path.dirname(this._state.traceFile));
     const event: trace.TraceEvent = {
@@ -267,14 +281,14 @@ export class Tracing extends SdkObject implements InstrumentationListener, Snaps
     state.traceFile = path.join(state.tracesDir, `${state.traceName}${suffix}.trace`);
   }
 
-  private _changeTraceName(state: RecordingState, name: string) {
+  private _changeTraceName(state: RecordingState, name: string, preserveNetworkResources: boolean) {
     state.traceName = name;
     state.chunkOrdinal = 0;  // Reset ordinal for the new name.
     this._allocateNewTraceFile(state);
 
-    // Network file survives across chunks, so make a copy with the new name.
     const newNetworkFile = path.join(state.tracesDir, name + '.network');
-    this._fs.copyFile(state.networkFile, newNetworkFile);
+    if (preserveNetworkResources)
+      this._fs.copyFile(state.networkFile, newNetworkFile);
     state.networkFile = newNetworkFile;
   }
 

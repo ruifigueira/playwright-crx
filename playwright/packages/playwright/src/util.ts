@@ -15,16 +15,17 @@
  */
 
 import fs from 'fs';
-import type { StackFrame } from '@protocol/channels';
-import util from 'util';
 import path from 'path';
 import url from 'url';
-import { debug, mime, minimatch, parseStackTraceLine } from 'playwright-core/lib/utilsBundle';
-import { formatCallLog } from 'playwright-core/lib/utils';
+import util from 'util';
+
+import { parseStackFrame, sanitizeForFilePath, calculateSha1, isRegExp, isString, stringifyStackFrames } from 'playwright-core/lib/utils';
+import { colors, debug, mime, minimatch } from 'playwright-core/lib/utilsBundle';
+
 import type { Location } from './../types/testReporter';
-import { calculateSha1, isRegExp, isString, sanitizeForFilePath, stringifyStackFrames } from 'playwright-core/lib/utils';
-import type { RawStack } from 'playwright-core/lib/utils';
 import type { TestInfoErrorImpl } from './common/ipc';
+import type { StackFrame } from '@protocol/channels';
+import type { RawStack } from 'playwright-core/lib/utils';
 
 const PLAYWRIGHT_TEST_PATH = path.join(__dirname, '..');
 const PLAYWRIGHT_CORE_PATH = path.dirname(require.resolve('playwright-core/package.json'));
@@ -54,7 +55,7 @@ export function filterStackFile(file: string) {
 export function filteredStackTrace(rawStack: RawStack): StackFrame[] {
   const frames: StackFrame[] = [];
   for (const line of rawStack) {
-    const frame = parseStackTraceLine(line);
+    const frame = parseStackFrame(line, path.sep, !!process.env.PWDEBUGIMPL);
     if (!frame || !frame.file)
       continue;
     if (!filterStackFile(frame.file))
@@ -205,8 +206,8 @@ export function addSuffixToFilePath(filePath: string, suffix: string): string {
   return base + suffix + ext;
 }
 
-export function sanitizeFilePathBeforeExtension(filePath: string): string {
-  const ext = path.extname(filePath);
+export function sanitizeFilePathBeforeExtension(filePath: string, ext?: string): string {
+  ext ??= path.extname(filePath);
   const base = filePath.substring(0, filePath.length - ext.length);
   return sanitizeForFilePath(base) + ext;
 }
@@ -223,7 +224,14 @@ export function getContainedPath(parentPath: string, subPath: string = ''): stri
 
 export const debugTest = debug('pw:test');
 
-export const callLogText = formatCallLog;
+export const callLogText = (log: string[] | undefined) => {
+  if (!log || !log.some(l => !!l))
+    return '';
+  return `
+Call log:
+${colors.dim(log.join('\n'))}
+`;
+};
 
 const folderToPackageJsonPath = new Map<string, string>();
 
@@ -383,6 +391,15 @@ function fileExists(resolved: string) {
   return fs.statSync(resolved, { throwIfNoEntry: false })?.isFile();
 }
 
+export async function fileExistsAsync(resolved: string) {
+  try {
+    const stat = await fs.promises.stat(resolved);
+    return stat.isFile();
+  } catch {
+    return false;
+  }
+}
+
 function dirExists(resolved: string) {
   return fs.statSync(resolved, { throwIfNoEntry: false })?.isDirectory();
 }
@@ -396,4 +413,9 @@ export async function removeDirAndLogToConsole(dir: string) {
     await fs.promises.rm(dir, { recursive: true, force: true });
   } catch {
   }
+}
+
+export const ansiRegex = new RegExp('([\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-ntqry=><~])))', 'g');
+export function stripAnsiEscapes(str: string): string {
+  return str.replace(ansiRegex, '');
 }

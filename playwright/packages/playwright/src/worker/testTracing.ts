@@ -14,17 +14,21 @@
  * limitations under the License.
  */
 
+import fs from 'fs';
+import path from 'path';
+
+import { ManualPromise, SerializedFS, calculateSha1, createGuid, monotonicTime } from 'playwright-core/lib/utils';
+import { yauzl, yazl } from 'playwright-core/lib/zipBundle';
+
+import { kTopLevelAttachmentPrefix } from '../isomorphic/util';
+import { filteredStackTrace } from '../util';
+
+import type { TestInfoImpl } from './testInfo';
+import type { PlaywrightWorkerOptions, TestInfo, TraceMode } from '../../types/test';
+import type { TestInfoErrorImpl } from '../common/ipc';
 import type { SerializedError, StackFrame } from '@protocol/channels';
 import type * as trace from '@trace/trace';
 import type EventEmitter from 'events';
-import fs from 'fs';
-import path from 'path';
-import { ManualPromise, calculateSha1, monotonicTime, createGuid, SerializedFS } from 'playwright-core/lib/utils';
-import { yauzl, yazl } from 'playwright-core/lib/zipBundle';
-import { filteredStackTrace } from '../util';
-import type { TestInfo, TraceMode, PlaywrightWorkerOptions } from '../../types/test';
-import type { TestInfoImpl } from './testInfo';
-import type { TestInfoErrorImpl } from '../common/ipc';
 
 export type Attachment = TestInfo['attachments'][0];
 export const testTraceEntryName = 'test.trace';
@@ -43,6 +47,8 @@ export class TestTracing {
   private _artifactsDir: string;
   private _tracesDir: string;
   private _contextCreatedEvent: trace.ContextCreatedTraceEvent;
+  private _didFinishTestFunctionAndAfterEachHooks = false;
+  private _lastActionId = 0;
 
   constructor(testInfo: TestInfoImpl, artifactsDir: string) {
     this._testInfo = testInfo;
@@ -110,6 +116,10 @@ export class TestTracing {
     }
   }
 
+  didFinishTestFunctionAndAfterEachHooks() {
+    this._didFinishTestFunctionAndAfterEachHooks = true;
+  }
+
   artifactsDir() {
     return this._artifactsDir;
   }
@@ -130,7 +140,7 @@ export class TestTracing {
     return `${this._testInfo.testId}${retrySuffix}${ordinalSuffix}`;
   }
 
-  generateNextTraceRecordingPath() {
+  private _generateNextTraceRecordingPath() {
     const file = path.join(this._artifactsDir, createGuid() + '.zip');
     this._temporaryTraceFiles.push(file);
     return file;
@@ -138,6 +148,22 @@ export class TestTracing {
 
   traceOptions() {
     return this._options;
+  }
+
+  maybeGenerateNextTraceRecordingPath() {
+    // Forget about traces that should be saved on failure, when no failure happened
+    // during the test and beforeEach/afterEach hooks.
+    // This avoids downloading traces over the wire when not really needed.
+    if (this._didFinishTestFunctionAndAfterEachHooks && this._shouldAbandonTrace())
+      return;
+    return this._generateNextTraceRecordingPath();
+  }
+
+  private _shouldAbandonTrace() {
+    if (!this._options)
+      return true;
+    const testFailed = this._testInfo.status !== this._testInfo.expectedStatus;
+    return !testFailed && (this._options.mode === 'retain-on-failure' || this._options.mode === 'retain-on-first-failure');
   }
 
   async stopIfNeeded() {
@@ -148,10 +174,7 @@ export class TestTracing {
     if (error)
       throw error;
 
-    const testFailed = this._testInfo.status !== this._testInfo.expectedStatus;
-    const shouldAbandonTrace = !testFailed && (this._options.mode === 'retain-on-failure' || this._options.mode === 'retain-on-first-failure');
-
-    if (shouldAbandonTrace) {
+    if (this._shouldAbandonTrace()) {
       for (const file of this._temporaryTraceFiles)
         await fs.promises.unlink(file).catch(() => {});
       return;
@@ -210,7 +233,7 @@ export class TestTracing {
 
     await new Promise(f => {
       zipFile.end(undefined, () => {
-        zipFile.outputStream.pipe(fs.createWriteStream(this.generateNextTraceRecordingPath())).on('close', f);
+        zipFile.outputStream.pipe(fs.createWriteStream(this._generateNextTraceRecordingPath())).on('close', f);
       });
     });
 
@@ -252,21 +275,32 @@ export class TestTracing {
       parentId,
       startTime: monotonicTime(),
       class: 'Test',
-      method: category,
+      method: 'step',
       apiName,
       params: Object.fromEntries(Object.entries(params || {}).map(([name, value]) => [name, generatePreview(value)])),
       stack,
     });
   }
 
-  appendAfterActionForStep(callId: string, error?: SerializedError['error'], attachments: Attachment[] = []) {
+  appendAfterActionForStep(callId: string, error?: SerializedError['error'], attachments: Attachment[] = [], annotations?: trace.AfterActionTraceEventAnnotation[]) {
     this._appendTraceEvent({
       type: 'after',
       callId,
       endTime: monotonicTime(),
       attachments: serializeAttachments(attachments),
+      annotations,
       error,
     });
+  }
+
+  appendTopLevelAttachment(attachment: Attachment) {
+    // trace viewer has no means of representing attachments outside of a step,
+    // so we create an artificial action that's hidden in the UI
+    // the alternative would be to have one hidden step at the end with all top-level attachments,
+    // but that would delay useful information in live traces.
+    const callId = `${kTopLevelAttachmentPrefix}@${++this._lastActionId}`;
+    this.appendBeforeActionForStep(callId, undefined, kTopLevelAttachmentPrefix, `${kTopLevelAttachmentPrefix} "${attachment.name}"`, undefined, []);
+    this.appendAfterActionForStep(callId, undefined, [attachment]);
   }
 
   private _appendTraceEvent(event: trace.TraceEvent) {
@@ -277,6 +311,8 @@ export class TestTracing {
 }
 
 function serializeAttachments(attachments: Attachment[]): trace.AfterActionTraceEvent['attachments'] {
+  if (attachments.length === 0)
+    return undefined;
   return attachments.filter(a => a.name !== 'trace').map(a => {
     return {
       name: a.name,
@@ -335,7 +371,7 @@ async function mergeTraceFiles(fileName: string, temporaryTraceFiles: string[]) 
           // Keep the name for test traces so that the last test trace
           // that contains most of the information is kept in the trace.
           // Note the reverse order of the iteration (from new traces to old).
-        } else if (entry.fileName.match(/[\d-]*trace\./)) {
+        } else if (entry.fileName.match(/trace\.[a-z]*$/)) {
           entryName = i + '-' + entry.fileName;
         }
         if (entryNames.has(entryName)) {

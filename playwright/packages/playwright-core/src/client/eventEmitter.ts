@@ -22,12 +22,12 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+import type { EventEmitter as EventEmitterType } from 'events';
+import type { Platform } from './platform';
+
 type EventType = string | symbol;
 type Listener = (...args: any[]) => any;
 type EventMap = Record<EventType, Listener | Listener[]>;
-import { EventEmitter as OriginalEventEmitter } from 'events';
-import type { EventEmitter as EventEmitterType } from 'events';
-import { isUnderTest } from '../utils';
 
 export class EventEmitter implements EventEmitterType {
 
@@ -36,8 +36,10 @@ export class EventEmitter implements EventEmitterType {
   private _maxListeners: number | undefined = undefined;
   readonly _pendingHandlers = new Map<EventType, Set<Promise<void>>>();
   private _rejectionHandler: ((error: Error) => void) | undefined;
+  readonly _platform: Platform;
 
-  constructor() {
+  constructor(platform: Platform) {
+    this._platform = platform;
     if (this._events === undefined || this._events === Object.getPrototypeOf(this)._events) {
       this._events = Object.create(null);
       this._eventsCount = 0;
@@ -55,7 +57,7 @@ export class EventEmitter implements EventEmitterType {
   }
 
   getMaxListeners(): number {
-    return this._maxListeners === undefined ? OriginalEventEmitter.defaultMaxListeners : this._maxListeners;
+    return this._maxListeners === undefined ? this._platform.defaultMaxListeners() : this._maxListeners;
   }
 
   emit(type: EventType, ...args: any[]): boolean {
@@ -153,7 +155,7 @@ export class EventEmitter implements EventEmitterType {
         w.emitter = this;
         w.type = type;
         w.count = existing.length;
-        if (!isUnderTest()) {
+        if (!this._platform.isUnderTest()) {
           // eslint-disable-next-line no-console
           console.warn(w);
         }
@@ -243,7 +245,6 @@ export class EventEmitter implements EventEmitterType {
     if (options.behavior === 'wait') {
       const errors: Error[] = [];
       this._rejectionHandler = error => errors.push(error);
-      // eslint-disable-next-line internal-playwright/await-promise-in-class-returns
       return this._waitFor(type).then(() => {
         if (errors.length)
           throw errors[0];
@@ -253,7 +254,6 @@ export class EventEmitter implements EventEmitterType {
     if (options.behavior === 'ignoreErrors')
       this._rejectionHandler = () => {};
 
-    // eslint-disable-next-line internal-playwright/await-promise-in-class-returns
     return Promise.resolve();
   }
 

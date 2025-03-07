@@ -14,15 +14,20 @@
  * limitations under the License.
  */
 
-import path from 'path';
 import fs from 'fs';
-import type { T } from '../transform/babelBundle';
-import { types, traverse, babelParse } from '../transform/babelBundle';
+import path from 'path';
+
+
 import { MultiMap } from 'playwright-core/lib/utils';
-import { colors, diff } from 'playwright-core/lib/utilsBundle';
-import type { FullConfigInternal } from '../common/config';
+import { colors } from 'playwright-core/lib/utils';
+import { diff } from 'playwright-core/lib/utilsBundle';
+
 import { filterProjects } from './projectUtils';
+import { babelParse, traverse, types } from '../transform/babelBundle';
+
+import type { FullConfigInternal } from '../common/config';
 import type { InternalReporter } from '../reporters/internalReporter';
+import type { T } from '../transform/babelBundle';
 const t: typeof T = types;
 
 type Location = {
@@ -41,6 +46,10 @@ const suggestedRebaselines = new MultiMap<string, Replacement>();
 
 export function addSuggestedRebaseline(location: Location, suggestedRebaseline: string) {
   suggestedRebaselines.set(location.file, { location, code: suggestedRebaseline });
+}
+
+export function clearSuggestedRebaselines() {
+  suggestedRebaselines.clear();
 }
 
 export async function applySuggestedRebaselines(config: FullConfigInternal, reporter: InternalReporter) {

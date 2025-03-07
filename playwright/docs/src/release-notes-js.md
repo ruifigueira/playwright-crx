@@ -6,6 +6,99 @@ toc_max_heading_level: 2
 
 import LiteYouTube from '@site/src/components/LiteYouTube';
 
+## Version 1.51
+
+### StorageState for indexedDB
+
+* New option [`option: BrowserContext.storageState.indexedDB`] for [`method: BrowserContext.storageState`] allows to save and restore IndexedDB contents. Useful when your application uses [IndexedDB API](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API) to store authentication tokens, like Firebase Authentication.
+
+  Here is an example following the [authentication guide](./auth.md#basic-shared-account-in-all-tests):
+
+  ```js title="tests/auth.setup.ts"
+  import { test as setup, expect } from '@playwright/test';
+  import path from 'path';
+
+  const authFile = path.join(__dirname, '../playwright/.auth/user.json');
+
+  setup('authenticate', async ({ page }) => {
+    await page.goto('/');
+    // ... perform authentication steps ...
+
+    // make sure to save indexedDB
+    await page.context().storageState({ path: authFile, indexedDB: true });
+  });
+  ```
+
+### Copy as prompt
+
+New "Copy prompt" button on errors in the HTML report, trace viewer and UI mode. Click to copy a pre-filled LLM prompt that contains the error message and useful context for fixing the error.
+
+  ![Copy prompt](https://github.com/user-attachments/assets/f3654407-dd6d-4240-9845-0d96df2bf30a)
+
+### Filter visible elements
+
+New option [`option: Locator.filter.visible`] for [`method: Locator.filter`] allows matching only visible elements.
+
+  ```js title="example.spec.ts"
+  test('some test', async ({ page }) => {
+    // Ignore invisible todo items.
+    const todoItems = page.getByTestId('todo-item').filter({ visible: true });
+    // Check there are exactly 3 visible ones.
+    await expect(todoItems).toHaveCount(3);
+  });
+  ```
+
+### Git information in HTML report
+
+Set option [`property: TestConfig.captureGitInfo`] to capture git information into [`property: TestConfig.metadata`].
+
+  ```js title="playwright.config.ts"
+  import { defineConfig } from '@playwright/test';
+
+  export default defineConfig({
+    captureGitInfo: { commit: true, diff: true }
+  });
+  ```
+
+  HTML report will show this information when available:
+
+  ![Git information in the report](https://github.com/user-attachments/assets/f5b3f6f4-aa08-4a24-816c-7edf33ef0c37)
+
+### Test Step improvements
+
+A new [TestStepInfo] object is now available in test steps. You can add step attachments or skip the step under some conditions.
+
+  ```js
+  test('some test', async ({ page, isMobile }) => {
+    // Note the new "step" argument:
+    await test.step('here is my step', async step => {
+      step.skip(isMobile, 'not relevant on mobile layouts');
+
+      // ...
+      await step.attach('my attachment', { body: 'some text' });
+      // ...
+    });
+  });
+  ```
+
+### Miscellaneous
+
+* New option `contrast` for methods [`method: Page.emulateMedia`] and [`method: Browser.newContext`] allows to emulate the `prefers-contrast` media feature.
+* New option [`option: APIRequest.newContext.failOnStatusCode`] makes all fetch requests made through the [APIRequestContext] throw on response codes other than 2xx and 3xx.
+* Assertion [`method: PageAssertions.toHaveURL`] now supports a predicate.
+
+### Browser Versions
+
+* Chromium 134.0.6998.35
+* Mozilla Firefox 135.0
+* WebKit 18.4
+
+This version was also tested against the following stable channels:
+
+* Google Chrome 133
+* Microsoft Edge 133
+
+
 ## Version 1.50
 
 ### Test runner
@@ -21,7 +114,7 @@ import LiteYouTube from '@site/src/components/LiteYouTube';
   ```
 
 * New method [`method: Test.step.skip`] to disable execution of a test step.
-  
+
   ```js
   test('some test', async ({ page }) => {
     await test.step('before running step', async () => {
@@ -49,11 +142,12 @@ import LiteYouTube from '@site/src/components/LiteYouTube';
 
 * Option [`property: TestConfig.webServer`] added a `gracefulShutdown` field for specifying a process kill signal other than the default `SIGKILL`.
 * Exposed [`property: TestStep.attachments`] from the reporter API to allow retrieval of all attachments created by that step.
+* New option `pathTemplate` for `toHaveScreenshot` and `toMatchAriaSnapshot` assertions in the [`property: TestConfig.expect`] configuration.
 
 ### UI updates
 
 * Updated default HTML reporter to improve display of attachments.
-* New button for picking elements to produce aria snapshots.
+* New button in Codegen for picking elements to produce aria snapshots.
 * Additional details (such as keys pressed) are now displayed alongside action API calls in traces.
 * Display of `canvas` content in traces is error-prone. Display is now disabled by default, and can be enabled via the `Display canvas content` UI setting.
 * `Call` and `Network` panels now display additional time information.
@@ -83,7 +177,7 @@ This version was also tested against the following stable channels:
 
 ### Aria snapshots
 
-New assertion [`method: LocatorAssertions.toMatchAriaSnapshot#1`] verifies page structure by comparing to an expected accessibility tree, represented as YAML.
+New assertion [`method: LocatorAssertions.toMatchAriaSnapshot`] verifies page structure by comparing to an expected accessibility tree, represented as YAML.
 
 ```js
 await page.goto('https://playwright.dev');
@@ -1497,9 +1591,9 @@ This version was also tested against the following stable channels:
 
   ```html
   <select multiple>
-    <option value="red">Red</div>
-    <option value="green">Green</div>
-    <option value="blue">Blue</div>
+    <option value="red">Red</option>
+    <option value="green">Green</option>
+    <option value="blue">Blue</option>
   </select>
   ```
 

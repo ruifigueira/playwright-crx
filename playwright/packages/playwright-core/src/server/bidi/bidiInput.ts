@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
+import { resolveSmartModifierString } from '../input';
+import { getBidiKeyValue } from './third_party/bidiKeyboard';
+import * as bidi from './third_party/bidiProtocol';
+
 import type * as input from '../input';
 import type * as types from '../types';
 import type { BidiSession } from './bidiConnection';
-import * as bidi from './third_party/bidiProtocol';
-import { getBidiKeyValue } from './third_party/bidiKeyboard';
-import { resolveSmartModifierString } from '../input';
 
 export class RawKeyboardImpl implements input.RawKeyboard {
   private _session: BidiSession;
@@ -78,9 +79,6 @@ export class RawMouseImpl implements input.RawMouse {
   }
 
   async move(x: number, y: number, button: types.MouseButton | 'none', buttons: Set<types.MouseButton>, modifiers: Set<types.KeyboardModifier>, forClick: boolean): Promise<void> {
-    // Bidi throws when x/y are not integers.
-    x = Math.round(x);
-    y = Math.round(y);
     await this._performActions([{ type: 'pointerMove', x, y }]);
   }
 
@@ -94,8 +92,8 @@ export class RawMouseImpl implements input.RawMouse {
 
   async wheel(x: number, y: number, buttons: Set<types.MouseButton>, modifiers: Set<types.KeyboardModifier>, deltaX: number, deltaY: number): Promise<void> {
     // Bidi throws when x/y are not integers.
-    x = Math.round(x);
-    y = Math.round(y);
+    x = Math.floor(x);
+    y = Math.floor(y);
     await this._session.send('input.performActions', {
       context: this._session.sessionId,
       actions: [

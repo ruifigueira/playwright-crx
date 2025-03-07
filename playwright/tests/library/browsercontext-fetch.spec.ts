@@ -280,7 +280,7 @@ it('should add cookies from Set-Cookie header', async ({ context, page, server }
   expect((await page.evaluate(() => document.cookie)).split(';').map(s => s.trim()).sort()).toEqual(['foo=bar', 'session=value']);
 });
 
-it('should preserve cookie order from Set-Cookie header', async ({ context, page, server }) => {
+it('should preserve cookie order from Set-Cookie header', async ({ context, page, server, browserName, isLinux }) => {
   it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/23390' });
   server.setRoute('/setcookie.html', (req, res) => {
     res.setHeader('Set-Cookie', ['cookie.0=foo', 'cookie.1=bar']);
@@ -1183,7 +1183,7 @@ it('should send secure cookie over http for localhost', async ({ page, server })
   expect(serverRequest.headers.cookie).toBe('a=v');
 });
 
-it('should accept bool and numeric params', async ({ page, server }) => {
+it('should accept bool and numeric params and filter out undefined', async ({ page, server }) => {
   let request;
   const url = new URL(server.EMPTY_PAGE);
   url.searchParams.set('str', 's');
@@ -1200,6 +1200,7 @@ it('should accept bool and numeric params', async ({ page, server }) => {
       'num': 10,
       'bool': true,
       'bool2': false,
+      'none': undefined,
     }
   });
   const params = new URLSearchParams(request!.url.substr(request!.url.indexOf('?')));
@@ -1207,6 +1208,7 @@ it('should accept bool and numeric params', async ({ page, server }) => {
   expect(params.get('num')).toEqual('10');
   expect(params.get('bool')).toEqual('true');
   expect(params.get('bool2')).toEqual('false');
+  expect(params.has('none')).toBe(false);
 });
 
 it('should abort requests when browser context closes', async ({ contextFactory, server }) => {

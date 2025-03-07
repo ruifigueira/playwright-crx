@@ -15,17 +15,19 @@
  * limitations under the License.
  */
 
-import { WKBrowser } from '../webkit/wkBrowser';
-import type { Env } from '../../utils/processLauncher';
 import path from 'path';
+
 import { kBrowserCloseMessageId } from './wkConnection';
+import { wrapInASCIIBox } from '../utils/ascii';
 import { BrowserType, kNoXServerRunningError } from '../browserType';
-import type { ConnectionTransport } from '../transport';
+import { WKBrowser } from '../webkit/wkBrowser';
+
 import type { BrowserOptions } from '../browser';
-import type * as types from '../types';
-import { wrapInASCIIBox } from '../../utils';
 import type { SdkObject } from '../instrumentation';
+import type { Env } from '../utils/processLauncher';
 import type { ProtocolError } from '../protocolError';
+import type { ConnectionTransport } from '../transport';
+import type * as types from '../types';
 
 export class WebKit extends BrowserType {
   constructor(parent: SdkObject) {

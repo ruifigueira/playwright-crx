@@ -222,6 +222,54 @@ NameValue:
     name: string
     value: string
 
+IndexedDBDatabase:
+  type: object
+  properties:
+    name: string
+    version: number
+    stores:
+      type: array
+      items:
+        type: object
+        properties:
+          name: string
+          autoIncrement: boolean
+          keyPath: string?
+          keyPathArray:
+            type: array?
+            items: string
+          records:
+            type: array
+            items:
+              type: object
+              properties:
+                key: json?
+                keyEncoded: json?
+                value: json?
+                valueEncoded: json?
+          indexes:
+            type: array
+            items:
+              type: object
+              properties:
+                name: string
+                keyPath: string?
+                keyPathArray:
+                  type: array?
+                  items: string
+                multiEntry: boolean
+                unique: boolean
+
+SetOriginStorage:
+  type: object
+  properties:
+    origin: string
+    localStorage:
+      type: array
+      items: NameValue
+    indexedDB:
+      type: array?
+      items: IndexedDBDatabase
 
 OriginStorage:
   type: object
@@ -230,7 +278,9 @@ OriginStorage:
     localStorage:
       type: array
       items: NameValue
-
+    indexedDB:
+      type: array?
+      items: IndexedDBDatabase
 
 SerializedError:
   type: object
@@ -326,6 +376,8 @@ APIRequestContext:
           items: string
 
     storageState:
+      parameters:
+        indexedDB: boolean?
       returns:
         cookies:
           type: array
@@ -508,6 +560,12 @@ ContextOptions:
       - accept
       - deny
       - internal-browser-default
+    contrast:
+      type: enum?
+      literals:
+      - no-preference
+      - more
+      - no-override
     baseURL: string?
     recordVideo:
       type: object?
@@ -693,6 +751,7 @@ Playwright:
         extraHTTPHeaders:
           type: array?
           items: NameValue
+        failOnStatusCode: boolean?
         clientCertificates:
           type: array?
           items:
@@ -730,7 +789,7 @@ Playwright:
               items: NetworkCookie
             origins:
               type: array?
-              items: OriginStorage
+              items: SetOriginStorage
         tracesDir: string?
 
       returns:
@@ -964,7 +1023,7 @@ Browser:
               items: SetNetworkCookie
             origins:
               type: array?
-              items: OriginStorage
+              items: SetOriginStorage
       returns:
         context: BrowserContext
 
@@ -986,7 +1045,7 @@ Browser:
               items: SetNetworkCookie
             origins:
               type: array?
-              items: OriginStorage
+              items: SetOriginStorage
       returns:
         context: BrowserContext
 
@@ -1178,6 +1237,8 @@ BrowserContext:
         offline: boolean
 
     storageState:
+      parameters:
+        indexedDB: boolean?
       returns:
         cookies:
           type: array
@@ -1419,6 +1480,12 @@ Page:
           literals:
           - active
           - none
+          - no-override
+        contrast:
+          type: enum?
+          literals:
+          - no-preference
+          - more
           - no-override
       flags:
         snapshot: true
@@ -1879,6 +1946,12 @@ Frame:
     ariaSnapshot:
       parameters:
         selector: string
+        id: boolean?
+        mode:
+          type: enum?
+          literals:
+          - raw
+          - regex
         timeout: number?
       returns:
         snapshot: string
@@ -2647,6 +2720,10 @@ ElementHandle:
       flags:
         slowMo: true
         snapshot: true
+
+    generateLocatorString:
+      returns:
+        value: string?
 
     getAttribute:
       parameters:

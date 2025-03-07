@@ -14,20 +14,22 @@
  * limitations under the License.
  */
 
-import net from 'net';
-import http2 from 'http2';
-import type https from 'https';
-import tls from 'tls';
-import stream from 'stream';
-import { createSocket, createTLSSocket } from '../utils/happy-eyeballs';
-import { escapeHTML, generateSelfSignedCertificate, ManualPromise, rewriteErrorMessage } from '../utils';
-import type { SocksSocketClosedPayload, SocksSocketDataPayload, SocksSocketRequestedPayload } from '../common/socksProxy';
-import { SocksProxy } from '../common/socksProxy';
-import type * as types from './types';
-import { debugLogger } from '../utils/debugLogger';
-import { createProxyAgent } from './fetch';
 import { EventEmitter } from 'events';
+import http2 from 'http2';
+import net from 'net';
+import stream from 'stream';
+import tls from 'tls';
+
+import { SocksProxy } from './utils/socksProxy';
+import { ManualPromise, escapeHTML, generateSelfSignedCertificate, rewriteErrorMessage } from '../utils';
 import { verifyClientCertificates } from './browserContext';
+import { createProxyAgent } from './fetch';
+import { debugLogger } from './utils/debugLogger';
+import { createSocket, createTLSSocket } from './utils/happyEyeballs';
+
+import type * as types from './types';
+import type { SocksSocketClosedPayload, SocksSocketDataPayload, SocksSocketRequestedPayload } from './utils/socksProxy';
+import type https from 'https';
 
 let dummyServerTlsOptions: tls.TlsOptions | undefined = undefined;
 function loadDummyServerCertsIfNeeded() {
@@ -98,7 +100,7 @@ class SocksProxyConnection {
 
   async connect() {
     if (this.socksProxy.proxyAgentFromOptions)
-      this.target = await this.socksProxy.proxyAgentFromOptions.connect(new EventEmitter() as any, { host: rewriteToLocalhostIfNeeded(this.host), port: this.port, secureEndpoint: false });
+      this.target = await this.socksProxy.proxyAgentFromOptions.callback(new EventEmitter() as any, { host: rewriteToLocalhostIfNeeded(this.host), port: this.port, secureEndpoint: false });
     else
       this.target = await createSocket(rewriteToLocalhostIfNeeded(this.host), this.port);
 

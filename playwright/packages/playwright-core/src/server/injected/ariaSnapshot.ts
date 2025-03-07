@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
-import * as roleUtils from './roleUtils';
-import { getElementComputedStyle } from './domUtils';
 import { escapeRegExp, longestCommonSubstring, normalizeWhiteSpace } from '@isomorphic/stringUtils';
+
+import { getElementComputedStyle } from './domUtils';
+import * as roleUtils from './roleUtils';
 import { yamlEscapeKeyIfNeeded, yamlEscapeValueIfNeeded } from './yaml';
+
 import type { AriaProps, AriaRegex, AriaRole, AriaTemplateNode, AriaTemplateRoleNode, AriaTemplateTextNode } from '@isomorphic/ariaSnapshot';
 
 export type AriaNode = AriaProps & {
@@ -57,7 +59,8 @@ export function generateAriaTree(rootElement: Element): AriaSnapshot {
 
     if (node.nodeType === Node.TEXT_NODE && node.nodeValue) {
       const text = node.nodeValue;
-      if (text)
+      // <textarea>AAA</textarea> should not report AAA as a child of the textarea.
+      if (ariaNode.role !== 'textbox' && text)
         ariaNode.children.push(node.nodeValue || '');
       return;
     }

@@ -14,22 +14,24 @@
  * limitations under the License.
  */
 
-import fs from 'fs';
-import { isString, isRegExp, monotonicTime } from '../utils';
-import type * as channels from '@protocol/channels';
-import { Events } from './events';
+import { EventEmitter } from './eventEmitter';
 import { BrowserContext, prepareBrowserContextParams } from './browserContext';
 import { ChannelOwner } from './channelOwner';
-import type * as api from '../../types/types';
-import type * as types from './types';
-import type { Page } from './page';
-import { TimeoutSettings } from '../common/timeoutSettings';
+import { TargetClosedError, isTargetClosedError } from './errors';
+import { Events } from './events';
 import { Waiter } from './waiter';
-import { EventEmitter } from 'events';
-import { Connection } from './connection';
-import { isTargetClosedError, TargetClosedError } from './errors';
-import { raceAgainstDeadline } from '../utils/timeoutRunner';
+import { TimeoutSettings } from './timeoutSettings';
+import { isRegExp, isString } from '../utils/isomorphic/rtti';
+import { monotonicTime } from '../utils/isomorphic/time';
+import { raceAgainstDeadline } from '../utils/isomorphic/timeoutRunner';
+import { connectOverWebSocket } from './webSocket';
+
+import type { Page } from './page';
+import type * as types from './types';
+import type * as api from '../../types/types';
 import type { AndroidServerLauncherImpl } from '../androidServerImpl';
+import type { Platform } from './platform';
+import type * as channels from '@protocol/channels';
 
 type Direction = 'down' | 'up' | 'left' | 'right';
 type SpeedOptions = { speed?: number };
@@ -44,12 +46,14 @@ export class Android extends ChannelOwner<channels.AndroidChannel> implements ap
 
   constructor(parent: ChannelOwner, type: string, guid: string, initializer: channels.AndroidInitializer) {
     super(parent, type, guid, initializer);
-    this._timeoutSettings = new TimeoutSettings();
+    this._timeoutSettings = new TimeoutSettings(this._platform);
   }
 
   setDefaultTimeout(timeout: number) {
     this._timeoutSettings.setDefaultTimeout(timeout);
-    this._channel.setDefaultTimeoutNoReply({ timeout });
+    this._wrapApiCall(async () => {
+      await this._channel.setDefaultTimeoutNoReply({ timeout });
+    }, true).catch(() => {});
   }
 
   async devices(options: { port?: number } = {}): Promise<AndroidDevice[]> {
@@ -67,47 +71,29 @@ export class Android extends ChannelOwner<channels.AndroidChannel> implements ap
     return await this._wrapApiCall(async () => {
       const deadline = options.timeout ? monotonicTime() + options.timeout : 0;
       const headers = { 'x-playwright-browser': 'android', ...options.headers };
-      const localUtils = this._connection.localUtils();
       const connectParams: channels.LocalUtilsConnectParams = { wsEndpoint, headers, slowMo: options.slowMo, timeout: options.timeout };
-      const { pipe } = await localUtils._channel.connect(connectParams);
-      const closePipe = () => pipe.close().catch(() => {});
-      const connection = new Connection(localUtils, this._instrumentation);
-      connection.markAsRemote();
-      connection.on('close', closePipe);
+      const connection = await connectOverWebSocket(this._connection, connectParams);
 
       let device: AndroidDevice;
-      let closeError: string | undefined;
-      const onPipeClosed = () => {
+      connection.on('close', () => {
         device?._didClose();
-        connection.close(closeError);
-      };
-      pipe.on('closed', onPipeClosed);
-      connection.onmessage = message => pipe.send({ message }).catch(onPipeClosed);
-
-      pipe.on('message', ({ message }) => {
-        try {
-          connection!.dispatch(message);
-        } catch (e) {
-          closeError = String(e);
-          closePipe();
-        }
       });
 
       const result = await raceAgainstDeadline(async () => {
         const playwright = await connection!.initializePlaywright();
         if (!playwright._initializer.preConnectedAndroidDevice) {
-          closePipe();
+          connection.close();
           throw new Error('Malformed endpoint. Did you use Android.launchServer method?');
         }
         device = AndroidDevice.from(playwright._initializer.preConnectedAndroidDevice!);
         device._shouldCloseConnectionOnClose = true;
-        device.on(Events.AndroidDevice.Close, closePipe);
+        device.on(Events.AndroidDevice.Close, () => connection.close());
         return device;
       }, deadline);
       if (!result.timedOut) {
         return result.result;
       } else {
-        closePipe();
+        connection.close();
         throw new Error(`Timeout ${options.timeout}ms exceeded`);
       }
     });
@@ -128,7 +114,7 @@ export class AndroidDevice extends ChannelOwner<channels.AndroidDeviceChannel> i
   constructor(parent: ChannelOwner, type: string, guid: string, initializer: channels.AndroidDeviceInitializer) {
     super(parent, type, guid, initializer);
     this.input = new AndroidInput(this);
-    this._timeoutSettings = new TimeoutSettings((parent as Android)._timeoutSettings);
+    this._timeoutSettings = new TimeoutSettings(this._platform, (parent as Android)._timeoutSettings);
     this._channel.on('webViewAdded', ({ webView }) => this._onWebViewAdded(webView));
     this._channel.on('webViewRemoved', ({ socketName }) => this._onWebViewRemoved(socketName));
     this._channel.on('close', () => this._didClose());
@@ -149,7 +135,9 @@ export class AndroidDevice extends ChannelOwner<channels.AndroidDeviceChannel> i
 
   setDefaultTimeout(timeout: number) {
     this._timeoutSettings.setDefaultTimeout(timeout);
-    this._channel.setDefaultTimeoutNoReply({ timeout });
+    this._wrapApiCall(async () => {
+      await this._channel.setDefaultTimeoutNoReply({ timeout });
+    }, true).catch(() => {});
   }
 
   serial(): string {
@@ -230,7 +218,7 @@ export class AndroidDevice extends ChannelOwner<channels.AndroidDeviceChannel> i
   async screenshot(options: { path?: string } = {}): Promise<Buffer> {
     const { binary } = await this._channel.screenshot();
     if (options.path)
-      await fs.promises.writeFile(options.path, binary);
+      await this._platform.fs().promises.writeFile(options.path, binary);
     return binary;
   }
 
@@ -265,15 +253,15 @@ export class AndroidDevice extends ChannelOwner<channels.AndroidDeviceChannel> i
   }
 
   async installApk(file: string | Buffer, options?: { args: string[] }): Promise<void> {
-    await this._channel.installApk({ file: await loadFile(file), args: options && options.args });
+    await this._channel.installApk({ file: await loadFile(this._platform, file), args: options && options.args });
   }
 
   async push(file: string | Buffer, path: string, options?: { mode: number }): Promise<void> {
-    await this._channel.push({ file: await loadFile(file), path, mode: options ? options.mode : undefined });
+    await this._channel.push({ file: await loadFile(this._platform, file), path, mode: options ? options.mode : undefined });
   }
 
   async launchBrowser(options: types.BrowserContextOptions & { pkg?: string } = {}): Promise<BrowserContext> {
-    const contextOptions = await prepareBrowserContextParams(options);
+    const contextOptions = await prepareBrowserContextParams(this._platform, options);
     const result = await this._channel.launchBrowser(contextOptions);
     const context = BrowserContext.from(result.context) as BrowserContext;
     context._setOptions(contextOptions, {});
@@ -319,9 +307,9 @@ export class AndroidSocket extends ChannelOwner<channels.AndroidSocketChannel> i
   }
 }
 
-async function loadFile(file: string | Buffer): Promise<Buffer> {
+async function loadFile(platform: Platform, file: string | Buffer): Promise<Buffer> {
   if (isString(file))
-    return await fs.promises.readFile(file);
+    return await platform.fs().promises.readFile(file);
   return file;
 }
 
@@ -409,7 +397,7 @@ export class AndroidWebView extends EventEmitter implements api.AndroidWebView {
   private _pagePromise: Promise<Page> | undefined;
 
   constructor(device: AndroidDevice, data: channels.AndroidWebView) {
-    super();
+    super(device._platform);
     this._device = device;
     this._data = data;
   }

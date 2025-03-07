@@ -14,14 +14,20 @@
  * limitations under the License.
  */
 
-import { Connection } from './client/connection';
-import { PipeTransport } from './protocol/transport';
-import type { Playwright } from './client/playwright';
 import * as childProcess from 'child_process';
-import * as path from 'path';
-import { ManualPromise } from './utils/manualPromise';
+import path from 'path';
+
+import { Connection } from './client/connection';
+import { PipeTransport } from './server/utils/pipeTransport';
+import { ManualPromise } from './utils/isomorphic/manualPromise';
+import { nodePlatform } from './server/utils/nodePlatform';
+import { setPlatformForSelectors } from './client/selectors';
+
+import type { Playwright } from './client/playwright';
+
 
 export async function start(env: any = {}): Promise<{ playwright: Playwright, stop: () => Promise<void> }> {
+  setPlatformForSelectors(nodePlatform);
   const client = new PlaywrightClient(env);
   const playwright = await client._playwright;
   (playwright as any).driverProcess = client._driverProcess;
@@ -45,7 +51,7 @@ class PlaywrightClient {
     this._driverProcess.unref();
     this._driverProcess.stderr!.on('data', data => process.stderr.write(data));
 
-    const connection = new Connection(undefined, undefined);
+    const connection = new Connection(nodePlatform);
     const transport = new PipeTransport(this._driverProcess.stdin!, this._driverProcess.stdout!);
     connection.onmessage = message => transport.send(JSON.stringify(message));
     transport.onmessage = message => connection.dispatch(JSON.parse(message));

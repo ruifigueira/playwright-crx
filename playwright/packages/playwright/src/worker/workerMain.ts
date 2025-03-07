@@ -14,25 +14,27 @@
  * limitations under the License.
  */
 
-import { colors } from 'playwright-core/lib/utilsBundle';
-import { debugTest, relativeFilePath } from '../util';
-import type { TestBeginPayload, TestEndPayload, RunPayload, DonePayload, WorkerInitParams, TeardownErrorsPayload, TestInfoErrorImpl } from '../common/ipc';
-import { stdioChunkToParams } from '../common/ipc';
-import { setCurrentTestInfo, setIsWorkerProcess } from '../common/globals';
-import { deserializeConfig } from '../common/configLoader';
-import type { Suite, TestCase } from '../common/test';
-import type { Annotation, FullConfigInternal, FullProjectInternal } from '../common/config';
-import { FixtureRunner } from './fixtureRunner';
 import { ManualPromise, gracefullyCloseAll, removeFolders } from 'playwright-core/lib/utils';
-import { SkipError, TestInfoImpl } from './testInfo';
-import { ProcessRunner } from '../common/process';
-import { loadTestFile } from '../common/testLoader';
-import { applyRepeatEachIndex, bindFileSuiteToProject, filterTestsRemoveEmptySuites } from '../common/suiteUtils';
-import { PoolBuilder } from '../common/poolBuilder';
-import type { Location } from '../../types/testReporter';
-import { inheritFixtureNames } from '../common/fixtures';
-import { type TimeSlot } from './timeoutManager';
+import { colors } from 'playwright-core/lib/utils';
+
+import { deserializeConfig } from '../common/configLoader';
+import { setCurrentTestInfo, setIsWorkerProcess } from '../common/globals';
+import { stdioChunkToParams } from '../common/ipc';
+import { debugTest, relativeFilePath } from '../util';
+import { FixtureRunner } from './fixtureRunner';
+import { TestSkipError, TestInfoImpl } from './testInfo';
 import { testInfoError } from './util';
+import { inheritFixtureNames } from '../common/fixtures';
+import { PoolBuilder } from '../common/poolBuilder';
+import { ProcessRunner } from '../common/process';
+import { applyRepeatEachIndex, bindFileSuiteToProject, filterTestsRemoveEmptySuites } from '../common/suiteUtils';
+import { loadTestFile } from '../common/testLoader';
+
+import type { TimeSlot } from './timeoutManager';
+import type { Location } from '../../types/testReporter';
+import type { Annotation, FullConfigInternal, FullProjectInternal } from '../common/config';
+import type { DonePayload, RunPayload, TeardownErrorsPayload, TestBeginPayload, TestEndPayload, TestInfoErrorImpl, WorkerInitParams } from '../common/ipc';
+import type { Suite, TestCase } from '../common/test';
 
 export class WorkerMain extends ProcessRunner {
   private _params: WorkerInitParams;
@@ -105,16 +107,20 @@ export class WorkerMain extends ProcessRunner {
   override async gracefullyClose() {
     try {
       await this._stop();
+      if (!this._config) {
+        // We never set anything up and we can crash on attempting cleanup
+        return;
+      }
       // Ignore top-level errors, they are already inside TestInfo.errors.
       const fakeTestInfo = new TestInfoImpl(this._config, this._project, this._params, undefined, 0, () => {}, () => {}, () => {});
       const runnable = { type: 'teardown' } as const;
       // We have to load the project to get the right deadline below.
-      await fakeTestInfo._runAsStage({ title: 'worker cleanup', runnable }, () => this._loadIfNeeded()).catch(() => {});
+      await fakeTestInfo._runWithTimeout(runnable, () => this._loadIfNeeded()).catch(() => {});
       await this._fixtureRunner.teardownScope('test', fakeTestInfo, runnable).catch(() => {});
       await this._fixtureRunner.teardownScope('worker', fakeTestInfo, runnable).catch(() => {});
       // Close any other browsers launched in this process. This includes anything launched
       // manually in the test/hooks and internal browsers like Playwright Inspector.
-      await fakeTestInfo._runAsStage({ title: 'worker cleanup', runnable }, () => gracefullyCloseAll()).catch(() => {});
+      await fakeTestInfo._runWithTimeout(runnable, () => gracefullyCloseAll()).catch(() => {});
       this._fatalErrors.push(...fakeTestInfo.errors);
     } catch (e) {
       this._fatalErrors.push(testInfoError(e));
@@ -190,15 +196,19 @@ export class WorkerMain extends ProcessRunner {
     if (this._config)
       return;
 
-    this._config = await deserializeConfig(this._params.config);
-    this._project = this._config.projects.find(p => p.id === this._params.projectId)!;
+    const config = await deserializeConfig(this._params.config);
+    const project = config.projects.find(p => p.id === this._params.projectId);
+    if (!project)
+      throw new Error(`Project "${this._params.projectId}" not found in the worker process. Make sure project name does not change.`);
+    this._config = config;
+    this._project = project;
     this._poolBuilder = PoolBuilder.createForWorker(this._project);
   }
 
   async runTestGroup(runPayload: RunPayload) {
     this._runFinished = new ManualPromise<void>();
     const entries = new Map(runPayload.entries.map(e => [e.testId, e]));
-    let fatalUnknownTestIds;
+    let fatalUnknownTestIds: string[] | undefined;
     try {
       await this._loadIfNeeded();
       const fileSuite = await loadTestFile(runPayload.file, this._config.config.rootDir);
@@ -311,8 +321,20 @@ export class WorkerMain extends ProcessRunner {
     let shouldRunAfterEachHooks = false;
 
     testInfo._allowSkips = true;
-    await testInfo._runAsStage({ title: 'setup and test' }, async () => {
-      await testInfo._runAsStage({ title: 'start tracing', runnable: { type: 'test' } }, async () => {
+
+    // Create warning if any of the async calls were not awaited in various stages.
+    const checkForFloatingPromises = (functionDescription: string) => {
+      if (process.env.PW_DISABLE_FLOATING_PROMISES_WARNING)
+        return;
+      if (!testInfo._floatingPromiseScope.hasFloatingPromises())
+        return;
+      // TODO: 1.52: Actually build annotations
+      // testInfo.annotations.push({ type: 'warning', description: `Some async calls were not awaited by the end of ${functionDescription}. This can cause flakiness.` });
+      testInfo._floatingPromiseScope.clear();
+    };
+
+    await (async () => {
+      await testInfo._runWithTimeout({ type: 'test' }, async () => {
         // Ideally, "trace" would be an config-level option belonging to the
         // test runner instead of a fixture belonging to Playwright.
         // However, for backwards compatibility, we have to read it from a fixture today.
@@ -337,7 +359,7 @@ export class WorkerMain extends ProcessRunner {
       await removeFolders([testInfo.outputDir]);
 
       let testFunctionParams: object | null = null;
-      await testInfo._runAsStage({ title: 'Before Hooks', stepInfo: { category: 'hook' } }, async () => {
+      await testInfo._runAsStep({ title: 'Before Hooks', category: 'hook' }, async () => {
         // Run "beforeAll" hooks, unless already run during previous tests.
         for (const suite of suites)
           await this._runBeforeAllHooksForSuite(suite, testInfo);
@@ -350,17 +372,20 @@ export class WorkerMain extends ProcessRunner {
         testFunctionParams = await this._fixtureRunner.resolveParametersForFunction(test.fn, testInfo, 'test', { type: 'test' });
       });
 
+      checkForFloatingPromises('beforeAll/beforeEach hooks');
+
       if (testFunctionParams === null) {
         // Fixture setup failed or was skipped, we should not run the test now.
         return;
       }
 
-      await testInfo._runAsStage({ title: 'test function', runnable: { type: 'test' } }, async () => {
+      await testInfo._runWithTimeout({ type: 'test' }, async () => {
         // Now run the test itself.
         const fn = test.fn; // Extract a variable to get a better stack trace ("myTest" vs "TestCase.myTest [as fn]").
         await fn(testFunctionParams, testInfo);
+        checkForFloatingPromises('the test');
       });
-    }).catch(() => {});  // Ignore the top-level error, it is already inside TestInfo.errors.
+    })().catch(() => {});  // Ignore the top-level error, it is already inside TestInfo.errors.
 
     // Update duration, so it is available in fixture teardown and afterEach hooks.
     testInfo.duration = testInfo._timeoutManager.defaultSlot().elapsed | 0;
@@ -371,12 +396,12 @@ export class WorkerMain extends ProcessRunner {
     // After hooks get an additional timeout.
     const afterHooksTimeout = calculateMaxTimeout(this._project.project.timeout, testInfo.timeout);
     const afterHooksSlot = { timeout: afterHooksTimeout, elapsed: 0 };
-    await testInfo._runAsStage({ title: 'After Hooks', stepInfo: { category: 'hook' } }, async () => {
+    await testInfo._runAsStep({ title: 'After Hooks', category: 'hook' }, async () => {
       let firstAfterHooksError: Error | undefined;
 
       try {
         // Run "immediately upon test function finish" callback.
-        await testInfo._runAsStage({ title: 'on-test-function-finish', runnable: { type: 'test', slot: afterHooksSlot } }, async () => testInfo._onDidFinishTestFunction?.());
+        await testInfo._runWithTimeout({ type: 'test', slot: afterHooksSlot }, async () => testInfo._onDidFinishTestFunction?.());
       } catch (error) {
         firstAfterHooksError = firstAfterHooksError ?? error;
       }
@@ -388,6 +413,8 @@ export class WorkerMain extends ProcessRunner {
       } catch (error) {
         firstAfterHooksError = firstAfterHooksError ?? error;
       }
+
+      testInfo._tracing.didFinishTestFunctionAndAfterEachHooks();
 
       try {
         // Teardown test-scoped fixtures. Attribute to 'test' so that users understand
@@ -414,6 +441,8 @@ export class WorkerMain extends ProcessRunner {
         throw firstAfterHooksError;
     }).catch(() => {});  // Ignore the top-level error, it is already inside TestInfo.errors.
 
+    checkForFloatingPromises('afterAll/afterEach hooks');
+
     if (testInfo._isFailure())
       this._isStopped = true;
 
@@ -422,7 +451,7 @@ export class WorkerMain extends ProcessRunner {
       // Mark as "cleaned up" early to avoid running cleanup twice.
       this._didRunFullCleanup = true;
 
-      await testInfo._runAsStage({ title: 'Worker Cleanup', stepInfo: { category: 'hook' } }, async () => {
+      await testInfo._runAsStep({ title: 'Worker Cleanup', category: 'hook' }, async () => {
         let firstWorkerCleanupError: Error | undefined;
 
         // Give it more time for the full cleanup.
@@ -455,7 +484,7 @@ export class WorkerMain extends ProcessRunner {
     }
 
     const tracingSlot = { timeout: this._project.project.timeout, elapsed: 0 };
-    await testInfo._runAsStage({ title: 'stop tracing', runnable: { type: 'test', slot: tracingSlot } }, async () => {
+    await testInfo._runWithTimeout({ type: 'test', slot: tracingSlot }, async () => {
       await testInfo._tracing.stopIfNeeded();
     }).catch(() => {});  // Ignore the top-level error, it is already inside TestInfo.errors.
 
@@ -508,7 +537,7 @@ export class WorkerMain extends ProcessRunner {
     let firstError: Error | undefined;
     for (const hook of this._collectHooksAndModifiers(suite, type, testInfo)) {
       try {
-        await testInfo._runAsStage({ title: hook.title, stepInfo: { category: 'hook', location: hook.location } }, async () => {
+        await testInfo._runAsStep({ title: hook.title, category: 'hook', location: hook.location }, async () => {
           // Separate time slot for each beforeAll/afterAll hook.
           const timeSlot = { timeout: this._project.project.timeout, elapsed: 0 };
           const runnable = { type: hook.type, slot: timeSlot, location: hook.location };
@@ -529,7 +558,7 @@ export class WorkerMain extends ProcessRunner {
       } catch (error) {
         firstError = firstError ?? error;
         // Skip in beforeAll/modifier prevents others from running.
-        if (type === 'beforeAll' && (error instanceof SkipError))
+        if (type === 'beforeAll' && (error instanceof TestSkipError))
           break;
         if (type === 'beforeAll' && !this._skipRemainingTestsInSuite) {
           // This will inform dispatcher that we should not run more tests from this group
@@ -561,13 +590,13 @@ export class WorkerMain extends ProcessRunner {
         continue;
       }
       try {
-        await testInfo._runAsStage({ title: hook.title, stepInfo: { category: 'hook', location: hook.location } }, async () => {
+        await testInfo._runAsStep({ title: hook.title, category: 'hook', location: hook.location }, async () => {
           await this._fixtureRunner.resolveParametersAndRunFunction(hook.fn, testInfo, 'test', runnable);
         });
       } catch (error) {
         firstError = firstError ?? error;
         // Skip in modifier prevents others from running.
-        if (error instanceof SkipError)
+        if (error instanceof TestSkipError)
           break;
       }
     }

@@ -5,11 +5,11 @@
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "allowJs": true,
     "skipLibCheck": false,
-    "esModuleInterop": false,
+    "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
@@ -23,6 +23,6 @@
       "@web/*": ["../web/src/*"],
     }
   },
-  "include": ["src"],
+  "include": ["src", "../web/src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

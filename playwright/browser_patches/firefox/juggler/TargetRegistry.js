@@ -384,6 +384,7 @@ class PageTarget {
     this._linkedBrowser = tab.linkedBrowser;
     this._browserContext = browserContext;
     this._viewportSize = undefined;
+    this._zoom = 1;
     this._initialDPPX = this._linkedBrowser.browsingContext.overrideDPPX;
     this._url = 'about:blank';
     this._openerId = opener ? opener.id() : undefined;
@@ -393,7 +394,7 @@ class PageTarget {
     this._videoRecordingInfo = undefined;
     this._screencastRecordingInfo = undefined;
     this._dialogs = new Map();
-    this.forcedColors = 'no-override';
+    this.forcedColors = 'none';
     this.disableCache = false;
     this.mediumOverride = '';
     this.crossProcessCookie = {
@@ -496,6 +497,7 @@ class PageTarget {
     this.updateUserAgent(browsingContext);
     this.updatePlatform(browsingContext);
     this.updateDPPXOverride(browsingContext);
+    this.updateZoom(browsingContext);
     this.updateEmulatedMedia(browsingContext);
     this.updateColorSchemeOverride(browsingContext);
     this.updateReducedMotionOverride(browsingContext);
@@ -534,7 +536,16 @@ class PageTarget {
   }
 
   updateDPPXOverride(browsingContext = undefined) {
-    (browsingContext || this._linkedBrowser.browsingContext).overrideDPPX = this._browserContext.deviceScaleFactor || this._initialDPPX;
+    browsingContext ||= this._linkedBrowser.browsingContext;
+    const dppx = this._zoom * (this._browserContext.deviceScaleFactor || this._initialDPPX);
+    browsingContext.overrideDPPX = dppx;
+  }
+
+  async updateZoom(browsingContext = undefined) {
+    browsingContext ||= this._linkedBrowser.browsingContext;
+    // Update dpr first, and then UI zoom.
+    this.updateDPPXOverride(browsingContext);
+    browsingContext.fullZoom = this._zoom;
   }
 
   _updateModalDialogs() {
@@ -584,7 +595,7 @@ class PageTarget {
       const toolbarTop = stackRect.y;
       this._window.resizeBy(width - this._window.innerWidth, height + toolbarTop - this._window.innerHeight);
 
-      await this._channel.connect('').send('awaitViewportDimensions', { width, height });
+      await this._channel.connect('').send('awaitViewportDimensions', { width: width / this._zoom, height: height / this._zoom });
     } else {
       this._linkedBrowser.style.removeProperty('width');
       this._linkedBrowser.style.removeProperty('height');
@@ -596,8 +607,8 @@ class PageTarget {
 
       const actualSize = this._linkedBrowser.getBoundingClientRect();
       await this._channel.connect('').send('awaitViewportDimensions', {
-        width: actualSize.width,
-        height: actualSize.height,
+        width: actualSize.width / this._zoom,
+        height: actualSize.height / this._zoom,
       });
     }
   }
@@ -635,7 +646,8 @@ class PageTarget {
   }
 
   updateForcedColorsOverride(browsingContext = undefined) {
-    (browsingContext || this._linkedBrowser.browsingContext).forcedColorsOverride = (this.forcedColors !== 'no-override' ? this.forcedColors : this._browserContext.forcedColors) || 'no-override';
+    const isActive = this.forcedColors === 'active' || this._browserContext.forcedColors === 'active';
+    (browsingContext || this._linkedBrowser.browsingContext).forcedColorsOverride = isActive ? 'active' : 'none';
   }
 
   async setInterceptFileChooserDialog(enabled) {
@@ -647,6 +659,14 @@ class PageTarget {
   async setViewportSize(viewportSize) {
     this._viewportSize = viewportSize;
     await this.updateViewportSize();
+  }
+
+  async setZoom(zoom) {
+    // This is default range from the ZoomManager.
+    if (zoom < 0.3 || zoom > 5)
+      throw new Error('Invalid zoom value, must be between 0.3 and 5');
+    this._zoom = zoom;
+    await this.updateZoom();
   }
 
   close(runBeforeUnload = false) {
@@ -858,8 +878,8 @@ function fromProtocolReducedMotion(reducedMotion) {
 function fromProtocolForcedColors(forcedColors) {
   if (forcedColors === 'active' || forcedColors === 'none')
     return forcedColors;
-  if (forcedColors === null)
-    return undefined;
+  if (!forcedColors)
+    return 'none';
   throw new Error('Unknown forced colors: ' + forcedColors);
 }
 
@@ -893,7 +913,7 @@ class BrowserContext {
     this.forceOffline = false;
     this.disableCache = false;
     this.colorScheme = 'none';
-    this.forcedColors = 'no-override';
+    this.forcedColors = 'none';
     this.reducedMotion = 'none';
     this.videoRecordingOptions = undefined;
     this.crossProcessCookie = {

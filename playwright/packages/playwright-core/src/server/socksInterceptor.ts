@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 
-import * as socks from '../common/socksProxy';
 import EventEmitter from 'events';
-import type * as channels from '@protocol/channels';
+
+import * as socks from './utils/socksProxy';
+import { ValidationError, findValidator } from '../protocol/validator';
+import { isUnderTest } from './utils/debug';
+
 import type { WebSocketTransport } from './transport';
-import { findValidator, ValidationError } from '../protocol/validator';
 import type { ValidatorContext } from '../protocol/validator';
+import type * as channels from '@protocol/channels';
 
 export class SocksInterceptor {
   private _handler: socks.SocksProxyHandler;
@@ -40,7 +43,7 @@ export class SocksInterceptor {
             const id = --lastId;
             this._ids.add(id);
             const validator = findValidator('SocksSupport', prop, 'Params');
-            params = validator(params, '', { tChannelImpl: tChannelForSocks, binary: 'toBase64' });
+            params = validator(params, '', { tChannelImpl: tChannelForSocks, binary: 'toBase64', isUnderTest });
             transport.send({ id, guid: this._socksSupportObjectGuid, method: prop, params, metadata: { stack: [], apiName: '', internal: true } } as any);
           } catch (e) {
           }
@@ -72,7 +75,7 @@ export class SocksInterceptor {
     }
     if (this._socksSupportObjectGuid && message.guid === this._socksSupportObjectGuid) {
       const validator = findValidator('SocksSupport', message.method, 'Event');
-      const params = validator(message.params, '', { tChannelImpl: tChannelForSocks, binary: 'fromBase64' });
+      const params = validator(message.params, '', { tChannelImpl: tChannelForSocks, binary: 'fromBase64', isUnderTest });
       this._channel.emit(message.method, params);
       return true;
     }

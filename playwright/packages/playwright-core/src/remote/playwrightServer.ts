@@ -14,18 +14,21 @@
  * limitations under the License.
  */
 
+import { PlaywrightConnection } from './playwrightConnection';
+import { createPlaywright } from '../server/playwright';
+import { debugLogger } from '../server/utils/debugLogger';
+import { Semaphore } from '../utils/isomorphic/semaphore';
+import { WSServer } from '../server/utils/wsServer';
+import { wrapInASCIIBox } from '../server/utils/ascii';
+import { getPlaywrightVersion } from '../server/utils/userAgent';
+
+import type { ClientType } from './playwrightConnection';
+import type { SocksProxy } from '../server/utils/socksProxy';
+import type { AndroidDevice } from '../server/android/android';
 import type { Browser } from '../server/browser';
 import type { Playwright } from '../server/playwright';
-import { createPlaywright } from '../server/playwright';
-import { PlaywrightConnection } from './playwrightConnection';
-import type { ClientType } from './playwrightConnection';
 import type  { LaunchOptions } from '../server/types';
-import { Semaphore } from '../utils/semaphore';
-import type { AndroidDevice } from '../server/android/android';
-import type { SocksProxy } from '../common/socksProxy';
-import { debugLogger } from '../utils/debugLogger';
-import { userAgentVersionMatchesErrorMessage } from '../utils';
-import { WSServer } from '../utils/wsServer';
+
 
 type ServerOptions = {
   path: string;
@@ -127,5 +130,30 @@ export class PlaywrightServer {
 
   async close() {
     await this._wsServer.close();
+  }
+}
+
+function userAgentVersionMatchesErrorMessage(userAgent: string) {
+  const match = userAgent.match(/^Playwright\/(\d+\.\d+\.\d+)/);
+  if (!match) {
+    // Cannot parse user agent - be lax.
+    return;
+  }
+  const received = match[1].split('.').slice(0, 2).join('.');
+  const expected = getPlaywrightVersion(true);
+  if (received !== expected) {
+    return wrapInASCIIBox([
+      `Playwright version mismatch:`,
+      `  - server version: v${expected}`,
+      `  - client version: v${received}`,
+      ``,
+      `If you are using VSCode extension, restart VSCode.`,
+      ``,
+      `If you are connecting to a remote service,`,
+      `keep your local Playwright version in sync`,
+      `with the remote service version.`,
+      ``,
+      `<3 Playwright Team`
+    ].join('\n'), 1);
   }
 }

@@ -18,12 +18,12 @@ import * as fs from 'fs';
 import type { PlaywrightTestConfig } from '@playwright/test';
 import path from 'path';
 import url from 'url';
-import type { HttpServer } from '../../packages/playwright-core/src/utils';
+import type { HttpServer } from '../../packages/playwright-core/lib/server/utils/httpServer';
 import { startHtmlReportServer } from '../../packages/playwright/lib/reporters/html';
 import { expect as baseExpect, test as baseTest, stripAnsi } from './playwright-test-fixtures';
 import extractZip from '../../packages/playwright-core/bundles/zip/node_modules/extract-zip';
 import * as yazl from '../../packages/playwright-core/bundles/zip/node_modules/yazl';
-import { getUserAgent } from '../../packages/playwright-core/lib/utils/userAgent';
+import { getUserAgent } from '../../packages/playwright-core/lib/server/utils/userAgent';
 import { Readable } from 'stream';
 
 const DOES_NOT_SUPPORT_UTF8_IN_TERMINAL = process.platform === 'win32' && process.env.TERM_PROGRAM !== 'vscode' && !process.env.WT_SESSION;
