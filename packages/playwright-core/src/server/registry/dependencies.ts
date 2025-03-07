@@ -14,16 +14,18 @@
  * limitations under the License.
  */
 
+import * as childProcess from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
-import * as os from 'os';
-import childProcess from 'child_process';
-import * as utils from '../../utils';
-import { spawnAsync } from '../../utils/spawnAsync';
-import { hostPlatform, isOfficiallySupportedPlatform } from '../../utils/hostPlatform';
-import { buildPlaywrightCLICommand, registry } from '.';
+
 import { deps } from './nativeDeps';
-import { getPlaywrightVersion } from '../../utils/userAgent';
+import { wrapInASCIIBox } from '../utils/ascii';
+import { hostPlatform, isOfficiallySupportedPlatform } from '../utils/hostPlatform';
+import { spawnAsync } from '../utils/spawnAsync';
+import { getPlaywrightVersion } from '../utils/userAgent';
+
+import { buildPlaywrightCLICommand, registry } from '.';
 
 const BIN_DIRECTORY = path.join(__dirname, '..', '..', '..', 'bin');
 const languageBindingVersion = process.env.PW_CLI_DISPLAY_VERSION || require('../../../package.json').version;
@@ -269,7 +271,7 @@ export async function validateDependenciesLinux(sdkLanguage: string, linuxLddDir
     ]);
   }
 
-  throw new Error('\n' + utils.wrapInASCIIBox(errorLines.join('\n'), 1));
+  throw new Error('\n' + wrapInASCIIBox(errorLines.join('\n'), 1));
 }
 
 function isSharedLib(basename: string) {

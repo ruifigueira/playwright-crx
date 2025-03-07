@@ -15,14 +15,16 @@
  */
 
 import { EventEmitter } from 'events';
+
+import { performAction } from './recorderRunner';
+import { collapseActions } from './recorderUtils';
+import { isUnderTest } from '../utils/debug';
+import { monotonicTime } from '../../utils/isomorphic/time';
+
+import type { Signal } from '../../../../recorder/src/actions';
 import type { Frame } from '../frames';
 import type { Page } from '../page';
-import type { Signal } from '../../../../recorder/src/actions';
 import type * as actions from '@recorder/actions';
-import { monotonicTime } from '../../utils/time';
-import { collapseActions } from './recorderUtils';
-import { performAction } from './recorderRunner';
-import { isUnderTest } from '../../utils/debug';
 
 export class RecorderCollection extends EventEmitter {
   private _actions: actions.ActionInContext[] = [];
@@ -85,7 +87,7 @@ export class RecorderCollection extends EventEmitter {
       let generateGoto = false;
       if (!lastAction)
         generateGoto = true;
-      else if (lastAction.action.name !== 'click' && lastAction.action.name !== 'press')
+      else if (lastAction.action.name !== 'click' && lastAction.action.name !== 'press' && lastAction.action.name !== 'fill')
         generateGoto = true;
       else if (timestamp - lastAction.startTime > signalThreshold)
         generateGoto = true;

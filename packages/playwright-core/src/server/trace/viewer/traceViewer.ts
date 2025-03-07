@@ -14,19 +14,22 @@
  * limitations under the License.
  */
 
-import path from 'path';
 import fs from 'fs';
-import { HttpServer } from '../../../utils/httpServer';
-import type { Transport } from '../../../utils/httpServer';
-import { gracefullyProcessExitDoNotHang, isUnderTest } from '../../../utils';
-import { syncLocalStorageWithSettings } from '../../launchApp';
+import path from 'path';
+
+import { gracefullyProcessExitDoNotHang } from '../../../utils';
+import { isUnderTest } from '../../../utils';
+import { HttpServer } from '../../utils/httpServer';
+import { open } from '../../../utilsBundle';
 import { serverSideCallMetadata } from '../../instrumentation';
+import { syncLocalStorageWithSettings } from '../../launchApp';
+import { launchApp } from '../../launchApp';
 import { createPlaywright } from '../../playwright';
 import { ProgressController } from '../../progress';
-import { open } from '../../../utilsBundle';
-import type { Page } from '../../page';
+
+import type { Transport } from '../../utils/httpServer';
 import type { BrowserType } from '../../browserType';
-import { launchApp } from '../../launchApp';
+import type { Page } from '../../page';
 
 export type TraceViewerServerOptions = {
   host?: string;
@@ -67,6 +70,10 @@ export async function startTraceViewerServer(options?: TraceViewerServerOptions)
   server.routePrefix('/trace', (request, response) => {
     const url = new URL('http://localhost' + request.url!);
     const relativePath = url.pathname.slice('/trace'.length);
+    if (process.env.PW_HMR) {
+      // When running in Vite HMR mode, port is hardcoded in build.js
+      response.appendHeader('Access-Control-Allow-Origin', 'http://localhost:44223');
+    }
     if (relativePath.endsWith('/stall.js'))
       return true;
     if (relativePath.startsWith('/file')) {
@@ -135,6 +142,16 @@ export async function installRootRedirect(server: HttpServer, traceUrls: string[
   server.routePath('/', (_, response) => {
     response.statusCode = 302;
     response.setHeader('Location', urlPath);
+
+    if (process.env.EXPERIMENTAL_OPENAI_API_KEY)
+      response.appendHeader('Set-Cookie', `openai_api_key=${process.env.EXPERIMENTAL_OPENAI_API_KEY}`);
+    if (process.env.OPENAI_BASE_URL)
+      response.appendHeader('Set-Cookie', `openai_base_url=${process.env.OPENAI_BASE_URL}`);
+    if (process.env.EXPERIMENTAL_ANTHROPIC_API_KEY)
+      response.appendHeader('Set-Cookie', `anthropic_api_key=${process.env.EXPERIMENTAL_ANTHROPIC_API_KEY}`);
+    if (process.env.ANTHROPIC_BASE_URL)
+      response.appendHeader('Set-Cookie', `anthropic_base_url=${process.env.ANTHROPIC_BASE_URL}`);
+
     response.end();
     return true;
   });

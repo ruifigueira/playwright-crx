@@ -54,10 +54,23 @@ function defaultProfilePreferences(
     // console
     // https://bugzilla.mozilla.org/show_bug.cgi?id=1543115
     'browser.dom.window.dump.enabled': true,
+
+    // Make sure newtab weather doesn't hit the network to retrieve weather data.
+    'browser.newtabpage.activity-stream.discoverystream.region-weather-config': '',
+
+    // Make sure newtab wallpapers don't hit the network to retrieve wallpaper data.
+    'browser.newtabpage.activity-stream.newtabWallpapers.enabled': false,
+    'browser.newtabpage.activity-stream.newtabWallpapers.v2.enabled': false,
+
+    // Make sure Topsites doesn't hit the network to retrieve sponsored tiles.
+    'browser.newtabpage.activity-stream.showSponsoredTopSites': false,
+
     // Disable topstories
     'browser.newtabpage.activity-stream.feeds.system.topstories': false,
+
     // Always display a blank page
     'browser.newtabpage.enabled': false,
+
     // Background thumbnails in particular cause grief: and disabling
     // thumbnails in general cannot hurt
     'browser.pagethumbnails.capturing_disabled': true,
@@ -133,6 +146,15 @@ function defaultProfilePreferences(
     'dom.max_chrome_script_run_time': 0,
     'dom.max_script_run_time': 0,
 
+    // Disable background timer throttling to allow tests to run in parallel
+    // without a decrease in performance.
+    'dom.min_background_timeout_value': 0,
+    'dom.min_background_timeout_value_without_budget_throttling': 0,
+    'dom.timeout.enable_budget_timer_throttling': false,
+
+    // Disable HTTPS-First upgrades
+    'dom.security.https_first': false,
+
     // Only load extensions from the application and user profile
     // AddonManager.SCOPE_PROFILE + AddonManager.SCOPE_APPLICATION
     'extensions.autoDisableScopes': 0,
@@ -175,11 +197,17 @@ function defaultProfilePreferences(
     // Show chrome errors and warnings in the error console
     'javascript.options.showInConsole': true,
 
+    // Do not throttle rendering (requestAnimationFrame) in background tabs
+    'layout.testing.top-level-always-active': true,
+
     // Disable download and usage of OpenH264: and Widevine plugins
     'media.gmp-manager.updateEnabled': false,
 
     // Disable the GFX sanity window
     'media.sanity-test.disabled': true,
+
+    // Disable connectivity service pings
+    'network.connectivity-service.enabled': false,
 
     // Disable experimental feature that is only available in Nightly
     'network.cookie.sameSite.laxByDefault': false,
@@ -215,9 +243,6 @@ function defaultProfilePreferences(
 
     // Do not wait for the notification button security delay
     'security.notification_enable_delay': 0,
-
-    // Ensure blocklist updates do not hit the network
-    'services.settings.server': `http://${server}/dummy/blocklist/`,
 
     // Do not automatically fill sign-in forms with known usernames and
     // passwords

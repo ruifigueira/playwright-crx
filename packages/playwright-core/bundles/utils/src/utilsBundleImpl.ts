@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+/* eslint-disable import/order */
+
 import colorsLibrary from 'colors/safe';
 export const colors = colorsLibrary;
 
@@ -53,9 +55,6 @@ import progressLibrary from 'progress';
 export const progress = progressLibrary;
 
 export { SocksProxyAgent } from 'socks-proxy-agent';
-
-import StackUtilsLibrary from 'stack-utils';
-export const StackUtils = StackUtilsLibrary;
 
 import yamlLibrary from 'yaml';
 export const yaml = yamlLibrary;

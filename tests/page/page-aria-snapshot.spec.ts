@@ -515,6 +515,7 @@ it('should normalize whitespace', async ({ page }) => {
       <summary> one  \n two <a href="#"> link &nbsp;\n  1 </a> </summary>
     </details>
     <input value='  hello   &nbsp; world '>
+    <button>hello\u00ad\u200bworld</button>
   `);
 
   await checkAndMatchSnapshot(page.locator('body'), `
@@ -522,6 +523,7 @@ it('should normalize whitespace', async ({ page }) => {
       - text: one two
       - link "link 1"
     - textbox: hello world
+    - button "helloworld"
   `);
 
   // Weird whitespace in the template should be normalized.
@@ -532,6 +534,7 @@ it('should normalize whitespace', async ({ page }) => {
           two
       - link "  link     1 "
     - textbox:        hello  world
+    - button "he\u00adlloworld\u200b"
   `);
 });
 
@@ -603,5 +606,18 @@ it('should escape special yaml values', async ({ page }) => {
     - link "-"
     - text: "-"
     - textbox: "555"
+  `);
+});
+
+it('should not report textarea textContent', async ({ page }) => {
+  await page.setContent(`<textarea>Before</textarea>`);
+  await checkAndMatchSnapshot(page.locator('body'), `
+    - textbox: Before
+  `);
+  await page.evaluate(() => {
+    document.querySelector('textarea').value = 'After';
+  });
+  await checkAndMatchSnapshot(page.locator('body'), `
+    - textbox: After
   `);
 });

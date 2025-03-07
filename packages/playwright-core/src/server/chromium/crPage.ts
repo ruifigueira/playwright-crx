@@ -16,37 +16,41 @@
  */
 
 import path from 'path';
-import type { RegisteredListener } from '../../utils/eventsHelper';
-import { eventsHelper } from '../../utils/eventsHelper';
-import { registry } from '../registry';
-import { rewriteErrorMessage } from '../../utils/stackTrace';
-import { assert, createGuid } from '../../utils';
+
+import { assert } from '../../utils/isomorphic/assert';
+import { createGuid } from '../utils/crypto';
+import { eventsHelper } from '../utils/eventsHelper';
+import { rewriteErrorMessage } from '../../utils/isomorphic/stackTrace';
 import * as dialog from '../dialog';
 import * as dom from '../dom';
 import * as frames from '../frames';
 import { helper } from '../helper';
 import * as network from '../network';
-import { type InitScript, PageBinding, type PageDelegate } from '../page';
+import {  PageBinding  } from '../page';
 import { Page, Worker } from '../page';
-import type { Progress } from '../progress';
-import type * as types from '../types';
-import type * as channels from '@protocol/channels';
+import { registry } from '../registry';
 import { getAccessibilityTree } from './crAccessibility';
 import { CRBrowserContext } from './crBrowser';
-import type { CRSession } from './crConnection';
 import { CRCoverage } from './crCoverage';
 import { DragManager } from './crDragDrop';
-import { CRExecutionContext } from './crExecutionContext';
+import { createHandle, CRExecutionContext } from './crExecutionContext';
 import { RawKeyboardImpl, RawMouseImpl, RawTouchscreenImpl } from './crInput';
 import { CRNetworkManager } from './crNetworkManager';
 import { CRPDF } from './crPdf';
 import { exceptionToError, releaseObject, toConsoleMessageLocation } from './crProtocolHelper';
 import { platformToFontFamilies } from './defaultFontFamilies';
-import type { Protocol } from './protocol';
 import { VideoRecorder } from './videoRecorder';
 import { BrowserContext } from '../browserContext';
 import { TargetClosedError } from '../errors';
 import { isSessionClosedError } from '../protocolError';
+
+import type { CRSession } from './crConnection';
+import type { Protocol } from './protocol';
+import type { RegisteredListener } from '../utils/eventsHelper';
+import type { InitScript, PageDelegate } from '../page';
+import type { Progress } from '../progress';
+import type * as types from '../types';
+import type * as channels from '@protocol/channels';
 
 
 const UTILITY_WORLD_NAME = '__playwright_utility_world__';
@@ -277,10 +281,6 @@ export class CRPage implements PageDelegate {
     return this._sessionForHandle(handle)._getOwnerFrame(handle);
   }
 
-  isElementHandle(remoteObject: any): boolean {
-    return (remoteObject as Protocol.Runtime.RemoteObject).subtype === 'node';
-  }
-
   async getBoundingBox(handle: dom.ElementHandle): Promise<types.Rect | null> {
     return this._sessionForHandle(handle)._getBoundingBox(handle);
   }
@@ -308,11 +308,6 @@ export class CRPage implements PageDelegate {
 
   async getContentQuads(handle: dom.ElementHandle): Promise<types.Quad[] | null> {
     return this._sessionForHandle(handle)._getContentQuads(handle);
-  }
-
-  async setInputFiles(handle: dom.ElementHandle<HTMLInputElement>, files: types.FilePayload[]): Promise<void> {
-    await handle.evaluateInUtility(([injected, node, files]) =>
-      injected.setInputFiles(node, files), files);
   }
 
   async setInputFilePaths(handle: dom.ElementHandle<HTMLInputElement>, files: string[]): Promise<void> {
@@ -680,7 +675,6 @@ class FrameSession {
     else if (contextPayload.name === UTILITY_WORLD_NAME)
       worldName = 'utility';
     const context = new dom.FrameExecutionContext(delegate, frame, worldName);
-    (context as any)[contextDelegateSymbol] = delegate;
     if (worldName)
       frame._contextCreated(worldName, context);
     this._contextIdToContext.set(contextPayload.id, context);
@@ -740,7 +734,7 @@ class FrameSession {
     session.on('Target.attachedToTarget', event => this._onAttachedToTarget(event));
     session.on('Target.detachedFromTarget', event => this._onDetachedFromTarget(event));
     session.on('Runtime.consoleAPICalled', event => {
-      const args = event.args.map(o => worker._existingExecutionContext!.createHandle(o));
+      const args = event.args.map(o => createHandle(worker._existingExecutionContext!, o));
       this._page._addConsoleMessage(event.type, args, toConsoleMessageLocation(event.stackTrace));
     });
     session.on('Runtime.exceptionThrown', exception => this._page.emitOnContextOnceInitialized(BrowserContext.Events.PageError, exceptionToError(exception.exceptionDetails), this._page));
@@ -803,7 +797,7 @@ class FrameSession {
     const context = this._contextIdToContext.get(event.executionContextId);
     if (!context)
       return;
-    const values = event.args.map(arg => context.createHandle(arg));
+    const values = event.args.map(arg => createHandle(context, arg));
     this._page._addConsoleMessage(event.type, values, toConsoleMessageLocation(event.stackTrace));
   }
 
@@ -1026,10 +1020,12 @@ class FrameSession {
     const colorScheme = emulatedMedia.colorScheme === 'no-override' ? '' : emulatedMedia.colorScheme;
     const reducedMotion = emulatedMedia.reducedMotion === 'no-override' ? '' : emulatedMedia.reducedMotion;
     const forcedColors = emulatedMedia.forcedColors === 'no-override' ? '' : emulatedMedia.forcedColors;
+    const contrast = emulatedMedia.contrast === 'no-override' ? '' : emulatedMedia.contrast;
     const features = [
       { name: 'prefers-color-scheme', value: colorScheme },
       { name: 'prefers-reduced-motion', value: reducedMotion },
       { name: 'forced-colors', value: forcedColors },
+      { name: 'prefers-contrast', value: contrast },
     ];
     await this._client.send('Emulation.setEmulatedMedia', { media, features });
   }
@@ -1166,11 +1162,11 @@ class FrameSession {
   async _adoptBackendNodeId(backendNodeId: Protocol.DOM.BackendNodeId, to: dom.FrameExecutionContext): Promise<dom.ElementHandle> {
     const result = await this._client._sendMayFail('DOM.resolveNode', {
       backendNodeId,
-      executionContextId: ((to as any)[contextDelegateSymbol] as CRExecutionContext)._contextId,
+      executionContextId: (to.delegate as CRExecutionContext)._contextId,
     });
     if (!result || result.object.subtype === 'null')
       throw new Error(dom.kUnableToAdoptErrorMessage);
-    return to.createHandle(result.object).asElement()!;
+    return createHandle(to, result.object).asElement()!;
   }
 }
 
@@ -1198,8 +1194,6 @@ async function emulateTimezone(session: CRSession, timezoneId: string) {
     throw exception;
   }
 }
-
-const contextDelegateSymbol = Symbol('delegate');
 
 // Chromium reference: https://source.chromium.org/chromium/chromium/src/+/main:components/embedder_support/user_agent_utils.cc;l=434;drc=70a6711e08e9f9e0d8e4c48e9ba5cab62eb010c2
 function calculateUserAgentMetadata(options: types.BrowserContextOptions) {

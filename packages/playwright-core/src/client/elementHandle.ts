@@ -14,25 +14,22 @@
  * limitations under the License.
  */
 
-import type * as channels from '@protocol/channels';
 import { Frame } from './frame';
-import type { Locator } from './locator';
-import { JSHandle, serializeArgument, parseResult } from './jsHandle';
-import type { ChannelOwner } from './channelOwner';
-import type { SelectOption, FilePayload, Rect, SelectOptionOptions } from './types';
-import fs from 'fs';
-import { mime } from '../utilsBundle';
-import path from 'path';
-import { assert, isString } from '../utils';
-import { fileUploadSizeLimit, mkdirIfNeeded } from '../utils/fileUtils';
-import type * as api from '../../types/types';
-import type * as structs from '../../types/structs';
-import type { BrowserContext } from './browserContext';
+import { JSHandle, parseResult, serializeArgument } from './jsHandle';
+import { assert } from '../utils/isomorphic/assert';
+import { fileUploadSizeLimit, mkdirIfNeeded } from './fileUtils';
+import { isString } from '../utils/isomorphic/rtti';
 import { WritableStream } from './writableStream';
-import { pipeline } from 'stream';
-import { promisify } from 'util';
+import { getMimeTypeForPath } from '../utils/isomorphic/mimeType';
 
-const pipelineAsync = promisify(pipeline);
+import type { BrowserContext } from './browserContext';
+import type { ChannelOwner } from './channelOwner';
+import type { Locator } from './locator';
+import type { FilePayload, Rect, SelectOption, SelectOptionOptions } from './types';
+import type * as structs from '../../types/structs';
+import type * as api from '../../types/types';
+import type { Platform } from './platform';
+import type * as channels from '@protocol/channels';
 
 export class ElementHandle<T extends Node = Node> extends JSHandle<T> implements api.ElementHandle {
   readonly _elementChannel: channels.ElementHandleChannel;
@@ -60,6 +57,11 @@ export class ElementHandle<T extends Node = Node> extends JSHandle<T> implements
 
   async contentFrame(): Promise<Frame | null> {
     return Frame.fromNullable((await this._elementChannel.contentFrame()).frame);
+  }
+
+  async _generateLocatorString(): Promise<string | null> {
+    const value = (await this._elementChannel.generateLocatorString()).value;
+    return value === undefined ? null : value;
   }
 
   async getAttribute(name: string): Promise<string | null> {
@@ -149,7 +151,7 @@ export class ElementHandle<T extends Node = Node> extends JSHandle<T> implements
     const frame = await this.ownerFrame();
     if (!frame)
       throw new Error('Cannot set input files to detached element');
-    const converted = await convertInputFiles(files, frame.page().context());
+    const converted = await convertInputFiles(this._platform, files, frame.page().context());
     await this._elementChannel.setInputFiles({ ...converted, ...options });
   }
 
@@ -185,20 +187,21 @@ export class ElementHandle<T extends Node = Node> extends JSHandle<T> implements
     return value === undefined ? null : value;
   }
 
-  async screenshot(options: Omit<channels.ElementHandleScreenshotOptions, 'mask'> & { path?: string, mask?: Locator[] } = {}): Promise<Buffer> {
+  async screenshot(options: Omit<channels.ElementHandleScreenshotOptions, 'mask'> & { path?: string, mask?: api.Locator[] } = {}): Promise<Buffer> {
+    const mask = options.mask as Locator[] | undefined;
     const copy: channels.ElementHandleScreenshotOptions = { ...options, mask: undefined };
     if (!copy.type)
       copy.type = determineScreenshotType(options);
-    if (options.mask) {
-      copy.mask = options.mask.map(locator => ({
+    if (mask) {
+      copy.mask = mask.map(locator => ({
         frame: locator._frame._channel,
         selector: locator._selector,
       }));
     }
     const result = await this._elementChannel.screenshot(copy);
     if (options.path) {
-      await mkdirIfNeeded(options.path);
-      await fs.promises.writeFile(options.path, result.binary);
+      await mkdirIfNeeded(this._platform, options.path);
+      await this._platform.fs().promises.writeFile(options.path, result.binary);
     }
     return result.binary;
   }
@@ -256,18 +259,18 @@ function filePayloadExceedsSizeLimit(payloads: FilePayload[]) {
   return payloads.reduce((size, item) => size + (item.buffer ? item.buffer.byteLength : 0), 0) >= fileUploadSizeLimit;
 }
 
-async function resolvePathsAndDirectoryForInputFiles(items: string[]): Promise<[string[] | undefined, string | undefined]> {
+async function resolvePathsAndDirectoryForInputFiles(platform: Platform, items: string[]): Promise<[string[] | undefined, string | undefined]> {
   let localPaths: string[] | undefined;
   let localDirectory: string | undefined;
   for (const item of items) {
-    const stat = await fs.promises.stat(item as string);
+    const stat = await platform.fs().promises.stat(item as string);
     if (stat.isDirectory()) {
       if (localDirectory)
         throw new Error('Multiple directories are not supported');
-      localDirectory = path.resolve(item as string);
+      localDirectory = platform.path().resolve(item as string);
     } else {
       localPaths ??= [];
-      localPaths.push(path.resolve(item as string));
+      localPaths.push(platform.path().resolve(item as string));
     }
   }
   if (localPaths?.length && localDirectory)
@@ -275,30 +278,30 @@ async function resolvePathsAndDirectoryForInputFiles(items: string[]): Promise<[
   return [localPaths, localDirectory];
 }
 
-export async function convertInputFiles(files: string | FilePayload | string[] | FilePayload[], context: BrowserContext): Promise<SetInputFilesFiles> {
+export async function convertInputFiles(platform: Platform, files: string | FilePayload | string[] | FilePayload[], context: BrowserContext): Promise<SetInputFilesFiles> {
   const items: (string | FilePayload)[] = Array.isArray(files) ? files.slice() : [files];
 
   if (items.some(item => typeof item === 'string')) {
     if (!items.every(item => typeof item === 'string'))
       throw new Error('File paths cannot be mixed with buffers');
 
-    const [localPaths, localDirectory] = await resolvePathsAndDirectoryForInputFiles(items);
+    const [localPaths, localDirectory] = await resolvePathsAndDirectoryForInputFiles(platform, items);
 
     if (context._connection.isRemote()) {
-      const files = localDirectory ? (await fs.promises.readdir(localDirectory, { withFileTypes: true, recursive: true })).filter(f => f.isFile()).map(f => path.join(f.path, f.name)) : localPaths!;
+      const files = localDirectory ? (await platform.fs().promises.readdir(localDirectory, { withFileTypes: true, recursive: true })).filter(f => f.isFile()).map(f => platform.path().join(f.path, f.name)) : localPaths!;
       const { writableStreams, rootDir } = await context._wrapApiCall(async () => context._channel.createTempFiles({
-        rootDirName: localDirectory ? path.basename(localDirectory) : undefined,
+        rootDirName: localDirectory ? platform.path().basename(localDirectory) : undefined,
         items: await Promise.all(files.map(async file => {
-          const lastModifiedMs = (await fs.promises.stat(file)).mtimeMs;
+          const lastModifiedMs = (await platform.fs().promises.stat(file)).mtimeMs;
           return {
-            name: localDirectory ? path.relative(localDirectory, file) : path.basename(file),
+            name: localDirectory ? platform.path().relative(localDirectory, file) : platform.path().basename(file),
             lastModifiedMs
           };
         })),
       }), true);
       for (let i = 0; i < files.length; i++) {
         const writable = WritableStream.from(writableStreams[i]);
-        await pipelineAsync(fs.createReadStream(files[i]), writable.stream());
+        await platform.streamFile(files[i], writable.stream());
       }
       return {
         directoryStream: rootDir,
@@ -319,7 +322,7 @@ export async function convertInputFiles(files: string | FilePayload | string[] |
 
 export function determineScreenshotType(options: { path?: string, type?: 'png' | 'jpeg' }): 'png' | 'jpeg' | undefined {
   if (options.path) {
-    const mimeType = mime.getType(options.path);
+    const mimeType = getMimeTypeForPath(options.path);
     if (mimeType === 'image/png')
       return 'png';
     else if (mimeType === 'image/jpeg')

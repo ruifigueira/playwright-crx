@@ -15,9 +15,10 @@
  */
 
 import url from 'url';
+
 import { addToCompilationCache, serializeCompilationCache } from '../transform/compilationCache';
-import { singleTSConfig, transformConfig } from '../transform/transform';
 import { PortTransport } from '../transform/portTransport';
+import { singleTSConfig, transformConfig } from '../transform/transform';
 
 let loaderChannel: PortTransport | undefined;
 // Node.js < 20

@@ -16,17 +16,20 @@
 
 import crypto from 'crypto';
 import fs from 'fs';
+import Module from 'module';
 import path from 'path';
 import url from 'url';
-import { sourceMapSupport, pirates } from '../utilsBundle';
+
+import { loadTsConfig } from '../third_party/tsconfig-loader';
+import { createFileMatcher, fileIsModule, resolveImportSpecifierAfterMapping } from '../util';
+import { pirates, sourceMapSupport } from '../utilsBundle';
+import { belongsToNodeModules, currentFileDepsCollector, getFromCompilationCache, installSourceMapSupport } from './compilationCache';
+
+import type { BabelPlugin, BabelTransformFunction } from './babelBundle';
 import type { Location } from '../../types/testReporter';
 import type { LoadedTsConfig } from '../third_party/tsconfig-loader';
-import { loadTsConfig } from '../third_party/tsconfig-loader';
-import Module from 'module';
-import type { BabelPlugin, BabelTransformFunction } from './babelBundle';
-import { createFileMatcher, fileIsModule, resolveImportSpecifierAfterMapping } from '../util';
 import type { Matcher } from '../util';
-import { getFromCompilationCache, currentFileDepsCollector, belongsToNodeModules, installSourceMapSupport } from './compilationCache';
+
 
 const version = require('../../package.json').version;
 
@@ -232,9 +235,10 @@ export function transformHook(originalCode: string, filename: string, moduleUrl?
 
   const { babelTransform }: { babelTransform: BabelTransformFunction } = require('./babelBundle');
   transformData = new Map<string, any>();
-  const { code, map } = babelTransform(originalCode, filename, !!moduleUrl, pluginsPrologue, pluginsEpilogue);
-  if (!code)
-    return { code: '', serializedCache };
+  const babelResult = babelTransform(originalCode, filename, !!moduleUrl, pluginsPrologue, pluginsEpilogue);
+  if (!babelResult?.code)
+    return { code: originalCode, serializedCache };
+  const { code, map } = babelResult;
   const added = addToCache!(code, map, transformData);
   return { code, serializedCache: added.serializedCache };
 }

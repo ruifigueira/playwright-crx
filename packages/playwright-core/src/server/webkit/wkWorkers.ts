@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-import type { RegisteredListener } from '../../utils/eventsHelper';
-import { eventsHelper } from '../../utils/eventsHelper';
-import type { Page } from '../page';
+import { eventsHelper } from '../utils/eventsHelper';
 import { Worker } from '../page';
-import type { Protocol } from './protocol';
 import { WKSession } from './wkConnection';
-import { WKExecutionContext } from './wkExecutionContext';
+import { createHandle, WKExecutionContext } from './wkExecutionContext';
+
+import type { Protocol } from './protocol';
+import type { RegisteredListener } from '../utils/eventsHelper';
+import type { Page } from '../page';
 import type * as types from '../types';
 
 export class WKWorkers {
@@ -94,7 +95,7 @@ export class WKWorkers {
       derivedType = 'timeEnd';
 
     const handles = (parameters || []).map(p => {
-      return worker._existingExecutionContext!.createHandle(p);
+      return createHandle(worker._existingExecutionContext!, p);
     });
     const location: types.ConsoleMessageLocation = {
       url: url || '',

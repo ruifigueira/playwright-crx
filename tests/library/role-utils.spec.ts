@@ -372,6 +372,13 @@ test('display:contents should be visible when contents are visible', async ({ pa
   await expect(page.getByRole('button')).toHaveCount(1);
 });
 
+test('should remove soft hyphens and zero-width spaces', async ({ page }) => {
+  await page.setContent(`
+    <button>1\u00ad2\u200b3</button>
+  `);
+  expect.soft(await getNameAndRole(page, 'button')).toEqual({ role: 'button', name: '123' });
+});
+
 test('label/labelled-by aria-hidden with descendants', async ({ page }) => {
   test.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/29796' });
 
@@ -493,6 +500,21 @@ test('should not include hidden pseudo into accessible name', async ({ page }) =
     </a>
   `);
   expect.soft(await getNameAndRole(page, 'a')).toEqual({ role: 'link', name: 'hello hello' });
+});
+
+test('should resolve pseudo content from attr', async ({ page }) => {
+  await page.setContent(`
+    <style>
+    .stars:before {
+      display: block;
+      content: attr(data-hello);
+    }
+    </style>
+    <a href="http://example.com">
+      <div class="stars" data-hello="hello">world</div>
+    </a>
+  `);
+  expect(await getNameAndRole(page, 'a')).toEqual({ role: 'link', name: 'hello world' });
 });
 
 test('should ignore invalid aria-labelledby', async ({ page }) => {

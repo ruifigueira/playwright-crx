@@ -1,13 +1,27 @@
 [browserServerImpl.ts]
-**
+remote/
+server/
+server/utils
+utils/isomorphic/
+utilsBundle.ts
 
 [androidServerImpl.ts]
-**
+remote/
+server/
+server/utils
+utils/isomorphic/
+utilsBundle.ts
 
 [inProcessFactory.ts]
 **
+
+[inprocess.ts]
+utils/
+server/utils
 
 [outofprocess.ts]
 client/
 protocol/
 utils/
+utils/isomorphic
+server/utils

@@ -13,14 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import path from 'path';
 import net from 'net';
+import path from 'path';
 
-import { colors, debug } from 'playwright-core/lib/utilsBundle';
-import { raceAgainstDeadline, launchProcess, monotonicTime, isURLAvailable } from 'playwright-core/lib/utils';
+import { launchProcess, isURLAvailable, monotonicTime, raceAgainstDeadline } from 'playwright-core/lib/utils';
+import { colors } from 'playwright-core/lib/utils';
+import { debug } from 'playwright-core/lib/utilsBundle';
 
-import type { FullConfig } from '../../types/testReporter';
 import type { TestRunnerPlugin } from '.';
+import type { FullConfig } from '../../types/testReporter';
 import type { FullConfigInternal } from '../common/config';
 import type { ReporterV2 } from '../reporters/reporterV2';
 

@@ -327,6 +327,25 @@ test('should print nice error when project is unknown', async ({ runInlineTest }
   expect(output).toContain('Project(s) "suite3" not found. Available projects: "suite1", "suite2"');
 });
 
+test('should print nice error when project is unknown and launching UI mode', async ({ runInlineTest }) => {
+  // Prevent UI mode from opening and the test never finishing
+  test.setTimeout(5000);
+  const { output, exitCode } = await runInlineTest({
+    'playwright.config.ts': `
+      module.exports = { projects: [
+        { name: 'suite1' },
+        { name: 'suite2' },
+      ] };
+    `,
+    'a.test.ts': `
+      import { test, expect } from '@playwright/test';
+      test('pass', async ({}, testInfo) => {});
+    `
+  }, { project: 'suite3', ui: true });
+  expect(exitCode).toBe(1);
+  expect(output).toContain('Project(s) "suite3" not found. Available projects: "suite1", "suite2"');
+});
+
 test('should filter by project list, case-insensitive', async ({ runInlineTest }) => {
   const { passed, failed, outputLines, skipped } = await runInlineTest({
     'playwright.config.ts': `
@@ -390,6 +409,24 @@ test('should print nice error when some of the projects are unknown', async ({ r
   }, { project: ['suitE1', 'suIte3', 'SUite4'] });
   expect(exitCode).toBe(1);
   expect(output).toContain('Project(s) "suIte3", "SUite4" not found. Available projects: "suite1", "suite2"');
+});
+
+test('should print nice error when project name is not stable', async ({ runInlineTest }) => {
+  const { output, exitCode } = await runInlineTest({
+    'playwright.config.ts': `
+      module.exports = { projects: [
+        { name: \`calculated \$\{Date.now()\}\` },
+      ] };
+    `,
+    'a.test.ts': `
+      import { test, expect } from '@playwright/test';
+      test('pass', async ({}, testInfo) => {
+        console.log(testInfo.project.name);
+      });
+    `
+  });
+  expect(exitCode).toBe(1);
+  expect(output).toContain('not found in the worker process. Make sure project name does not change.');
 });
 
 test('should work without config file', async ({ runInlineTest }) => {
@@ -660,4 +697,36 @@ test('should merge ct configs', async ({ runInlineTest }) => {
     `
   });
   expect(result.exitCode).toBe(0);
+});
+
+test('should throw on invalid config.tsconfig option', async ({ runInlineTest }) => {
+  const result = await runInlineTest({
+    'playwright.config.ts': `
+      export default {
+        tsconfig: true,
+      };
+    `,
+  });
+
+  expect(result.exitCode).toBe(1);
+  expect(result.output).toContain(`config.tsconfig must be a string`);
+});
+
+test('should throw on nonexistant config.tsconfig', async ({ runInlineTest }) => {
+  const result = await runInlineTest({
+    'playwright.config.ts': `
+      export default {
+        tsconfig: './does-not-exist.json',
+      };
+    `,
+  });
+
+  expect(result.exitCode).toBe(1);
+  expect(result.output).toContain(`config.tsconfig does not exist`);
+});
+
+test('should throw on invalid --tsconfig', async ({ runInlineTest }) => {
+  const result = await runInlineTest({}, { 'tsconfig': 'does-not-exist.json' });
+  expect(result.exitCode).toBe(1);
+  expect(result.output).toContain(`--tsconfig "does-not-exist.json" does not exist`);
 });

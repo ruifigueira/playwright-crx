@@ -19,22 +19,26 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { Command } from '../utilsBundle';
-import { program, dotenv } from '../utilsBundle';
-export { program } from '../utilsBundle';
-import { runDriver, runServer, printApiJson, launchBrowserServer } from './driver';
-import { runTraceInBrowser, runTraceViewerApp } from '../server/trace/viewer/traceViewer';
-import type { TraceViewerServerOptions } from '../server/trace/viewer/traceViewer';
+
 import * as playwright from '../..';
-import type { BrowserContext } from '../client/browserContext';
-import type { Browser } from '../client/browser';
-import type { Page } from '../client/page';
-import type { BrowserType } from '../client/browserType';
-import type { BrowserContextOptions, LaunchOptions } from '../client/types';
-import { wrapInASCIIBox, isLikelyNpxGlobal, assert, gracefullyProcessExitDoNotHang, getPackageManagerExecCommand } from '../utils';
-import type { Executable } from '../server';
+import { launchBrowserServer, printApiJson, runDriver, runServer } from './driver';
 import { registry, writeDockerVersion } from '../server';
-import { isTargetClosedError } from '../client/errors';
+import { gracefullyProcessExitDoNotHang, isLikelyNpxGlobal } from '../utils';
+import { runTraceInBrowser, runTraceViewerApp } from '../server/trace/viewer/traceViewer';
+import { assert, getPackageManagerExecCommand } from '../utils';
+import { wrapInASCIIBox } from '../server/utils/ascii';
+import { dotenv, program } from '../utilsBundle';
+
+import type { Browser } from '../client/browser';
+import type { BrowserContext } from '../client/browserContext';
+import type { BrowserType } from '../client/browserType';
+import type { Page } from '../client/page';
+import type { BrowserContextOptions, LaunchOptions } from '../client/types';
+import type { Executable } from '../server';
+import type { TraceViewerServerOptions } from '../server/trace/viewer/traceViewer';
+import type { Command } from '../utilsBundle';
+
+export { program } from '../utilsBundle';
 
 const packageJSON = require('../../package.json');
 
@@ -548,7 +552,7 @@ async function openPage(context: BrowserContext, url: string | undefined): Promi
     else if (!url.startsWith('http') && !url.startsWith('file://') && !url.startsWith('about:') && !url.startsWith('data:'))
       url = 'http://' + url;
     await page.goto(url).catch(error => {
-      if (process.env.PWTEST_CLI_AUTO_EXIT_WHEN && isTargetClosedError(error)) {
+      if (process.env.PWTEST_CLI_AUTO_EXIT_WHEN) {
         // Tests with PWTEST_CLI_AUTO_EXIT_WHEN might close page too fast, resulting
         // in a stray navigation aborted error. We should ignore it.
       } else {

@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-import type { Size, Point, TimeoutOptions, HeadersArray } from '../common/types';
-export type { Size, Point, Rect, Quad, TimeoutOptions, HeadersArray } from '../common/types';
+import type { HeadersArray, Point, Size, TimeoutOptions } from '../utils/isomorphic/types';
+export type { HeadersArray, Point, Quad, Rect, Size, TimeoutOptions } from '../utils/isomorphic/types';
 import type * as channels from '@protocol/channels';
 
 export type StrictOptions = {
@@ -83,6 +83,8 @@ export type ColorScheme = 'dark' | 'light' | 'no-preference' | 'no-override';
 export type ReducedMotion = 'no-preference' | 'reduce' | 'no-override';
 
 export type ForcedColors = 'active' | 'none' | 'no-override';
+
+export type Contrast = 'no-preference' | 'more' | 'no-override';
 
 export type DeviceDescriptor = {
   userAgent: string,

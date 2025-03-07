@@ -15,21 +15,24 @@
  */
 
 import fs from 'fs';
-import type * as channels from '@protocol/channels';
-import * as injectedScriptSource from '../generated/injectedScriptSource';
-import { isSessionClosedError } from './protocolError';
-import type { ScreenshotOptions } from './screenshotter';
-import type * as frames from './frames';
-import type { InjectedScript, HitTargetInterceptionResult, ElementState } from './injected/injectedScript';
-import type { CallMetadata } from './instrumentation';
+
 import * as js from './javascript';
+import { ProgressController } from './progress';
+import { asLocator, isUnderTest } from '../utils';
+import { prepareFilesForUpload } from './fileUploadUtils';
+import { isSessionClosedError } from './protocolError';
+import * as injectedScriptSource from '../generated/injectedScriptSource';
+
+import type * as frames from './frames';
+import type { ElementState, HitTargetInterceptionResult, InjectedScript } from './injected/injectedScript';
+import type { CallMetadata } from './instrumentation';
 import type { Page } from './page';
 import type { Progress } from './progress';
-import { ProgressController } from './progress';
+import type { ScreenshotOptions } from './screenshotter';
 import type * as types from './types';
-import type { TimeoutOptions } from '../common/types';
-import { isUnderTest } from '../utils';
-import { prepareFilesForUpload } from './fileUploadUtils';
+import type { TimeoutOptions } from '../utils/isomorphic/types';
+import type * as channels from '@protocol/channels';
+
 
 export type InputFilesItems = {
   filePayloads?: types.FilePayload[],
@@ -80,12 +83,6 @@ export class FrameExecutionContext extends js.ExecutionContext {
     return js.evaluateExpression(this, expression, { ...options, returnByValue: false }, arg);
   }
 
-  override createHandle(remoteObject: js.RemoteObject): js.JSHandle {
-    if (this.frame._page._delegate.isElementHandle(remoteObject))
-      return new ElementHandle(this, remoteObject.objectId!);
-    return super.createHandle(remoteObject);
-  }
-
   injectedScript(): Promise<js.JSHandle<InjectedScript>> {
     if (!this._injectedScriptPromise) {
       const custom: string[] = [];
@@ -108,7 +105,11 @@ export class FrameExecutionContext extends js.ExecutionContext {
         );
         })();
       `;
-      this._injectedScriptPromise = this.rawEvaluateHandle(source).then(objectId => new js.JSHandle(this, 'object', 'InjectedScript', objectId));
+      this._injectedScriptPromise = this.rawEvaluateHandle(source)
+          .then(handle => {
+            handle._setPreview('InjectedScript');
+            return handle;
+          });
     }
     return this._injectedScriptPromise;
   }
@@ -183,6 +184,15 @@ export class ElementHandle<T extends Node = Node> extends js.JSHandle<T> {
     if (!isFrameElement)
       return null;
     return this._page._delegate.getContentFrame(this);
+  }
+
+  async generateLocatorString(): Promise<string | undefined> {
+    const selector = await this.evaluateInUtility(async ([injected, node]) => {
+      return injected.generateSelectorSimple(node as unknown as Element);
+    }, {});
+    if (selector === 'error:notconnected')
+      return;
+    return asLocator('javascript', selector);
   }
 
   async getAttribute(metadata: CallMetadata, name: string): Promise<string | null> {
@@ -693,7 +703,8 @@ export class ElementHandle<T extends Node = Node> extends js.JSHandle<T> {
       await this._page._delegate.setInputFilePaths(retargeted, localPathsOrDirectory);
       await waitForInputEvent;
     } else {
-      await this._page._delegate.setInputFiles(retargeted, filePayloads!);
+      await retargeted.evaluateInUtility(([injected, node, files]) =>
+        injected.setInputFiles(node, files), filePayloads!);
     }
     return 'done';
   }
@@ -799,8 +810,8 @@ export class ElementHandle<T extends Node = Node> extends js.JSHandle<T> {
     return this._page._delegate.getBoundingBox(this);
   }
 
-  async ariaSnapshot(): Promise<string> {
-    return await this.evaluateInUtility(([injected, element]) => injected.ariaSnapshot(element), {});
+  async ariaSnapshot(options: { id?: boolean, mode?: 'raw' | 'regex' }): Promise<string> {
+    return await this.evaluateInUtility(([injected, element, options]) => injected.ariaSnapshot(element, options), options);
   }
 
   async screenshot(metadata: CallMetadata, options: ScreenshotOptions & TimeoutOptions = {}): Promise<Buffer> {

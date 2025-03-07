@@ -15,37 +15,40 @@
  * limitations under the License.
  */
 
-import type * as dom from './dom';
-import * as frames from './frames';
-import * as input from './input';
-import * as js from './javascript';
-import type * as network from './network';
-import type * as channels from '@protocol/channels';
-import type { ScreenshotOptions } from './screenshotter';
-import { Screenshotter, validateScreenshotOptions } from './screenshotter';
-import { TimeoutSettings } from '../common/timeoutSettings';
-import type * as types from './types';
+import * as accessibility from './accessibility';
 import { BrowserContext } from './browserContext';
 import { ConsoleMessage } from './console';
-import * as accessibility from './accessibility';
-import { FileChooser } from './fileChooser';
-import type { Progress } from './progress';
-import { ProgressController } from './progress';
-import { LongStandingScope, assert, compressCallLog, createGuid, trimStringWithEllipsis } from '../utils';
-import { ManualPromise } from '../utils/manualPromise';
-import { debugLogger } from '../utils/debugLogger';
-import type { ImageComparatorOptions } from '../utils/comparators';
-import { getComparator } from '../utils/comparators';
-import type { CallMetadata } from './instrumentation';
-import { SdkObject } from './instrumentation';
-import type { Artifact } from './artifact';
-import type { TimeoutOptions } from '../common/types';
-import { isInvalidSelectorError } from '../utils/isomorphic/selectorParser';
-import { parseEvaluationResultValue, source } from './isomorphic/utilityScriptSerializers';
-import type { SerializedValue } from './isomorphic/utilityScriptSerializers';
 import { TargetClosedError, TimeoutError } from './errors';
-import { asLocator } from '../utils';
+import { FileChooser } from './fileChooser';
+import * as frames from './frames';
 import { helper } from './helper';
+import * as input from './input';
+import { SdkObject } from './instrumentation';
+import { parseEvaluationResultValue, source } from './isomorphic/utilityScriptSerializers';
+import * as js from './javascript';
+import { ProgressController } from './progress';
+import { Screenshotter, validateScreenshotOptions } from './screenshotter';
+import { TimeoutSettings } from './timeoutSettings';
+import { LongStandingScope, assert, trimStringWithEllipsis } from '../utils';
+import { createGuid } from './utils/crypto';
+import { asLocator } from '../utils';
+import { getComparator } from './utils/comparators';
+import { debugLogger } from './utils/debugLogger';
+import { isInvalidSelectorError } from '../utils/isomorphic/selectorParser';
+import { ManualPromise } from '../utils/isomorphic/manualPromise';
+import { compressCallLog } from './callLog';
+
+import type { Artifact } from './artifact';
+import type * as dom from './dom';
+import type { CallMetadata } from './instrumentation';
+import type { SerializedValue } from './isomorphic/utilityScriptSerializers';
+import type * as network from './network';
+import type { Progress } from './progress';
+import type { ScreenshotOptions } from './screenshotter';
+import type * as types from './types';
+import type { TimeoutOptions } from '../utils/isomorphic/types';
+import type { ImageComparatorOptions } from './utils/comparators';
+import type * as channels from '@protocol/channels';
 
 export interface PageDelegate {
   readonly rawMouse: input.RawMouse;
@@ -72,12 +75,10 @@ export interface PageDelegate {
   setBackgroundColor(color?: { r: number; g: number; b: number; a: number; }): Promise<void>;
   takeScreenshot(progress: Progress, format: string, documentRect: types.Rect | undefined, viewportRect: types.Rect | undefined, quality: number | undefined, fitsViewport: boolean, scale: 'css' | 'device'): Promise<Buffer>;
 
-  isElementHandle(remoteObject: any): boolean;
   adoptElementHandle<T extends Node>(handle: dom.ElementHandle<T>, to: dom.FrameExecutionContext): Promise<dom.ElementHandle<T>>;
   getContentFrame(handle: dom.ElementHandle): Promise<frames.Frame | null>;  // Only called for frame owner elements.
   getOwnerFrame(handle: dom.ElementHandle): Promise<string | null>; // Returns frameId.
   getContentQuads(handle: dom.ElementHandle): Promise<types.Quad[] | null | 'error:notconnected'>;
-  setInputFiles(handle: dom.ElementHandle<HTMLInputElement>, files: types.FilePayload[]): Promise<void>;
   setInputFilePaths(handle: dom.ElementHandle<HTMLInputElement>, files: string[]): Promise<void>;
   getBoundingBox(handle: dom.ElementHandle): Promise<types.Rect | null>;
   getFrameElement(frame: frames.Frame): Promise<dom.ElementHandle>;
@@ -107,6 +108,7 @@ type EmulatedMedia = {
   colorScheme: types.ColorScheme;
   reducedMotion: types.ReducedMotion;
   forcedColors: types.ForcedColors;
+  contrast: types.Contrast;
 };
 
 type ExpectScreenshotOptions = ImageComparatorOptions & ScreenshotOptions & {
@@ -530,6 +532,8 @@ export class Page extends SdkObject {
       this._emulatedMedia.reducedMotion = options.reducedMotion;
     if (options.forcedColors !== undefined)
       this._emulatedMedia.forcedColors = options.forcedColors;
+    if (options.contrast !== undefined)
+      this._emulatedMedia.contrast = options.contrast;
 
     await this._delegate.updateEmulateMedia();
   }
@@ -541,6 +545,7 @@ export class Page extends SdkObject {
       colorScheme: this._emulatedMedia.colorScheme !== undefined ? this._emulatedMedia.colorScheme : contextOptions.colorScheme ?? 'light',
       reducedMotion: this._emulatedMedia.reducedMotion !== undefined ? this._emulatedMedia.reducedMotion : contextOptions.reducedMotion ?? 'no-preference',
       forcedColors: this._emulatedMedia.forcedColors !== undefined ? this._emulatedMedia.forcedColors : contextOptions.forcedColors ?? 'none',
+      contrast: this._emulatedMedia.contrast !== undefined ? this._emulatedMedia.contrast : contextOptions.contrast ?? 'no-preference',
     };
   }
 
@@ -828,6 +833,7 @@ export class Worker extends SdkObject {
   _createExecutionContext(delegate: js.ExecutionContextDelegate) {
     this._existingExecutionContext = new js.ExecutionContext(this, delegate, 'worker');
     this._executionContextCallback(this._existingExecutionContext);
+    return this._existingExecutionContext;
   }
 
   url(): string {

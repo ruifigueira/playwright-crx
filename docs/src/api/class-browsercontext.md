@@ -1512,7 +1512,7 @@ Whether to emulate network being offline for the browser context.
       - `name` <[string]>
       - `value` <[string]>
 
-Returns storage state for this browser context, contains current cookies and local storage snapshot.
+Returns storage state for this browser context, contains current cookies, local storage snapshot and IndexedDB snapshot.
 
 ## async method: BrowserContext.storageState
 * since: v1.8
@@ -1521,6 +1521,17 @@ Returns storage state for this browser context, contains current cookies and loc
 
 ### option: BrowserContext.storageState.path = %%-storagestate-option-path-%%
 * since: v1.8
+
+### option: BrowserContext.storageState.indexedDB
+* since: v1.51
+- `indexedDB` ?<boolean>
+
+Set to `true` to include [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API) in the storage state snapshot.
+If your application uses IndexedDB to store authentication tokens, like Firebase Authentication, enable this.
+
+:::note
+IndexedDBs with typed arrays are currently not supported.
+:::
 
 ## property: BrowserContext.tracing
 * since: v1.12

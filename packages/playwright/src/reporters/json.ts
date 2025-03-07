@@ -16,11 +16,14 @@
 
 import fs from 'fs';
 import path from 'path';
-import type { FullConfig, TestCase, Suite, TestResult, TestError, TestStep, FullResult, Location, JSONReport, JSONReportSuite, JSONReportSpec, JSONReportTest, JSONReportTestResult, JSONReportTestStep, JSONReportError } from '../../types/testReporter';
+
+import { toPosixPath, MultiMap } from 'playwright-core/lib/utils';
+
 import { formatError, nonTerminalScreen, prepareErrorStack, resolveOutputFile } from './base';
-import { MultiMap, toPosixPath } from 'playwright-core/lib/utils';
 import { getProjectId } from '../common/config';
+
 import type { ReporterV2 } from './reporterV2';
+import type { FullConfig, FullResult, JSONReport, JSONReportError, JSONReportSpec, JSONReportSuite, JSONReportTest, JSONReportTestResult, JSONReportTestStep, Location, Suite, TestCase, TestError, TestResult, TestStep } from '../../types/testReporter';
 
 type JSONOptions = {
   outputFile?: string,
@@ -200,6 +203,7 @@ class JSONReporter implements ReporterV2 {
     const steps = result.steps.filter(s => s.category === 'test.step');
     const jsonResult: JSONReportTestResult = {
       workerIndex: result.workerIndex,
+      parallelIndex: result.parallelIndex,
       status: result.status,
       duration: result.duration,
       error: result.error,

@@ -14,22 +14,24 @@
  * limitations under the License.
  */
 
-import fs from 'fs';
-import path from 'path';
-import * as util from 'util';
+import { toClientCertificatesProtocol } from './browserContext';
+import { ChannelOwner } from './channelOwner';
+import { TargetClosedError, isTargetClosedError } from './errors';
+import { RawHeaders } from './network';
+import { Tracing } from './tracing';
+import { assert } from '../utils/isomorphic/assert';
+import { mkdirIfNeeded } from './fileUtils';
+import { headersObjectToArray } from '../utils/isomorphic/headers';
+import { isString } from '../utils/isomorphic/rtti';
+
+import type { Playwright } from './playwright';
+import type { ClientCertificate, FilePayload, Headers, SetStorageState, StorageState } from './types';
 import type { Serializable } from '../../types/structs';
 import type * as api from '../../types/types';
-import type { HeadersArray, NameValue } from '../common/types';
+import type { HeadersArray, NameValue } from '../utils/isomorphic/types';
+import type { Platform } from './platform';
 import type * as channels from '@protocol/channels';
-import { assert, headersObjectToArray, isString } from '../utils';
-import { mkdirIfNeeded } from '../utils/fileUtils';
-import { ChannelOwner } from './channelOwner';
-import { RawHeaders } from './network';
-import type { ClientCertificate, FilePayload, Headers, StorageState } from './types';
-import type { Playwright } from './playwright';
-import { Tracing } from './tracing';
-import { TargetClosedError, isTargetClosedError } from './errors';
-import { toClientCertificatesProtocol } from './browserContext';
+import type * as fs from 'fs';
 
 export type FetchOptions = {
   params?: { [key: string]: string | number | boolean; } | URLSearchParams | string,
@@ -47,7 +49,7 @@ export type FetchOptions = {
 
 type NewContextOptions = Omit<channels.PlaywrightNewRequestOptions, 'extraHTTPHeaders' | 'clientCertificates' | 'storageState' | 'tracesDir'> & {
   extraHTTPHeaders?: Headers,
-  storageState?: string | StorageState,
+  storageState?: string | SetStorageState,
   clientCertificates?: ClientCertificate[];
 };
 
@@ -57,30 +59,29 @@ export class APIRequest implements api.APIRequest {
   private _playwright: Playwright;
   readonly _contexts = new Set<APIRequestContext>();
 
-  // Instrumentation.
-  _defaultContextOptions?: NewContextOptions & { tracesDir?: string };
-
   constructor(playwright: Playwright) {
     this._playwright = playwright;
   }
 
   async newContext(options: NewContextOptions = {}): Promise<APIRequestContext> {
-    options = { ...this._defaultContextOptions, ...options };
+    options = {
+      ...this._playwright._defaultContextOptions,
+      timeout: this._playwright._defaultContextTimeout,
+      ...options,
+    };
     const storageState = typeof options.storageState === 'string' ?
-      JSON.parse(await fs.promises.readFile(options.storageState, 'utf8')) :
+      JSON.parse(await this._playwright._platform.fs().promises.readFile(options.storageState, 'utf8')) :
       options.storageState;
-    // We do not expose tracesDir in the API, so do not allow options to accidentally override it.
-    const tracesDir = this._defaultContextOptions?.tracesDir;
     const context = APIRequestContext.from((await this._playwright._channel.newRequest({
       ...options,
       extraHTTPHeaders: options.extraHTTPHeaders ? headersObjectToArray(options.extraHTTPHeaders) : undefined,
       storageState,
-      tracesDir,
-      clientCertificates: await toClientCertificatesProtocol(options.clientCertificates),
+      tracesDir: this._playwright._defaultLaunchOptions?.tracesDir, // We do not expose tracesDir in the API, so do not allow options to accidentally override it.
+      clientCertificates: await toClientCertificatesProtocol(this._playwright._platform, options.clientCertificates),
     })).request);
     this._contexts.add(context);
     context._request = this;
-    context._tracing._tracesDir = tracesDir;
+    context._tracing._tracesDir = this._playwright._defaultLaunchOptions?.tracesDir;
     await context._instrumentation.runAfterCreateRequestContext(context);
     return context;
   }
@@ -231,7 +232,7 @@ export class APIRequestContext extends ChannelOwner<channels.APIRequestContextCh
         } else {
           // Convert file-like values to ServerFilePayload structs.
           for (const [name, value] of Object.entries(options.multipart))
-            multipartData.push(await toFormField(name, value));
+            multipartData.push(await toFormField(this._platform, name, value));
         }
       }
       if (postDataBuffer === undefined && jsonData === undefined && formData === undefined && multipartData === undefined)
@@ -260,26 +261,27 @@ export class APIRequestContext extends ChannelOwner<channels.APIRequestContextCh
     });
   }
 
-  async storageState(options: { path?: string } = {}): Promise<StorageState> {
-    const state = await this._channel.storageState();
+  async storageState(options: { path?: string, indexedDB?: boolean } = {}): Promise<StorageState> {
+    const state = await this._channel.storageState({ indexedDB: options.indexedDB });
     if (options.path) {
-      await mkdirIfNeeded(options.path);
-      await fs.promises.writeFile(options.path, JSON.stringify(state, undefined, 2), 'utf8');
+      await mkdirIfNeeded(this._platform, options.path);
+      await this._platform.fs().promises.writeFile(options.path, JSON.stringify(state, undefined, 2), 'utf8');
     }
     return state;
   }
 }
 
-async function toFormField(name: string, value: string|number|boolean|fs.ReadStream|FilePayload): Promise<channels.FormField> {
+async function toFormField(platform: Platform, name: string, value: string | number | boolean | fs.ReadStream | FilePayload): Promise<channels.FormField> {
+  const typeOfValue = typeof value;
   if (isFilePayload(value)) {
     const payload = value as FilePayload;
     if (!Buffer.isBuffer(payload.buffer))
       throw new Error(`Unexpected buffer type of 'data.${name}'`);
     return { name, file: filePayloadToJson(payload) };
-  } else if (value instanceof fs.ReadStream) {
-    return { name, file: await readStreamToJson(value as fs.ReadStream) };
-  } else {
+  } else if (typeOfValue === 'string' || typeOfValue === 'number' || typeOfValue === 'boolean') {
     return { name, value: String(value) };
+  } else {
+    return { name, file: await readStreamToJson(platform, value as fs.ReadStream) };
   }
 }
 
@@ -306,6 +308,9 @@ export class APIResponse implements api.APIResponse {
     this._request = context;
     this._initializer = initializer;
     this._headers = new RawHeaders(this._initializer.headers);
+
+    if (context._platform.inspectCustom)
+      (this as any)[context._platform.inspectCustom] = () => this._inspect();
   }
 
   ok(): boolean {
@@ -333,16 +338,18 @@ export class APIResponse implements api.APIResponse {
   }
 
   async body(): Promise<Buffer> {
-    try {
-      const result = await this._request._channel.fetchResponseBody({ fetchUid: this._fetchUid() });
-      if (result.binary === undefined)
-        throw new Error('Response has been disposed');
-      return result.binary;
-    } catch (e) {
-      if (isTargetClosedError(e))
-        throw new Error('Response has been disposed');
-      throw e;
-    }
+    return await this._request._wrapApiCall(async () => {
+      try {
+        const result = await this._request._channel.fetchResponseBody({ fetchUid: this._fetchUid() });
+        if (result.binary === undefined)
+          throw new Error('Response has been disposed');
+        return result.binary;
+      } catch (e) {
+        if (isTargetClosedError(e))
+          throw new Error('Response has been disposed');
+        throw e;
+      }
+    }, true);
   }
 
   async text(): Promise<string> {
@@ -363,7 +370,7 @@ export class APIResponse implements api.APIResponse {
     await this._request._channel.disposeAPIResponse({ fetchUid: this._fetchUid() });
   }
 
-  [util.inspect.custom]() {
+  private _inspect() {
     const headers = this.headersArray().map(({ name, value }) => `  ${name}: ${value}`);
     return `APIResponse: ${this.status()} ${this.statusText()}\n${headers.join('\n')}`;
   }
@@ -388,7 +395,7 @@ function filePayloadToJson(payload: FilePayload): ServerFilePayload {
   };
 }
 
-async function readStreamToJson(stream: fs.ReadStream): Promise<ServerFilePayload> {
+async function readStreamToJson(platform: Platform, stream: fs.ReadStream): Promise<ServerFilePayload> {
   const buffer = await new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = [];
     stream.on('data', chunk => chunks.push(chunk as Buffer));
@@ -397,7 +404,7 @@ async function readStreamToJson(stream: fs.ReadStream): Promise<ServerFilePayloa
   });
   const streamPath: string = Buffer.isBuffer(stream.path) ? stream.path.toString('utf8') : stream.path;
   return {
-    name: path.basename(streamPath),
+    name: platform.path().basename(streamPath),
     buffer,
   };
 }
@@ -416,8 +423,10 @@ function objectToArray(map?: { [key: string]: any }): NameValue[] | undefined {
   if (!map)
     return undefined;
   const result = [];
-  for (const [name, value] of Object.entries(map))
-    result.push({ name, value: String(value) });
+  for (const [name, value] of Object.entries(map)) {
+    if (value !== undefined)
+      result.push({ name, value: String(value) });
+  }
   return result;
 }
 

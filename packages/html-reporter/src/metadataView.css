@@ -1,0 +1,67 @@
+/*
+  Copyright (c) Microsoft Corporation.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+*/
+
+.metadata-toggle {
+  cursor: pointer;
+  user-select: none;
+  margin-left: 5px;
+  color: var(--color-fg-default);
+}
+
+.metadata-view {
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+.metadata-view .metadata-section {
+  margin: 8px 10px 8px 32px;
+}
+
+.metadata-view span:not(.copy-button-container),
+.metadata-view a {
+  display: inline-block;
+  line-height: 24px;
+}
+
+.metadata-properties {
+  display: flex;
+  flex-direction: column;
+  align-items: normal;
+  gap: 8px;
+}
+
+.metadata-properties > div {
+  height: 24px;
+}
+
+.metadata-separator {
+  height: 1px;
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.metadata-view a {
+  color: var(--color-fg-default);
+}
+
+.copyable-property {
+  white-space: pre;
+}
+
+.copyable-property > span {
+  display: flex;
+  align-items: center;
+}

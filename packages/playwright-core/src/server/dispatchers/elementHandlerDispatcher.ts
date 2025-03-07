@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 
+import { BrowserContextDispatcher } from './browserContextDispatcher';
+import { existingDispatcher } from './dispatcher';
+import { FrameDispatcher } from './frameDispatcher';
+import { JSHandleDispatcher, parseArgument, serializeResult } from './jsHandleDispatcher';
+import { PageDispatcher, WorkerDispatcher } from './pageDispatcher';
+
 import type { ElementHandle } from '../dom';
 import type { Frame } from '../frames';
-import type * as js from '../javascript';
-import type * as channels from '@protocol/channels';
-import { existingDispatcher } from './dispatcher';
-import { JSHandleDispatcher, serializeResult, parseArgument } from './jsHandleDispatcher';
-import type { JSHandleDispatcherParentScope } from './jsHandleDispatcher';
-import { FrameDispatcher } from './frameDispatcher';
 import type { CallMetadata } from '../instrumentation';
-import { BrowserContextDispatcher } from './browserContextDispatcher';
-import { PageDispatcher, WorkerDispatcher } from './pageDispatcher';
+import type * as js from '../javascript';
+import type { JSHandleDispatcherParentScope } from './jsHandleDispatcher';
+import type * as channels from '@protocol/channels';
+
 
 export class ElementHandleDispatcher extends JSHandleDispatcher implements channels.ElementHandleChannel {
   _type_ElementHandle = true;
@@ -61,6 +63,10 @@ export class ElementHandleDispatcher extends JSHandleDispatcher implements chann
   async contentFrame(params: channels.ElementHandleContentFrameParams, metadata: CallMetadata): Promise<channels.ElementHandleContentFrameResult> {
     const frame = await this._elementHandle.contentFrame();
     return { frame: frame ? FrameDispatcher.from(this._browserContextDispatcher(), frame) : undefined };
+  }
+
+  async generateLocatorString(params: channels.ElementHandleGenerateLocatorStringParams, metadata: CallMetadata): Promise<channels.ElementHandleGenerateLocatorStringResult> {
+    return { value: await this._elementHandle.generateLocatorString() };
   }
 
   async getAttribute(params: channels.ElementHandleGetAttributeParams, metadata: CallMetadata): Promise<channels.ElementHandleGetAttributeResult> {

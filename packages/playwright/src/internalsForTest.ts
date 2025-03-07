@@ -15,6 +15,7 @@
  */
 
 import path from 'path';
+
 import { fileDependenciesForTest } from './transform/compilationCache';
 
 export function fileDependencies() {

@@ -14,17 +14,21 @@
  * limitations under the License.
  */
 
-import { colors as realColors, ms as milliseconds, parseStackTraceLine } from 'playwright-core/lib/utilsBundle';
 import path from 'path';
-import type { FullConfig, TestCase, Suite, TestResult, TestError, FullResult, TestStep, Location } from '../../types/testReporter';
-import { getPackageManagerExecCommand } from 'playwright-core/lib/utils';
+
+import { getPackageManagerExecCommand, parseErrorStack } from 'playwright-core/lib/utils';
+import { ms as milliseconds } from 'playwright-core/lib/utilsBundle';
+import { colors as realColors, noColors } from 'playwright-core/lib/utils';
+
+import { ansiRegex, resolveReporterOutputPath, stripAnsiEscapes } from '../util';
 import { getEastAsianWidth } from '../utilsBundle';
+
 import type { ReporterV2 } from './reporterV2';
-import { resolveReporterOutputPath } from '../util';
+import type { FullConfig, FullResult, Location, Suite, TestCase, TestError, TestResult, TestStep } from '../../types/testReporter';
+import type { Colors } from '@isomorphic/colors';
+
 export type TestResultOutput = { chunk: string | Buffer, type: 'stdout' | 'stderr' };
 export const kOutputSymbol = Symbol('output');
-
-type Colors = typeof realColors;
 
 type ErrorDetails = {
   message: string;
@@ -47,48 +51,6 @@ export type Screen = {
   colors: Colors;
   isTTY: boolean;
   ttyWidth: number;
-};
-
-export const noColors: Colors = {
-  bold: (t: string) => t,
-  cyan: (t: string) => t,
-  dim: (t: string) => t,
-  gray: (t: string) => t,
-  green: (t: string) => t,
-  red: (t: string) => t,
-  yellow: (t: string) => t,
-  black: (t: string) => t,
-  blue: (t: string) => t,
-  magenta: (t: string) => t,
-  white: (t: string) => t,
-  grey: (t: string) => t,
-  bgBlack: (t: string) => t,
-  bgRed: (t: string) => t,
-  bgGreen: (t: string) => t,
-  bgYellow: (t: string) => t,
-  bgBlue: (t: string) => t,
-  bgMagenta: (t: string) => t,
-  bgCyan: (t: string) => t,
-  bgWhite: (t: string) => t,
-  strip: (t: string) => t,
-  stripColors: (t: string) => t,
-  reset: (t: string) => t,
-  italic: (t: string) => t,
-  underline: (t: string) => t,
-  inverse: (t: string) => t,
-  hidden: (t: string) => t,
-  strikethrough: (t: string) => t,
-  rainbow: (t: string) => t,
-  zebra: (t: string) => t,
-  america: (t: string) => t,
-  trap: (t: string) => t,
-  random: (t: string) => t,
-  zalgo: (t: string) => t,
-
-  enabled: false,
-  enable: () => {},
-  disable: () => {},
-  setTheme: () => {},
 };
 
 // Output goes to terminal.
@@ -307,6 +269,8 @@ export class TerminalReporter implements ReporterV2 {
     if (full && summary.failuresToPrint.length && !this._omitFailures)
       this._printFailures(summary.failuresToPrint);
     this._printSlowTests();
+    // TODO: 1.52: Make warning display prettier
+    // this._printWarnings();
     this._printSummary(summaryMessage);
   }
 
@@ -324,6 +288,28 @@ export class TerminalReporter implements ReporterV2 {
     });
     if (slowTests.length)
       console.log(this.screen.colors.yellow('  Consider running tests from slow files in parallel, see https://playwright.dev/docs/test-parallel.'));
+  }
+
+  private _printWarnings() {
+    const warningTests = this.suite.allTests().filter(test => test.annotations.some(a => a.type === 'warning'));
+    const encounteredWarnings = new Map<string, Array<TestCase>>();
+    for (const test of warningTests) {
+      for (const annotation of test.annotations) {
+        if (annotation.type !== 'warning' || annotation.description === undefined)
+          continue;
+        let tests = encounteredWarnings.get(annotation.description);
+        if (!tests) {
+          tests = [];
+          encounteredWarnings.set(annotation.description, tests);
+        }
+        tests.push(test);
+      }
+    }
+    for (const [description, tests] of encounteredWarnings) {
+      console.log(this.screen.colors.yellow('  Warning: ') + description);
+      for (const test of tests)
+        console.log(this.formatTestHeader(test, { indent: '    ', mode: 'default' }));
+    }
   }
 
   private _printSummary(summary: string) {
@@ -370,6 +356,8 @@ export function formatFailure(screen: Screen, config: FullConfig, test: TestCase
     resultLines.push(...errors.map(error => '\n' + error.message));
     for (let i = 0; i < result.attachments.length; ++i) {
       const attachment = result.attachments[i];
+      if (attachment.name.startsWith('_'))
+        continue;
       const hasPrintableContent = attachment.contentType.startsWith('text/');
       if (!attachment.path && !hasPrintableContent)
         continue;
@@ -551,28 +539,7 @@ export function prepareErrorStack(stack: string): {
   stackLines: string[];
   location?: Location;
 } {
-  const lines = stack.split('\n');
-  let firstStackLine = lines.findIndex(line => line.startsWith('    at '));
-  if (firstStackLine === -1)
-    firstStackLine = lines.length;
-  const message = lines.slice(0, firstStackLine).join('\n');
-  const stackLines = lines.slice(firstStackLine);
-  let location: Location | undefined;
-  for (const line of stackLines) {
-    const frame = parseStackTraceLine(line);
-    if (!frame || !frame.file)
-      continue;
-    if (belongsToNodeModules(frame.file))
-      continue;
-    location = { file: frame.file, column: frame.column || 0, line: frame.line || 0 };
-    break;
-  }
-  return { message, stackLines, location };
-}
-
-const ansiRegex = new RegExp('([\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-ntqry=><~])))', 'g');
-export function stripAnsiEscapes(str: string): string {
-  return str.replace(ansiRegex, '');
+  return parseErrorStack(stack, path.sep, !!process.env.PWDEBUGIMPL);
 }
 
 function characterWidth(c: string) {
@@ -625,10 +592,6 @@ export function fitToWidth(line: string, width: number, prefix?: string): string
     }
   }
   return taken.reverse().join('');
-}
-
-function belongsToNodeModules(file: string) {
-  return file.includes(`${path.sep}node_modules${path.sep}`);
 }
 
 function resolveFromEnv(name: string): string | undefined {

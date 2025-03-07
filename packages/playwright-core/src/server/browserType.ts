@@ -15,31 +15,36 @@
  */
 
 import fs from 'fs';
-import * as os from 'os';
+import os from 'os';
 import path from 'path';
-import type { BrowserContext } from './browserContext';
+
 import { normalizeProxySettings, validateBrowserContextOptions } from './browserContext';
-import type { BrowserName } from './registry';
-import { registry } from './registry';
-import type { ConnectionTransport } from './transport';
-import { WebSocketTransport } from './transport';
-import type { BrowserOptions, Browser, BrowserProcess } from './browser';
-import type { Env } from '../utils/processLauncher';
-import { launchProcess, envArrayToObject } from '../utils/processLauncher';
+import { DEFAULT_TIMEOUT, TimeoutSettings } from './timeoutSettings';
+import { debugMode } from './utils/debug';
+import { assert } from '../utils/isomorphic/assert';
+import { ManualPromise } from '../utils/isomorphic/manualPromise';
+import { existsAsync } from './utils/fileUtils';
+import { helper } from './helper';
+import { SdkObject } from './instrumentation';
 import { PipeTransport } from './pipeTransport';
-import type { Progress } from './progress';
+import { envArrayToObject, launchProcess } from './utils/processLauncher';
 import { ProgressController } from './progress';
+import {  isProtocolError } from './protocolError';
+import { registry } from './registry';
+import { ClientCertificatesProxy } from './socksClientCertificatesInterceptor';
+import { WebSocketTransport } from './transport';
+import { RecentLogsCollector } from './utils/debugLogger';
+
+import type { Browser, BrowserOptions, BrowserProcess } from './browser';
+import type { BrowserContext } from './browserContext';
+import type { CallMetadata } from './instrumentation';
+import type { Env } from './utils/processLauncher';
+import type { Progress } from './progress';
+import type { ProtocolError } from './protocolError';
+import type { BrowserName } from './registry';
+import type { ConnectionTransport } from './transport';
 import type * as types from './types';
 import type * as channels from '@protocol/channels';
-import { DEFAULT_TIMEOUT, TimeoutSettings } from '../common/timeoutSettings';
-import { debugMode, ManualPromise } from '../utils';
-import { existsAsync } from '../utils/fileUtils';
-import { helper } from './helper';
-import { RecentLogsCollector } from '../utils/debugLogger';
-import type { CallMetadata } from './instrumentation';
-import { SdkObject } from './instrumentation';
-import { type ProtocolError, isProtocolError } from './protocolError';
-import { ClientCertificatesProxy } from './socksClientCertificatesInterceptor';
 
 export const kNoXServerRunningError = 'Looks like you launched a headed browser without having a XServer running.\n' +
   'Set either \'headless: true\' or use \'xvfb-run <your-playwright-app>\' before running Playwright.\n\n<3 Playwright Team';
@@ -185,6 +190,7 @@ export abstract class BrowserType extends SdkObject {
     tempDirectories.push(artifactsDir);
 
     if (userDataDir) {
+      assert(path.isAbsolute(userDataDir), 'userDataDir must be an absolute path');
       // Firefox bails if the profile directory does not exist, Chrome creates it. We ensure consistent behavior here.
       if (!await existsAsync(userDataDir))
         await fs.promises.mkdir(userDataDir, { recursive: true, mode: 0o700 });

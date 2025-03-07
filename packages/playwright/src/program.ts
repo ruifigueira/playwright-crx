@@ -16,25 +16,29 @@
 
 /* eslint-disable no-console */
 
-import type { Command } from 'playwright-core/lib/utilsBundle';
 import fs from 'fs';
 import path from 'path';
-import { Runner } from './runner/runner';
-import { stopProfiling, startProfiling, gracefullyProcessExitDoNotHang } from 'playwright-core/lib/utils';
-import { serializeError } from './util';
+
+import { program } from 'playwright-core/lib/cli/program';
+import { gracefullyProcessExitDoNotHang, startProfiling, stopProfiling } from 'playwright-core/lib/utils';
+
+import { builtInReporters, defaultReporter, defaultTimeout } from './common/config';
+import { loadConfigFromFileRestartIfNeeded, loadEmptyConfigForMergeReports, resolveConfigLocation } from './common/configLoader';
+export { program } from 'playwright-core/lib/cli/program';
+import { prepareErrorStack } from './reporters/base';
 import { showHTMLReport } from './reporters/html';
 import { createMergedReport } from './reporters/merge';
-import { loadConfigFromFileRestartIfNeeded, loadEmptyConfigForMergeReports, resolveConfigLocation } from './common/configLoader';
-import type { ConfigCLIOverrides } from './common/ipc';
-import type { TestError } from '../types/testReporter';
-import type { TraceMode } from '../types/test';
-import { builtInReporters, defaultReporter, defaultTimeout } from './common/config';
-import { program } from 'playwright-core/lib/cli/program';
-export { program } from 'playwright-core/lib/cli/program';
-import type { ReporterDescription } from '../types/test';
-import { prepareErrorStack } from './reporters/base';
+import { filterProjects } from './runner/projectUtils';
+import { Runner } from './runner/runner';
 import * as testServer from './runner/testServer';
 import { runWatchModeLoop } from './runner/watchMode';
+import { serializeError } from './util';
+
+import type { TestError } from '../types/testReporter';
+import type { ConfigCLIOverrides } from './common/ipc';
+import type { TraceMode } from '../types/test';
+import type { ReporterDescription } from '../types/test';
+import type { Command } from 'playwright-core/lib/utilsBundle';
 
 function addTestCommand(program: Command) {
   const command = program.command('test [test-filter...]');
@@ -157,6 +161,23 @@ async function runTests(args: string[], opts: { [key: string]: any }) {
   await startProfiling();
   const cliOverrides = overridesFromOptions(opts);
 
+  const config = await loadConfigFromFileRestartIfNeeded(opts.config, cliOverrides, opts.deps === false);
+  if (!config)
+    return;
+
+  config.cliArgs = args;
+  config.cliGrep = opts.grep as string | undefined;
+  config.cliOnlyChanged = opts.onlyChanged === true ? 'HEAD' : opts.onlyChanged;
+  config.cliGrepInvert = opts.grepInvert as string | undefined;
+  config.cliListOnly = !!opts.list;
+  config.cliProjectFilter = opts.project || undefined;
+  config.cliPassWithNoTests = !!opts.passWithNoTests;
+  config.cliFailOnFlakyTests = !!opts.failOnFlakyTests;
+  config.cliLastFailed = !!opts.lastFailed;
+
+  // Evaluate project filters against config before starting execution. This enables a consistent error message across run modes
+  filterProjects(config.projects, config.cliProjectFilter);
+
   if (opts.ui || opts.uiHost || opts.uiPort) {
     if (opts.onlyChanged)
       throw new Error(`--only-changed is not supported in UI mode. If you'd like that to change, see https://github.com/microsoft/playwright/issues/15075 for more details.`);
@@ -197,20 +218,6 @@ async function runTests(args: string[], opts: { [key: string]: any }) {
     gracefullyProcessExitDoNotHang(exitCode);
     return;
   }
-
-  const config = await loadConfigFromFileRestartIfNeeded(opts.config, cliOverrides, opts.deps === false);
-  if (!config)
-    return;
-
-  config.cliArgs = args;
-  config.cliGrep = opts.grep as string | undefined;
-  config.cliOnlyChanged = opts.onlyChanged === true ? 'HEAD' : opts.onlyChanged;
-  config.cliGrepInvert = opts.grepInvert as string | undefined;
-  config.cliListOnly = !!opts.list;
-  config.cliProjectFilter = opts.project || undefined;
-  config.cliPassWithNoTests = !!opts.passWithNoTests;
-  config.cliFailOnFlakyTests = !!opts.failOnFlakyTests;
-  config.cliLastFailed = !!opts.lastFailed;
 
   const runner = new Runner(config);
   const status = await runner.runAllTests();
@@ -280,13 +287,11 @@ async function mergeReports(reportDir: string | undefined, opts: { [key: string]
 }
 
 function overridesFromOptions(options: { [key: string]: any }): ConfigCLIOverrides {
-  const shardPair = options.shard ? options.shard.split('/').map((t: string) => parseInt(t, 10)) : undefined;
-
   let updateSnapshots: 'all' | 'changed' | 'missing' | 'none' | undefined;
   if (['all', 'changed', 'missing', 'none'].includes(options.updateSnapshots))
     updateSnapshots = options.updateSnapshots;
   else
-    updateSnapshots = 'updateSnapshots' in options ? 'changed' : 'missing';
+    updateSnapshots = 'updateSnapshots' in options ? 'changed' : undefined;
 
   const overrides: ConfigCLIOverrides = {
     forbidOnly: options.forbidOnly ? true : undefined,
@@ -298,7 +303,7 @@ function overridesFromOptions(options: { [key: string]: any }): ConfigCLIOverrid
     repeatEach: options.repeatEach ? parseInt(options.repeatEach, 10) : undefined,
     retries: options.retries ? parseInt(options.retries, 10) : undefined,
     reporter: resolveReporterOption(options.reporter),
-    shard: shardPair ? { current: shardPair[0], total: shardPair[1] } : undefined,
+    shard: resolveShardOption(options.shard),
     timeout: options.timeout ? parseInt(options.timeout, 10) : undefined,
     tsconfig: options.tsconfig ? path.resolve(process.cwd(), options.tsconfig) : undefined,
     ignoreSnapshots: options.ignoreSnapshots ? !!options.ignoreSnapshots : undefined,
@@ -332,6 +337,9 @@ function overridesFromOptions(options: { [key: string]: any }): ConfigCLIOverrid
     overrides.use = overrides.use || {};
     overrides.use.trace = options.trace;
   }
+  if (overrides.tsconfig && !fs.existsSync(overrides.tsconfig))
+    throw new Error(`--tsconfig "${options.tsconfig}" does not exist`);
+
   return overrides;
 }
 
@@ -339,6 +347,34 @@ function resolveReporterOption(reporter?: string): ReporterDescription[] | undef
   if (!reporter || !reporter.length)
     return undefined;
   return reporter.split(',').map((r: string) => [resolveReporter(r)]);
+}
+
+function resolveShardOption(shard?: string): ConfigCLIOverrides['shard'] {
+  if (!shard)
+    return undefined;
+
+  const shardPair = shard.split('/');
+
+  if (shardPair.length !== 2) {
+    throw new Error(
+        `--shard "${shard}", expected format is "current/all", 1-based, for example "3/5".`,
+    );
+  }
+
+  const current = parseInt(shardPair[0], 10);
+  const total = parseInt(shardPair[1], 10);
+
+  if (isNaN(total) || total < 1)
+    throw new Error(`--shard "${shard}" total must be a positive number`);
+
+
+  if (isNaN(current) || current < 1 || current > total) {
+    throw new Error(
+        `--shard "${shard}" current must be a positive number, not greater than shard total`,
+    );
+  }
+
+  return { current, total };
 }
 
 function resolveReporter(id: string) {
@@ -385,7 +421,7 @@ const testOptions: [string, string][] = [
   ['--ui', `Run tests in interactive UI mode`],
   ['--ui-host <host>', 'Host to serve UI on; specifying this option opens UI in a browser tab'],
   ['--ui-port <port>', 'Port to serve UI on, 0 for any free port; specifying this option opens UI in a browser tab'],
-  ['-u, --update-snapshots [mode]', `Update snapshots with actual results. Possible values are 'all', 'changed', 'missing' and 'none'. Not passing defaults to 'missing', passing without value defaults to 'changed'`],
+  ['-u, --update-snapshots [mode]', `Update snapshots with actual results. Possible values are "all", "changed", "missing", and "none". Running tests without the flag defaults to "missing"; running tests with the flag but without a value defaults to "changed".`],
   ['--update-source-method <method>', `Chooses the way source is updated. Possible values are 'overwrite', '3way' and 'patch'. Defaults to 'patch'`],
   ['-j, --workers <workers>', `Number of concurrent workers or percentage of logical CPU cores, use 1 to run in a single worker (default: 50%)`],
   ['-x', `Stop after the first failure`],

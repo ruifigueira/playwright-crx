@@ -15,23 +15,28 @@
  * limitations under the License.
  */
 
-import * as os from 'os';
+import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import * as util from 'util';
-import * as fs from 'fs';
-import { lockfile } from '../../utilsBundle';
-import { fetchData } from '../../utils/network';
-import { getEmbedderName } from '../../utils/userAgent';
-import { getFromENV, getAsBooleanFromENV, calculateSha1, wrapInASCIIBox, getPackageManagerExecCommand } from '../../utils';
-import { removeFolders, existsAsync, canAccessFile } from '../../utils/fileUtils';
-import { type HostPlatform, hostPlatform, isOfficiallySupportedPlatform } from '../../utils/hostPlatform';
-import { spawnAsync } from '../../utils/spawnAsync';
-import type { DependencyGroup } from './dependencies';
-import { transformCommandsForRoot, dockerVersion, readDockerVersionSync } from './dependencies';
-import { installDependenciesLinux, installDependenciesWindows, validateDependenciesLinux, validateDependenciesWindows } from './dependencies';
+
 import { downloadBrowserWithProgressBar, logPolitely } from './browserFetcher';
+import { dockerVersion, readDockerVersionSync, transformCommandsForRoot } from './dependencies';
+import { installDependenciesLinux, installDependenciesWindows, validateDependenciesLinux, validateDependenciesWindows } from './dependencies';
+import { calculateSha1, getAsBooleanFromENV, getFromENV, getPackageManagerExecCommand } from '../../utils';
+import { wrapInASCIIBox } from '../utils/ascii';
+import { debugLogger } from '../utils/debugLogger';
+import {  hostPlatform, isOfficiallySupportedPlatform } from '../utils/hostPlatform';
+import { fetchData } from '../utils/network';
+import { spawnAsync } from '../utils/spawnAsync';
+import { getEmbedderName } from '../utils/userAgent';
+import { lockfile } from '../../utilsBundle';
+import { canAccessFile, existsAsync, removeFolders } from '../utils/fileUtils';
+
+import type { DependencyGroup } from './dependencies';
+import type { HostPlatform } from '../utils/hostPlatform';
+
 export { writeDockerVersion } from './dependencies';
-import { debugLogger } from '../../utils/debugLogger';
 
 const PACKAGE_PATH = path.join(__dirname, '..', '..', '..');
 const BIN_PATH = path.join(__dirname, '..', '..', '..', 'bin');
@@ -445,14 +450,7 @@ type BrowsersJSONDescriptor = {
 };
 
 function readDescriptors(browsersJSON: BrowsersJSON): BrowsersJSONDescriptor[] {
-  const headlessShells: BrowsersJSON['browsers'] = [];
-  for (const browserName of ['chromium', 'chromium-tip-of-tree']) {
-    headlessShells.push({
-      ...browsersJSON.browsers.find(browser => browser.name === browserName)!,
-      name: `${browserName}-headless-shell`,
-    });
-  }
-  return [...browsersJSON.browsers, ...headlessShells].map(obj => {
+  return (browsersJSON['browsers']).map(obj => {
     const name = obj.name;
     const revisionOverride = (obj.revisionOverrides || {})[hostPlatform];
     const revision = revisionOverride || obj.revision;

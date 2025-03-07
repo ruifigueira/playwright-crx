@@ -16,12 +16,15 @@
 
 import fs from 'fs';
 import path from 'path';
+
 import { Watcher } from 'playwright/lib/fsWatcher';
-import type { PluginContext } from 'rollup';
+
 import { source as injectedSource } from './generated/indexSource';
-import { createConfig, populateComponentsFromTests, resolveDirs, transformIndexFile, frameworkConfig } from './viteUtils';
+import { createConfig, frameworkConfig, populateComponentsFromTests, resolveDirs, transformIndexFile } from './viteUtils';
+
 import type { ComponentRegistry } from './viteUtils';
 import type { FullConfig } from 'playwright/test';
+import type { PluginContext } from 'rollup';
 
 export async function runDevServer(config: FullConfig): Promise<() => Promise<void>> {
   const { registerSourceFile, frameworkPluginFactory } = frameworkConfig(config);

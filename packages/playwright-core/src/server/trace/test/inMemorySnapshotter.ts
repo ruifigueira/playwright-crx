@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 
-import type { BrowserContext } from '../../browserContext';
-import type { Page } from '../../page';
-import type { FrameSnapshot } from '@trace/snapshot';
-import type { SnapshotRenderer } from '../../../../../trace-viewer/src/sw/snapshotRenderer';
 import { SnapshotStorage } from '../../../../../trace-viewer/src/sw/snapshotStorage';
-import type { SnapshotterBlob, SnapshotterDelegate } from '../recorder/snapshotter';
-import { Snapshotter } from '../recorder/snapshotter';
-import type { HarTracerDelegate } from '../../har/harTracer';
-import { HarTracer } from '../../har/harTracer';
-import type * as har from '@trace/har';
 import { ManualPromise } from '../../../utils';
+import { HarTracer } from '../../har/harTracer';
+import { Snapshotter } from '../recorder/snapshotter';
+
+import type { SnapshotRenderer } from '../../../../../trace-viewer/src/sw/snapshotRenderer';
+import type { BrowserContext } from '../../browserContext';
+import type { HarTracerDelegate } from '../../har/harTracer';
+import type { Page } from '../../page';
+import type { SnapshotterBlob, SnapshotterDelegate } from '../recorder/snapshotter';
+import type * as har from '@trace/har';
+import type { FrameSnapshot } from '@trace/snapshot';
+
 
 export class InMemorySnapshotter implements SnapshotterDelegate, HarTracerDelegate {
   private _blobs = new Map<string, Buffer>();
@@ -72,7 +74,7 @@ export class InMemorySnapshotter implements SnapshotterDelegate, HarTracerDelega
   }
 
   onEntryFinished(entry: har.Entry) {
-    this._storage.addResource(entry);
+    this._storage.addResource('', entry);
   }
 
   onContentBlob(sha1: string, buffer: Buffer) {
@@ -85,7 +87,7 @@ export class InMemorySnapshotter implements SnapshotterDelegate, HarTracerDelega
 
   onFrameSnapshot(snapshot: FrameSnapshot): void {
     ++this._snapshotCount;
-    const renderer = this._storage.addFrameSnapshot(snapshot, []);
+    const renderer = this._storage.addFrameSnapshot('', snapshot, []);
     this._snapshotReadyPromises.get(snapshot.snapshotName || '')?.resolve(renderer);
   }
 

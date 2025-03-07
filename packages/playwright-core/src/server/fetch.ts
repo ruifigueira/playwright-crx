@@ -14,37 +14,44 @@
  * limitations under the License.
  */
 
-import type * as channels from '@protocol/channels';
-import type { LookupAddress } from 'dns';
 import http from 'http';
 import https from 'https';
-import type { Readable, TransformCallback } from 'stream';
-import { pipeline, Transform } from 'stream';
-import zlib from 'zlib';
-import type { HTTPCredentials } from '../../types/types';
-import { TimeoutSettings } from '../common/timeoutSettings';
-import { getUserAgent } from '../utils/userAgent';
-import { assert, constructURLBasedOnBaseURL, createGuid, eventsHelper, monotonicTime, type RegisteredListener } from '../utils';
+import { Transform, pipeline } from 'stream';
+import { TLSSocket } from 'tls';
+import url from 'url';
+import * as zlib from 'zlib';
+
+import { TimeoutSettings } from './timeoutSettings';
+import { assert, constructURLBasedOnBaseURL, eventsHelper, monotonicTime  } from '../utils';
+import { createGuid } from './utils/crypto';
+import { getUserAgent } from './utils/userAgent';
 import { HttpsProxyAgent, SocksProxyAgent } from '../utilsBundle';
 import { BrowserContext, verifyClientCertificates } from './browserContext';
 import { CookieStore, domainMatches, parseRawCookie } from './cookieStore';
 import { MultipartFormData } from './formData';
-import { httpHappyEyeballsAgent, httpsHappyEyeballsAgent, timingForSocket } from '../utils/happy-eyeballs';
-import type { CallMetadata } from './instrumentation';
 import { SdkObject } from './instrumentation';
+import { ProgressController } from './progress';
+import { getMatchingTLSOptionsForOrigin, rewriteOpenSSLErrorIfNeeded } from './socksClientCertificatesInterceptor';
+import { httpHappyEyeballsAgent, httpsHappyEyeballsAgent, timingForSocket } from './utils/happyEyeballs';
+import { Tracing } from './trace/recorder/tracing';
+
+import type { CallMetadata } from './instrumentation';
 import type { Playwright } from './playwright';
 import type { Progress } from './progress';
-import { ProgressController } from './progress';
-import { Tracing } from './trace/recorder/tracing';
 import type * as types from './types';
 import type { HeadersArray, ProxySettings } from './types';
-import { getMatchingTLSOptionsForOrigin, rewriteOpenSSLErrorIfNeeded } from './socksClientCertificatesInterceptor';
+import type { HTTPCredentials } from '../../types/types';
+import type { RegisteredListener } from '../utils';
+import type * as channels from '@protocol/channels';
 import type * as har from '@trace/har';
-import { TLSSocket } from 'tls';
+import type { LookupAddress } from 'dns';
+import type { Readable, TransformCallback } from 'stream';
+
 
 type FetchRequestOptions = {
   userAgent: string;
   extraHTTPHeaders?: HeadersArray;
+  failOnStatusCode?: boolean;
   httpCredentials?: HTTPCredentials;
   proxy?: ProxySettings;
   timeoutSettings: TimeoutSettings;
@@ -132,7 +139,7 @@ export abstract class APIRequestContext extends SdkObject {
   abstract _defaultOptions(): FetchRequestOptions;
   abstract _addCookies(cookies: channels.NetworkCookie[]): Promise<void>;
   abstract _cookies(url: URL): Promise<channels.NetworkCookie[]>;
-  abstract storageState(): Promise<channels.APIRequestContextStorageStateResult>;
+  abstract storageState(indexedDB?: boolean): Promise<channels.APIRequestContextStorageStateResult>;
 
   private _storeResponseBody(body: Buffer): string {
     const uid = createGuid();
@@ -205,7 +212,8 @@ export abstract class APIRequestContext extends SdkObject {
     });
     const fetchUid = this._storeResponseBody(fetchResponse.body);
     this.fetchLog.set(fetchUid, controller.metadata.log);
-    if (params.failOnStatusCode && (fetchResponse.status < 200 || fetchResponse.status >= 400)) {
+    const failOnStatusCode = params.failOnStatusCode !== undefined ? params.failOnStatusCode : !!defaults.failOnStatusCode;
+    if (failOnStatusCode && (fetchResponse.status < 200 || fetchResponse.status >= 400)) {
       let responseText = '';
       if (fetchResponse.body.byteLength) {
         let text = fetchResponse.body.toString('utf8');
@@ -499,12 +507,12 @@ export abstract class APIRequestContext extends SdkObject {
         // happy eyeballs don't emit lookup and connect events, so we use our custom ones
         const happyEyeBallsTimings = timingForSocket(socket);
         dnsLookupAt = happyEyeBallsTimings.dnsLookupAt;
-        tcpConnectionAt ??= happyEyeBallsTimings.tcpConnectionAt;
+        tcpConnectionAt = happyEyeBallsTimings.tcpConnectionAt;
 
         // non-happy-eyeballs sockets
         listeners.push(
             eventsHelper.addEventListener(socket, 'lookup', () => { dnsLookupAt = monotonicTime(); }),
-            eventsHelper.addEventListener(socket, 'connect', () => { tcpConnectionAt ??= monotonicTime(); }),
+            eventsHelper.addEventListener(socket, 'connect', () => { tcpConnectionAt = monotonicTime(); }),
             eventsHelper.addEventListener(socket, 'secureConnect', () => {
               tlsHandshakeAt = monotonicTime();
 
@@ -521,20 +529,10 @@ export abstract class APIRequestContext extends SdkObject {
             }),
         );
 
-        // when using socks proxy, having the socket means the connection got established
-        if (agent instanceof SocksProxyAgent)
-          tcpConnectionAt ??= monotonicTime();
-
         serverIPAddress = socket.remoteAddress;
         serverPort = socket.remotePort;
       });
       request.on('finish', () => { requestFinishAt = monotonicTime(); });
-
-      // http proxy
-      request.on('proxyConnect', () => {
-        tcpConnectionAt ??= monotonicTime();
-      });
-
 
       progress.log(`→ ${options.method} ${url.toString()}`);
       if (options.headers) {
@@ -610,6 +608,7 @@ export class BrowserContextAPIRequestContext extends APIRequestContext {
     return {
       userAgent: this._context._options.userAgent || this._context._browser.userAgent(),
       extraHTTPHeaders: this._context._options.extraHTTPHeaders,
+      failOnStatusCode: undefined,
       httpCredentials: this._context._options.httpCredentials,
       proxy: this._context._options.proxy || this._context._browser.options.proxy,
       timeoutSettings: this._context._timeoutSettings,
@@ -627,8 +626,8 @@ export class BrowserContextAPIRequestContext extends APIRequestContext {
     return await this._context.cookies(url.toString());
   }
 
-  override async storageState(): Promise<channels.APIRequestContextStorageStateResult> {
-    return this._context.storageState();
+  override async storageState(indexedDB?: boolean): Promise<channels.APIRequestContextStorageStateResult> {
+    return this._context.storageState(indexedDB);
   }
 }
 
@@ -653,7 +652,7 @@ export class GlobalAPIRequestContext extends APIRequestContext {
       proxy.server = url;
     }
     if (options.storageState) {
-      this._origins = options.storageState.origins;
+      this._origins = options.storageState.origins?.map(origin => ({ indexedDB: [], ...origin }));
       this._cookieStore.addCookies(options.storageState.cookies || []);
     }
     verifyClientCertificates(options.clientCertificates);
@@ -661,6 +660,7 @@ export class GlobalAPIRequestContext extends APIRequestContext {
       baseURL: options.baseURL,
       userAgent: options.userAgent || getUserAgent(),
       extraHTTPHeaders: options.extraHTTPHeaders,
+      failOnStatusCode: !!options.failOnStatusCode,
       ignoreHTTPSErrors: !!options.ignoreHTTPSErrors,
       httpCredentials: options.httpCredentials,
       clientCertificates: options.clientCertificates,
@@ -693,25 +693,26 @@ export class GlobalAPIRequestContext extends APIRequestContext {
     return this._cookieStore.cookies(url);
   }
 
-  override async storageState(): Promise<channels.APIRequestContextStorageStateResult> {
+  override async storageState(indexedDB = false): Promise<channels.APIRequestContextStorageStateResult> {
     return {
       cookies: this._cookieStore.allCookies(),
-      origins: this._origins || []
+      origins: (this._origins || []).map(origin => ({ ...origin, indexedDB: indexedDB ? origin.indexedDB : [] })),
     };
   }
 }
 
 export function createProxyAgent(proxy: types.ProxySettings) {
-  const proxyURL = new URL(proxy.server);
-  if (proxyURL.protocol?.startsWith('socks'))
-    return new SocksProxyAgent(proxyURL);
-
+  const proxyOpts = url.parse(proxy.server);
+  if (proxyOpts.protocol?.startsWith('socks')) {
+    return new SocksProxyAgent({
+      host: proxyOpts.hostname,
+      port: proxyOpts.port || undefined,
+    });
+  }
   if (proxy.username)
-    proxyURL.username = proxy.username;
-  if (proxy.password)
-    proxyURL.password = proxy.password;
-  // TODO: We should use HttpProxyAgent conditional on proxyURL.protocol instead of always using CONNECT method.
-  return new HttpsProxyAgent(proxyURL);
+    proxyOpts.auth = `${proxy.username}:${proxy.password || ''}`;
+  // TODO: We should use HttpProxyAgent conditional on proxyOpts.protocol instead of always using CONNECT method.
+  return new HttpsProxyAgent(proxyOpts);
 }
 
 function toHeadersArray(rawHeaders: string[]): types.HeadersArray {

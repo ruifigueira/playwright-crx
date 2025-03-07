@@ -16,7 +16,7 @@
 
 import { expect, playwrightTest as baseTest } from '../config/browserTest';
 import { PlaywrightServer } from '../../packages/playwright-core/lib/remote/playwrightServer';
-import { createGuid } from '../../packages/playwright-core/lib/utils/crypto';
+import { createGuid } from '../../packages/playwright-core/lib/server/utils/crypto';
 import { Backend } from '../config/debugControllerBackend';
 import type { Browser, BrowserContext } from '@playwright/test';
 import type * as channels from '@protocol/channels';
@@ -51,7 +51,7 @@ const test = baseTest.extend<Fixtures>({
     await use(async () => {
       const browser = await browserType.connect(wsEndpoint, {
         headers: {
-          'x-playwright-launch-options': JSON.stringify((browserType as any)._defaultLaunchOptions),
+          'x-playwright-launch-options': JSON.stringify((browserType as any)._playwright._defaultLaunchOptions),
           'x-playwright-reuse-context': '1',
         },
       }) as BrowserWithReuse;

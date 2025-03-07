@@ -16,35 +16,40 @@
  */
 
 import path from 'path';
+
+import { assert } from '../../utils';
+import { headersArrayToObject } from '../../utils/isomorphic/headers';
+import { createGuid } from '../utils/crypto';
+import { eventsHelper } from '../utils/eventsHelper';
+import { hostPlatform } from '../utils/hostPlatform';
+import { splitErrorMessage } from '../../utils/isomorphic/stackTrace';
 import { PNG, jpegjs } from '../../utilsBundle';
-import { splitErrorMessage } from '../../utils/stackTrace';
-import { assert, createGuid, debugAssert, headersArrayToObject } from '../../utils';
-import { hostPlatform } from '../../utils/hostPlatform';
-import type * as accessibility from '../accessibility';
+import { BrowserContext } from '../browserContext';
 import * as dialog from '../dialog';
 import * as dom from '../dom';
-import type * as frames from '../frames';
-import type { RegisteredListener } from '../../utils/eventsHelper';
-import { eventsHelper } from '../../utils/eventsHelper';
+import { TargetClosedError } from '../errors';
 import { helper } from '../helper';
-import type { JSHandle } from '../javascript';
 import * as network from '../network';
-import { type InitScript, PageBinding, type PageDelegate } from '../page';
+import {  PageBinding  } from '../page';
 import { Page } from '../page';
-import type { Progress } from '../progress';
-import type * as types from '../types';
-import type { Protocol } from './protocol';
 import { getAccessibilityTree } from './wkAccessibility';
-import type { WKBrowserContext } from './wkBrowser';
 import { WKSession } from './wkConnection';
-import { WKExecutionContext } from './wkExecutionContext';
+import { createHandle, WKExecutionContext } from './wkExecutionContext';
 import { RawKeyboardImpl, RawMouseImpl, RawTouchscreenImpl } from './wkInput';
 import { WKInterceptableRequest, WKRouteImpl } from './wkInterceptableRequest';
 import { WKProvisionalPage } from './wkProvisionalPage';
 import { WKWorkers } from './wkWorkers';
-import { debugLogger } from '../../utils/debugLogger';
-import { BrowserContext } from '../browserContext';
-import { TargetClosedError } from '../errors';
+import { debugLogger } from '../utils/debugLogger';
+
+import type { Protocol } from './protocol';
+import type { WKBrowserContext } from './wkBrowser';
+import type { RegisteredListener } from '../utils/eventsHelper';
+import type * as accessibility from '../accessibility';
+import type * as frames from '../frames';
+import type { JSHandle } from '../javascript';
+import type { InitScript, PageDelegate } from '../page';
+import type { Progress } from '../progress';
+import type * as types from '../types';
 
 const UTILITY_WORLD_NAME = '__playwright_utility_world__';
 
@@ -191,8 +196,8 @@ export class WKPage implements PageDelegate {
     if (contextOptions.userAgent)
       promises.push(this.updateUserAgent());
     const emulatedMedia = this._page.emulatedMedia();
-    if (emulatedMedia.media || emulatedMedia.colorScheme || emulatedMedia.reducedMotion || emulatedMedia.forcedColors)
-      promises.push(WKPage._setEmulateMedia(session, emulatedMedia.media, emulatedMedia.colorScheme, emulatedMedia.reducedMotion, emulatedMedia.forcedColors));
+    if (emulatedMedia.media || emulatedMedia.colorScheme || emulatedMedia.reducedMotion || emulatedMedia.forcedColors || emulatedMedia.contrast)
+      promises.push(WKPage._setEmulateMedia(session, emulatedMedia.media, emulatedMedia.colorScheme, emulatedMedia.reducedMotion, emulatedMedia.forcedColors, emulatedMedia.contrast));
     const bootstrapScript = this._calculateBootstrapScript();
     if (bootstrapScript.length)
       promises.push(session.send('Page.setBootstrapScript', { source: bootstrapScript }));
@@ -289,7 +294,6 @@ export class WKPage implements PageDelegate {
   }
 
   handleWindowOpen(event: Protocol.Playwright.windowOpenPayload) {
-    debugAssert(!this._nextWindowOpenPopupFeatures);
     this._nextWindowOpenPopupFeatures = event.windowFeatures;
   }
 
@@ -492,7 +496,6 @@ export class WKPage implements PageDelegate {
     else if (contextPayload.type === 'user' && contextPayload.name === UTILITY_WORLD_NAME)
       worldName = 'utility';
     const context = new dom.FrameExecutionContext(delegate, frame, worldName);
-    (context as any)[contextDelegateSymbol] = delegate;
     if (worldName)
       frame._contextCreated(worldName, context);
     this._contextIdToContext.set(contextPayload.id, context);
@@ -558,7 +561,7 @@ export class WKPage implements PageDelegate {
       }
       if (!context)
         return;
-      handles.push(context.createHandle(p));
+      handles.push(createHandle(context, p));
     }
     this._lastConsoleMessage = {
       derivedType,
@@ -607,7 +610,7 @@ export class WKPage implements PageDelegate {
     let handle;
     try {
       const context = await this._page._frameManager.frame(event.frameId)!._mainContext();
-      handle = context.createHandle(event.element).asElement()!;
+      handle =  createHandle(context, event.element).asElement()!;
     } catch (e) {
       // During async processing, frame/context may go away. We should not throw.
       return;
@@ -615,7 +618,7 @@ export class WKPage implements PageDelegate {
     await this._page._onFileChooserOpened(handle);
   }
 
-  private static async _setEmulateMedia(session: WKSession, mediaType: types.MediaType, colorScheme: types.ColorScheme, reducedMotion: types.ReducedMotion, forcedColors: types.ForcedColors): Promise<void> {
+  private static async _setEmulateMedia(session: WKSession, mediaType: types.MediaType, colorScheme: types.ColorScheme, reducedMotion: types.ReducedMotion, forcedColors: types.ForcedColors, contrast: types.Contrast): Promise<void> {
     const promises = [];
     promises.push(session.send('Page.setEmulatedMedia', { media: mediaType === 'no-override' ? '' : mediaType }));
     let appearance: any = undefined;
@@ -639,6 +642,13 @@ export class WKPage implements PageDelegate {
       case 'no-override': forcedColorsWk = undefined; break;
     }
     promises.push(session.send('Page.setForcedColors', { forcedColors: forcedColorsWk }));
+    let contrastWk: any = undefined;
+    switch (contrast) {
+      case 'more': contrastWk = 'More'; break;
+      case 'no-preference': contrastWk = 'NoPreference'; break;
+      case 'no-override': contrastWk = undefined; break;
+    }
+    promises.push(session.send('Page.overrideUserPreference', { name: 'PrefersContrast', value: contrastWk }));
     await Promise.all(promises);
   }
 
@@ -661,7 +671,8 @@ export class WKPage implements PageDelegate {
     const colorScheme = emulatedMedia.colorScheme;
     const reducedMotion = emulatedMedia.reducedMotion;
     const forcedColors = emulatedMedia.forcedColors;
-    await this._forAllSessions(session => WKPage._setEmulateMedia(session, emulatedMedia.media, colorScheme, reducedMotion, forcedColors));
+    const contrast = emulatedMedia.contrast;
+    await this._forAllSessions(session => WKPage._setEmulateMedia(session, emulatedMedia.media, colorScheme, reducedMotion, forcedColors, contrast));
   }
 
   async updateEmulatedViewportSize(): Promise<void> {
@@ -857,10 +868,6 @@ export class WKPage implements PageDelegate {
     return nodeInfo.ownerFrameId || null;
   }
 
-  isElementHandle(remoteObject: any): boolean {
-    return (remoteObject as Protocol.Runtime.RemoteObject).subtype === 'node';
-  }
-
   async getBoundingBox(handle: dom.ElementHandle): Promise<types.Rect | null> {
     const quads = await this.getContentQuads(handle);
     if (!quads || !quads.length)
@@ -934,16 +941,6 @@ export class WKPage implements PageDelegate {
     ]);
   }
 
-  async setInputFiles(handle: dom.ElementHandle<HTMLInputElement>, files: types.FilePayload[]): Promise<void> {
-    const objectId = handle._objectId;
-    const protocolFiles = files.map(file => ({
-      name: file.name,
-      type: file.mimeType,
-      data: file.buffer,
-    }));
-    await this._session.send('DOM.setInputFiles', { objectId, files: protocolFiles });
-  }
-
   async setInputFilePaths(handle: dom.ElementHandle<HTMLInputElement>, paths: string[]): Promise<void> {
     const pageProxyId = this._pageProxySession.sessionId;
     const objectId = handle._objectId;
@@ -956,11 +953,11 @@ export class WKPage implements PageDelegate {
   async adoptElementHandle<T extends Node>(handle: dom.ElementHandle<T>, to: dom.FrameExecutionContext): Promise<dom.ElementHandle<T>> {
     const result = await this._session.sendMayFail('DOM.resolveNode', {
       objectId: handle._objectId,
-      executionContextId: ((to as any)[contextDelegateSymbol] as WKExecutionContext)._contextId
+      executionContextId: (to.delegate as WKExecutionContext)._contextId
     });
     if (!result || result.object.subtype === 'null')
       throw new Error(dom.kUnableToAdoptErrorMessage);
-    return to.createHandle(result.object) as dom.ElementHandle<T>;
+    return createHandle(to, result.object) as dom.ElementHandle<T>;
   }
 
   async getAccessibilityTree(needle?: dom.ElementHandle): Promise<{tree: accessibility.AXNode, needle: accessibility.AXNode | null}> {
@@ -980,11 +977,11 @@ export class WKPage implements PageDelegate {
     const context = await parent._mainContext();
     const result = await this._session.send('DOM.resolveNode', {
       frameId: frame._id,
-      executionContextId: ((context as any)[contextDelegateSymbol] as WKExecutionContext)._contextId
+      executionContextId: (context.delegate as WKExecutionContext)._contextId
     });
     if (!result || result.object.subtype === 'null')
       throw new Error('Frame has been detached.');
-    return context.createHandle(result.object) as dom.ElementHandle;
+    return createHandle(context, result.object) as dom.ElementHandle;
   }
 
   private _maybeCancelCoopNavigationRequest(provisionalPage: WKProvisionalPage) {
@@ -1255,5 +1252,3 @@ function isLoadedSecurely(url: string, timing: network.ResourceTiming) {
     return true;
   } catch (_) {}
 }
-
-const contextDelegateSymbol = Symbol('delegate');

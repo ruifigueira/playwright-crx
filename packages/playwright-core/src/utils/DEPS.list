@@ -1,6 +1,6 @@
 [*]
 ./
-../third_party/pixelmatch
-../image_tools/compare.ts
+./isomorphic
 ../utilsBundle.ts
 ../zipBundle.ts
+../utils/isomorphic

@@ -14,19 +14,28 @@
  * limitations under the License.
  */
 
-import { evaluationScript } from './clientHelper';
-import type * as channels from '@protocol/channels';
 import { ChannelOwner } from './channelOwner';
+import { evaluationScript } from './clientHelper';
+import { setTestIdAttribute, testIdAttributeName } from './locator';
+import { emptyPlatform } from './platform';
+
 import type { SelectorEngine } from './types';
 import type * as api from '../../types/types';
-import { setTestIdAttribute, testIdAttributeName } from './locator';
+import type * as channels from '@protocol/channels';
+import type { Platform } from './platform';
+
+let platform = emptyPlatform;
+
+export function setPlatformForSelectors(p: Platform) {
+  platform = p;
+}
 
 export class Selectors implements api.Selectors {
   private _channels = new Set<SelectorsOwner>();
   private _registrations: channels.SelectorsRegisterParams[] = [];
 
   async register(name: string, script: string | (() => SelectorEngine) | { path?: string, content?: string }, options: { contentScript?: boolean } = {}): Promise<void> {
-    const source = await evaluationScript(script, undefined, false);
+    const source = await evaluationScript(platform, script, undefined, false);
     const params = { ...options, name, source };
     for (const channel of this._channels)
       await channel._channel.register(params);

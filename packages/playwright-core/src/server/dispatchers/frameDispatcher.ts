@@ -14,20 +14,20 @@
  * limitations under the License.
  */
 
-import type { NavigationEvent } from '../frames';
 import { Frame } from '../frames';
-import type * as channels from '@protocol/channels';
 import { Dispatcher, existingDispatcher } from './dispatcher';
 import { ElementHandleDispatcher } from './elementHandlerDispatcher';
 import { parseArgument, serializeResult } from './jsHandleDispatcher';
 import { ResponseDispatcher } from './networkDispatchers';
 import { RequestDispatcher } from './networkDispatchers';
+import { parseAriaSnapshotUnsafe } from '../../utils/isomorphic/ariaSnapshot';
+import { yaml } from '../../utilsBundle';
+
 import type { CallMetadata } from '../instrumentation';
 import type { BrowserContextDispatcher } from './browserContextDispatcher';
 import type { PageDispatcher } from './pageDispatcher';
-import { debugAssert } from '../../utils';
-import { parseAriaSnapshotUnsafe } from '../../utils/isomorphic/ariaSnapshot';
-import { yaml } from '../../utilsBundle';
+import type { NavigationEvent } from '../frames';
+import type * as channels from '@protocol/channels';
 
 export class FrameDispatcher extends Dispatcher<Frame, channels.FrameChannel, BrowserContextDispatcher | PageDispatcher> implements channels.FrameChannel {
   _type_Frame = true;
@@ -49,7 +49,6 @@ export class FrameDispatcher extends Dispatcher<Frame, channels.FrameChannel, Br
     // Main frames are gc'ed separately from any other frames, so that
     // methods on Page that redirect to the main frame remain operational.
     // Note: we cannot check parentFrame() here because it may be null after the frame has been detached.
-    debugAssert(frame._page.mainFrame(), 'Cannot determine whether the frame is a main frame');
     const gcBucket = frame._page.mainFrame() === frame ? 'MainFrame' : 'Frame';
     const pageDispatcher = existingDispatcher<PageDispatcher>(frame._page);
     super(pageDispatcher || scope, frame, 'Frame', {

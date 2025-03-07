@@ -15,15 +15,17 @@
  */
 
 import path from 'path';
-import type { BabelFileResult, NodePath, PluginObj, TransformOptions } from '@babel/core';
-import type { TSExportAssignment, ImportDeclaration } from '@babel/types';
-import type { TemplateBuilder } from '@babel/template';
+
 import * as babel from '@babel/core';
+import traverseFunction from '@babel/traverse';
+
+import type { BabelFileResult, NodePath, PluginObj, TransformOptions } from '@babel/core';
+import type { TemplateBuilder } from '@babel/template';
+import type { ImportDeclaration, TSExportAssignment } from '@babel/types';
 
 export { codeFrameColumns } from '@babel/code-frame';
 export { declare } from '@babel/helper-plugin-utils';
 export { types } from '@babel/core';
-import traverseFunction from '@babel/traverse';
 export const traverse = traverseFunction;
 
 function babelTransformOptions(isTypeScript: boolean, isModule: boolean, pluginsPrologue: [string, any?][], pluginsEpilogue: [string, any?][]): TransformOptions {
@@ -118,15 +120,15 @@ function isTypeScript(filename: string) {
   return filename.endsWith('.ts') || filename.endsWith('.tsx') || filename.endsWith('.mts') || filename.endsWith('.cts');
 }
 
-export function babelTransform(code: string, filename: string, isModule: boolean, pluginsPrologue: [string, any?][], pluginsEpilogue: [string, any?][]): BabelFileResult {
+export function babelTransform(code: string, filename: string, isModule: boolean, pluginsPrologue: [string, any?][], pluginsEpilogue: [string, any?][]): BabelFileResult | null {
   if (isTransforming)
-    return {};
+    return null;
 
   // Prevent reentry while requiring plugins lazily.
   isTransforming = true;
   try {
     const options = babelTransformOptions(isTypeScript(filename), isModule, pluginsPrologue, pluginsEpilogue);
-    return babel.transform(code, { filename, ...options })!;
+    return babel.transform(code, { filename, ...options });
   } finally {
     isTransforming = false;
   }

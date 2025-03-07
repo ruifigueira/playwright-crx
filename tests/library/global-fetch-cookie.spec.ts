@@ -351,13 +351,34 @@ it('should preserve local storage on import/export of storage state', async ({ p
         localStorage: [{
           name: 'name1',
           value: 'value1'
-        }]
+        }],
+        ...{
+          indexedDB: [
+            {
+              name: 'db',
+              version: 5,
+              stores: [
+                {
+                  name: 'store',
+                  keyPath: 'id',
+                  autoIncrement: false,
+                  indexes: [],
+                  records: [
+                    {
+                      value: { id: 'foo', name: 'John Doe' }
+                    }
+                  ],
+                }
+              ]
+            }
+          ]
+        },
       },
     ]
   };
   const request = await playwright.request.newContext({ storageState });
   await request.get(server.EMPTY_PAGE);
-  const exportedState = await request.storageState();
+  const exportedState = await request.storageState({ indexedDB: true });
   expect(exportedState).toEqual(storageState);
   await request.dispose();
 });

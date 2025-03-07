@@ -1,8 +1,7 @@
 [*]
-../common/
 ../generated/
 ../protocol/
-../utils/
+../utils
 ../utils/isomorphic/
 ../utilsBundle.ts
 ../zipBundle.ts
@@ -13,6 +12,7 @@
 ./recorder/
 ./registry/
 ./trace/recorder/tracing.ts
+./utils/
 
 [playwright.ts]
 ./android/

@@ -291,6 +291,7 @@ export interface JSONReportError {
 
 export interface JSONReportTestResult {
   workerIndex: number;
+  parallelIndex: number;
   status: TestStatus | undefined;
   duration: number;
   error: TestError | undefined;
@@ -690,6 +691,21 @@ export interface TestStep {
    * Returns a list of step titles from the root step down to this step.
    */
   titlePath(): Array<string>;
+
+  /**
+   * The list of annotations applicable to the current test step.
+   */
+  annotations: Array<{
+    /**
+     * Annotation type, for example `'skip'`.
+     */
+    type: string;
+
+    /**
+     * Optional description.
+     */
+    description?: string;
+  }>;
 
   /**
    * The list of files or buffers attached in the step execution through

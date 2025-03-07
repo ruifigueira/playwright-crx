@@ -18,8 +18,8 @@ import type { IncomingMessage } from 'http';
 import type { ProxyServer } from '../third_party/proxy';
 import { createProxy } from '../third_party/proxy';
 import net from 'net';
-import type { SocksSocketClosedPayload, SocksSocketDataPayload, SocksSocketRequestedPayload } from '../../packages/playwright-core/src/common/socksProxy';
-import { SocksProxy } from '../../packages/playwright-core/lib/common/socksProxy';
+import type { SocksSocketClosedPayload, SocksSocketDataPayload, SocksSocketRequestedPayload } from 'playwright-core/src/server/utils/socksProxy';
+import { SocksProxy } from '../../packages/playwright-core/lib/server/utils/socksProxy';
 
 // Certain browsers perform telemetry requests which we want to ignore.
 const kConnectHostsToIgnore = new Set([
@@ -138,7 +138,7 @@ export async function setupSocksForwardingServer({
   const socksProxy = new SocksProxy();
   socksProxy.setPattern('*');
   socksProxy.addListener(SocksProxy.Events.SocksRequested, async (payload: SocksSocketRequestedPayload) => {
-    if (!['127.0.0.1', '0:0:0:0:0:0:0:1', 'fake-localhost-127-0-0-1.nip.io', 'localhost'].includes(payload.host) || payload.port !== allowedTargetPort) {
+    if (!['127.0.0.1', 'fake-localhost-127-0-0-1.nip.io', 'localhost'].includes(payload.host) || payload.port !== allowedTargetPort) {
       socksProxy.sendSocketError({ uid: payload.uid, error: 'ECONNREFUSED' });
       return;
     }
