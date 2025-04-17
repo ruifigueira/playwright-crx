@@ -68,6 +68,8 @@ export default defineConfig({
       'url': path.resolve(__dirname, './src/shims/url'),
       'zlib': path.resolve(__dirname, './node_modules/browserify-zlib'),
 
+      'fs/promises': path.resolve(__dirname, './src/shims/fs/promises'),
+
       'node:events': path.resolve(__dirname, './node_modules/events'),
       'node:module': path.resolve(__dirname, './src/shims/module'),
       'node:stream': path.resolve(__dirname, './node_modules/readable-stream'),
