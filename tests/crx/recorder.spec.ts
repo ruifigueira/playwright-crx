@@ -181,14 +181,14 @@ test('test', async ({ page, context }) => {
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'button' }).click();
   await page.getByRole('checkbox').uncheck();
-  await page.locator('input[type="text"]').fill('Hello world');
-  await page.locator('input[type="text"]').press('Tab');
+  await page.getByRole('textbox').fill('Hello world');
+  await page.getByRole('textbox').press('Tab');
   await page.getByRole('combobox').selectOption('B');
-  await page.locator('input[type="file"]').setInputFiles('file-to-upload.txt');
+  await page.getByRole('button', { name: 'Choose File' }).setInputFiles('file-to-upload.txt');
   const page1 = await context.newPage();
   await page1.close();
   await expect(page.getByRole('checkbox')).not.toBeChecked();
-  await expect(page.locator('input[type="text"]')).toHaveValue('Hello world');
+  await expect(page.getByRole('textbox')).toHaveValue('Hello world');
   await expect(page.getByRole('combobox')).toHaveValue('B');
   await expect(page.locator('div')).toContainText('Some long text');
   await expect(page.getByText('Some long text')).toBeVisible();
@@ -199,7 +199,7 @@ test('test', async ({ page, context }) => {
     - combobox:
       - option "A"
       - option "B" [selected]
-    - textbox: C:\\\\fakepath\\\\file-to-upload.txt
+    - button "Choose File"
     - text: Some long text
     \`);
 });`;

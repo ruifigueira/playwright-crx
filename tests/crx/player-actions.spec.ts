@@ -133,7 +133,7 @@ test('should fail while playing setInputFiles', async ({ page, recorderPage, bas
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
     `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ page.getByRole('textbox') .setInputFiles() ❌ — XXms`,
+    `▼ page.getByRole('button', { name: 'Choose File' }) .setInputFiles() ❌ — XXms`,
   ]);
 
   await Promise.all([
