@@ -14,7 +14,7 @@
   limitations under the License.
 */
 
-import type { TestCase, TestCaseAnnotation, TestCaseSummary } from './types';
+import type { TestCase, TestAnnotation, TestCaseSummary } from './types';
 import * as React from 'react';
 import { TabbedPane } from './tabbedPane';
 import { AutoChip } from './chip';
@@ -45,9 +45,7 @@ export const TestCaseView: React.FC<{
     return test.tags;
   }, [test]);
 
-  const visibleAnnotations = React.useMemo(() => {
-    return test?.annotations?.filter(annotation => !annotation.type.startsWith('_')) || [];
-  }, [test?.annotations]);
+  const visibleTestAnnotations = test?.annotations.filter(a => !a.type.startsWith('_')) ?? [];
 
   return <div className='test-case-column vbox'>
     {test && <div className='hbox'>
@@ -71,8 +69,8 @@ export const TestCaseView: React.FC<{
       {test && !!test.projectName && <ProjectLink projectNames={projectNames} projectName={test.projectName}></ProjectLink>}
       {labels && <LabelsLinkView labels={labels} />}
     </div>}
-    {!!visibleAnnotations.length && <AutoChip header='Annotations'>
-      {visibleAnnotations.map((annotation, index) => <TestCaseAnnotationView key={index} annotation={annotation} />)}
+    {test?.results.length === 0 && visibleTestAnnotations.length !== 0 && <AutoChip header='Annotations' dataTestId='test-case-annotations'>
+      {visibleTestAnnotations.map((annotation, index) => <TestCaseAnnotationView key={index} annotation={annotation} />)}
     </AutoChip>}
     {test && <TabbedPane tabs={
       test.results.map((result, index) => ({
@@ -81,12 +79,20 @@ export const TestCaseView: React.FC<{
           {statusIcon(result.status)} {retryLabel(index)}
           {(test.results.length > 1) && <span className='test-case-run-duration'>{msToString(result.duration)}</span>}
         </div>,
-        render: () => <TestResultView test={test!} result={result} />
+        render: () => {
+          const visibleAnnotations = result.annotations.filter(annotation => !annotation.type.startsWith('_'));
+          return <>
+            {!!visibleAnnotations.length && <AutoChip header='Annotations' dataTestId='test-case-annotations'>
+              {visibleAnnotations.map((annotation, index) => <TestCaseAnnotationView key={index} annotation={annotation} />)}
+            </AutoChip>}
+            <TestResultView test={test!} result={result} />
+          </>;
+        },
       })) || []} selectedTab={String(selectedResultIndex)} setSelectedTab={id => setSelectedResultIndex(+id)} />}
   </div>;
 };
 
-function TestCaseAnnotationView({ annotation: { type, description } }: { annotation: TestCaseAnnotation }) {
+function TestCaseAnnotationView({ annotation: { type, description } }: { annotation: TestAnnotation }) {
   return (
     <div className='test-case-annotation'>
       <span style={{ fontWeight: 'bold' }}>{type}</span>

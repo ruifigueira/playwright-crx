@@ -37,7 +37,7 @@ import { compressCallLog } from './callLog';
 
 import type { ConsoleMessage } from './console';
 import type { Dialog } from './dialog';
-import type { ElementStateWithoutStable, FrameExpectParams, InjectedScript } from './injected/injectedScript';
+import type { ElementStateWithoutStable, FrameExpectParams, InjectedScript } from '@injected/injectedScript';
 import type { CallMetadata } from './instrumentation';
 import type { Progress } from './progress';
 import type { ScreenshotOptions } from './screenshotter';
@@ -1411,7 +1411,7 @@ export class Frame extends SdkObject {
     });
   }
 
-  async ariaSnapshot(metadata: CallMetadata, selector: string, options: { id?: boolean, mode?: 'raw' | 'regex' } & types.TimeoutOptions = {}): Promise<string> {
+  async ariaSnapshot(metadata: CallMetadata, selector: string, options: { ref?: boolean, mode?: 'raw' | 'regex' } & types.TimeoutOptions = {}): Promise<string> {
     const controller = new ProgressController(metadata, this);
     return controller.run(async progress => {
       return await this._retryWithProgressIfNotConnected(progress, selector, true /* strict */, true /* performActionPreChecks */, handle => handle.ariaSnapshot(options));
@@ -1567,9 +1567,9 @@ export class Frame extends SdkObject {
                 return;
               }
               if (typeof polling !== 'number')
-                injected.builtinRequestAnimationFrame(next);
+                injected.utils.builtins.requestAnimationFrame(next);
               else
-                injected.builtinSetTimeout(next, polling);
+                injected.utils.builtins.setTimeout(next, polling);
             } catch (e) {
               reject(e);
             }

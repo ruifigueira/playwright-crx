@@ -22,7 +22,7 @@ import { setBoxedStackPrefixes, asLocator, createGuid, currentZone, debugMode, i
 
 import { currentTestInfo } from './common/globals';
 import { rootTestType } from './common/testType';
-import { attachErrorPrompts } from './prompt';
+import { attachErrorContext } from './errorContext';
 
 import type { Fixtures, PlaywrightTestArgs, PlaywrightTestOptions, PlaywrightWorkerArgs, PlaywrightWorkerOptions, ScreenshotMode, TestInfo, TestType, VideoMode } from '../types/test';
 import type { ContextReuseMode } from './common/config';
@@ -55,12 +55,15 @@ type TestFixtures = PlaywrightTestArgs & PlaywrightTestOptions & {
   _contextFactory: (options?: BrowserContextOptions) => Promise<BrowserContext>;
 };
 
+type ErrorContextOption = { format: 'json' | 'markdown' } | undefined;
+
 type WorkerFixtures = PlaywrightWorkerArgs & PlaywrightWorkerOptions & {
   playwright: PlaywrightImpl;
   _browserOptions: LaunchOptions;
   _optionContextReuseMode: ContextReuseMode,
   _optionConnectOptions: PlaywrightWorkerOptions['connectOptions'],
   _reuseContext: boolean,
+  _optionErrorContext: ErrorContextOption,
 };
 
 const playwrightFixtures: Fixtures<TestFixtures, WorkerFixtures> = ({
@@ -95,7 +98,7 @@ const playwrightFixtures: Fixtures<TestFixtures, WorkerFixtures> = ({
     playwright._defaultLaunchOptions = undefined;
   }, { scope: 'worker', auto: true, box: true }],
 
-  browser: [async ({ playwright, browserName, _browserOptions, connectOptions, _reuseContext }, use, testInfo) => {
+  browser: [async ({ playwright, browserName, _browserOptions, connectOptions }, use, testInfo) => {
     if (!['chromium', 'firefox', 'webkit', '_bidiChromium', '_bidiFirefox'].includes(browserName))
       throw new Error(`Unexpected browserName "${browserName}", must be one of "chromium", "firefox" or "webkit"`);
 
@@ -104,7 +107,6 @@ const playwrightFixtures: Fixtures<TestFixtures, WorkerFixtures> = ({
         ...connectOptions,
         exposeNetwork: connectOptions.exposeNetwork ?? (connectOptions as any)._exposeNetwork,
         headers: {
-          ...(_reuseContext ? { 'x-playwright-reuse-context': '1' } : {}),
           // HTTP headers are ASCII only (not UTF-8).
           'x-playwright-launch-options': jsonStringifyForceASCII(_browserOptions),
           ...connectOptions.headers,
@@ -245,13 +247,13 @@ const playwrightFixtures: Fixtures<TestFixtures, WorkerFixtures> = ({
     playwright._defaultContextNavigationTimeout = undefined;
   }, { auto: 'all-hooks-included',  title: 'context configuration', box: true } as any],
 
-  _setupArtifacts: [async ({ playwright, screenshot }, use, testInfo) => {
+  _setupArtifacts: [async ({ playwright, screenshot, _optionErrorContext }, use, testInfo) => {
     // This fixture has a separate zero-timeout slot to ensure that artifact collection
     // happens even after some fixtures or hooks time out.
     // Now that default test timeout is known, we can replace zero with an actual value.
     testInfo.setTimeout(testInfo.project.timeout);
 
-    const artifactsRecorder = new ArtifactsRecorder(playwright, tracing().artifactsDir(), screenshot);
+    const artifactsRecorder = new ArtifactsRecorder(playwright, tracing().artifactsDir(), screenshot, _optionErrorContext);
     await artifactsRecorder.willStartTest(testInfo as TestInfoImpl);
 
     const tracingGroupSteps: TestStepInternal[] = [];
@@ -393,6 +395,7 @@ const playwrightFixtures: Fixtures<TestFixtures, WorkerFixtures> = ({
 
   _optionContextReuseMode: ['none', { scope: 'worker', option: true }],
   _optionConnectOptions: [undefined, { scope: 'worker', option: true }],
+  _optionErrorContext: [process.env.PLAYWRIGHT_NO_COPY_PROMPT ? undefined : { format: 'markdown' }, { scope: 'worker', option: true }],
 
   _reuseContext: [async ({ video, _optionContextReuseMode }, use) => {
     let mode = _optionContextReuseMode;
@@ -524,7 +527,6 @@ type SnapshotRecorderMode = 'on' | 'off' | 'only-on-failure' | 'on-first-failure
 class SnapshotRecorder {
   private _ordinal = 0;
   private _temporary: string[] = [];
-  private _snapshottedSymbol = Symbol('snapshotted');
 
   constructor(
     private _artifactsRecorder: ArtifactsRecorder,
@@ -590,9 +592,11 @@ class SnapshotRecorder {
   }
 
   private async _snapshotPage(page: Page, temporary: boolean) {
-    if ((page as any)[this._snapshottedSymbol])
+    // Make sure we do not snapshot the same page twice for a single TestInfo,
+    // which is reused between beforeAll(s), test and afterAll(s).
+    if ((page as any)[this.testInfo._uniqueSymbol])
       return;
-    (page as any)[this._snapshottedSymbol] = true;
+    (page as any)[this.testInfo._uniqueSymbol] = true;
     try {
       const path = temporary ? this._createTemporaryArtifact(createGuid() + this._extension) : this._createAttachmentPath();
       await this._doSnapshot(page, path);
@@ -620,10 +624,12 @@ class ArtifactsRecorder {
   private _screenshotRecorder: SnapshotRecorder;
   private _pageSnapshot: string | undefined;
   private _sourceCache: Map<string, string> = new Map();
+  private _errorContext: ErrorContextOption;
 
-  constructor(playwright: PlaywrightImpl, artifactsDir: string, screenshot: ScreenshotOption) {
+  constructor(playwright: PlaywrightImpl, artifactsDir: string, screenshot: ScreenshotOption, errorContext: ErrorContextOption) {
     this._playwright = playwright;
     this._artifactsDir = artifactsDir;
+    this._errorContext = errorContext;
     const screenshotOptions = typeof screenshot === 'string' ? undefined : screenshot;
     this._startedCollectingArtifacts = Symbol('startedCollectingArtifacts');
 
@@ -663,14 +669,22 @@ class ArtifactsRecorder {
     await this._stopTracing(context.tracing);
 
     await this._screenshotRecorder.captureTemporary(context);
+    await this._takePageSnapshot(context);
+  }
 
-    if (!process.env.PLAYWRIGHT_NO_COPY_PROMPT && this._testInfo.errors.length > 0) {
-      try {
-        const page = context.pages()[0];
-        // TODO: maybe capture snapshot when the error is created, so it's from the right page and right time
-        this._pageSnapshot ??= await page?.locator('body').ariaSnapshot({ timeout: 5000 });
-      } catch {}
-    }
+  private async _takePageSnapshot(context: BrowserContext) {
+    if (!this._errorContext)
+      return;
+    if (this._testInfo.errors.length === 0)
+      return;
+    if (this._pageSnapshot)
+      return;
+    const page = context.pages()[0];
+
+    try {
+      // TODO: maybe capture snapshot when the error is created, so it's from the right page and right time
+      this._pageSnapshot = await page?.locator('body').ariaSnapshot({ timeout: 5000 });
+    } catch {}
   }
 
   async didCreateRequestContext(context: APIRequestContext) {
@@ -702,7 +716,13 @@ class ArtifactsRecorder {
     })));
 
     await this._screenshotRecorder.persistTemporary();
-    await attachErrorPrompts(this._testInfo, this._sourceCache, this._pageSnapshot);
+
+    const context = leftoverContexts[0];
+    if (context)
+      await this._takePageSnapshot(context);
+
+    if (this._errorContext)
+      await attachErrorContext(this._testInfo, this._errorContext.format, this._sourceCache, this._pageSnapshot);
   }
 
   private async _startTraceChunkOnContextCreation(tracing: Tracing) {
@@ -733,14 +753,20 @@ class ArtifactsRecorder {
   }
 }
 
-const paramsToRender = ['url', 'selector', 'text', 'key'];
-
+function paramsToRender(apiName: string) {
+  switch (apiName) {
+    case 'locator.fill':
+      return ['value'];
+    default:
+      return ['url', 'selector', 'text', 'key'];
+  }
+}
 function renderApiCall(apiName: string, params: any) {
   if (apiName === 'tracing.group')
     return params.name;
   const paramsArray = [];
   if (params) {
-    for (const name of paramsToRender) {
+    for (const name of paramsToRender(apiName)) {
       if (!(name in params))
         continue;
       let value;

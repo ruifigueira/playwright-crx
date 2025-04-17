@@ -149,7 +149,7 @@ Each accessible element in the tree is represented as a YAML node:
   as `checked`, `disabled`, `expanded`, `level`, `pressed`, or `selected`.
 
 These values are derived from ARIA attributes or calculated based on HTML semantics. To inspect the accessibility tree
-structure of a page, use the [Chrome DevTools Accessibility Pane](https://developer.chrome.com/docs/devtools/accessibility/reference#pane).
+structure of a page, use the [Chrome DevTools Accessibility Tab](https://developer.chrome.com/docs/devtools/accessibility/reference#tab).
 
 
 ## Snapshot matching
@@ -263,6 +263,48 @@ Similarly, you can partially match children in lists or groups by omitting speci
 Partial matches let you create flexible snapshot tests that verify essential page structure without enforcing
 specific content or attributes.
 
+### Strict matching
+
+By default, a template containing the subset of children will be matched:
+
+```html
+<ul>
+  <li>Feature A</li>
+  <li>Feature B</li>
+  <li>Feature C</li>
+</ul>
+```
+
+*aria snapshot for partial match*
+
+```yaml
+- list
+  - listitem: Feature B
+```
+
+
+The `/children` property can be used to control how child elements are matched:
+- `contain` (default): Matches if all specified children are present in order
+- `equal`: Matches if the children exactly match the specified list in order
+- `deep-equal`: Matches if the children exactly match the specified list in order, including nested children
+
+```html
+<ul>
+  <li>Feature A</li>
+  <li>Feature B</li>
+  <li>Feature C</li>
+</ul>
+```
+
+*aria snapshot will fail due to Feature C not being in the template*
+
+```yaml
+- list
+  - /children: equal
+  - listitem: Feature A
+  - listitem: Feature B
+```
+
 ### Matching with regular expressions
 
 Regular expressions allow flexible matching for elements with dynamic or variable text. Accessible names and text can
@@ -334,7 +376,7 @@ The way source code is updated can be changed using the `--update-source-method`
 - **"overwrite"**: Overwrites the source code with the new snapshot values.
 
 ```bash
-npx playwright test --update-snapshots --update-source-mode=3way
+npx playwright test --update-snapshots --update-source-method=3way
 ```
 
 #### Snapshots as separate files

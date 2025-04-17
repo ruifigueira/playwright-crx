@@ -34,6 +34,7 @@ import {
   toBeInViewport,
   toBeOK,
   toBeVisible,
+  toContainClass,
   toContainText,
   toHaveAccessibleDescription,
   toHaveAccessibleErrorMessage,
@@ -209,10 +210,12 @@ function setMatcherCallContext(context: MatcherCallContext) {
   matcherCallContext = context;
 }
 
-function takeMatcherCallContext(): MatcherCallContext {
+function takeMatcherCallContext(): MatcherCallContext | undefined {
   try {
-    return matcherCallContext!;
+    return matcherCallContext;
   } finally {
+    // Any subsequent matcher following the first is assumed to be an unsupported legacy asymmetric matcher.
+    // Lacking call context in these scenarios is not particularly important.
     matcherCallContext = undefined;
   }
 }
@@ -223,13 +226,13 @@ function wrapPlaywrightMatcherToPassNiceThis(matcher: any) {
   return function(this: any, ...args: any[]) {
     const { isNot, promise, utils } = this;
     const context = takeMatcherCallContext();
-    const timeout = context.expectInfo.timeout ?? context.testInfo?._projectInternal?.expect?.timeout ?? defaultExpectTimeout;
+    const timeout = context?.expectInfo.timeout ?? context?.testInfo?._projectInternal?.expect?.timeout ?? defaultExpectTimeout;
     const newThis: ExpectMatcherStateInternal = {
       isNot,
       promise,
       utils,
       timeout,
-      _stepInfo: context.step,
+      _stepInfo: context?.step,
     };
     (newThis as any).equals = throwUnsupportedExpectMatcherError;
     return matcher.call(newThis, ...args);
@@ -255,6 +258,7 @@ const customAsyncMatchers = {
   toBeOK,
   toBeVisible,
   toContainText,
+  toContainClass,
   toHaveAccessibleDescription,
   toHaveAccessibleName,
   toHaveAccessibleErrorMessage,
@@ -381,10 +385,8 @@ class ExpectMetaInfoProxyHandler implements ProxyHandler<any> {
         setMatcherCallContext({ expectInfo: this._info, testInfo, step: step.info });
         const callback = () => matcher.call(target, ...args);
         const result = currentZone().with('stepZone', step).run(callback);
-        if (result instanceof Promise) {
-          const promise = result.then(finalizer).catch(reportStepError);
-          return testInfo._floatingPromiseScope.wrapPromiseAPIResult(promise);
-        }
+        if (result instanceof Promise)
+          return result.then(finalizer).catch(reportStepError);
         finalizer();
         return result;
       } catch (e) {

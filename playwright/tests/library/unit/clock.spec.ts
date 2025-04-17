@@ -15,8 +15,8 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { createClock as rawCreateClock, install as rawInstall } from '../../../packages/playwright-core/src/server/injected/clock';
-import type { InstallConfig, ClockController, ClockMethods } from '../../../packages/playwright-core/src/server/injected/clock';
+import { createClock as rawCreateClock, install as rawInstall } from '../../../packages/injected/src/clock';
+import type { InstallConfig, ClockController, ClockMethods } from '../../../packages/injected/src/clock';
 
 const createClock = (now?: number): ClockController & ClockMethods => {
   const { clock, api } = rawCreateClock(globalThis);
@@ -1157,7 +1157,12 @@ it.describe('stubTimers', () => {
 
   it('restores global property on uninstall if it was inherited onto the global object', ({}) => {
     // Give the global object an inherited 'setTimeout' method
-    const proto = { Date,
+    const proto = {
+      Date,
+      Intl,
+      Map,
+      Set,
+      performance,
       setTimeout: () => {},
       clearTimeout: () => {},
       setInterval: () => {},

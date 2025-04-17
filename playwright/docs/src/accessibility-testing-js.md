@@ -113,7 +113,7 @@ test('should not have any automatically detectable WCAG A or AA violations', asy
 });
 ```
 
-You can find a complete listing of the rule tags axe-core supports in [the "Axe-core Tags" section of the axe API documentation](https://www.deque.com/axe/core-documentation/api-documentation/#axe-core-tags).
+You can find a complete listing of the rule tags axe-core supports in [the "Axe-core Tags" section of the axe API documentation](https://www.deque.com/axe/core-documentation/api-documentation/#axecore-tags).
 
 ## Handling known issues
 
@@ -244,7 +244,7 @@ type AxeFixture = {
 // This new "test" can be used in multiple test files, and each of them will get
 // a consistently configured AxeBuilder instance.
 export const test = base.extend<AxeFixture>({
-  makeAxeBuilder: async ({ page }, use, testInfo) => {
+  makeAxeBuilder: async ({ page }, use) => {
     const makeAxeBuilder = () => new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
         .exclude('#commonly-reused-element-with-known-issue');
@@ -255,8 +255,7 @@ export const test = base.extend<AxeFixture>({
 export { expect } from '@playwright/test';
 ```
 
-```js tab=js-js
-// axe-test.js
+```js tab=js-js title="axe-test.js"
 const base = require('@playwright/test');
 const AxeBuilder = require('@axe-core/playwright').default;
 
@@ -265,7 +264,7 @@ const AxeBuilder = require('@axe-core/playwright').default;
 // This new "test" can be used in multiple test files, and each of them will get
 // a consistently configured AxeBuilder instance.
 exports.test = base.test.extend({
-  makeAxeBuilder: async ({ page }, use, testInfo) => {
+  makeAxeBuilder: async ({ page }, use) => {
     const makeAxeBuilder = () => new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
         .exclude('#commonly-reused-element-with-known-issue');

@@ -269,8 +269,6 @@ export class TerminalReporter implements ReporterV2 {
     if (full && summary.failuresToPrint.length && !this._omitFailures)
       this._printFailures(summary.failuresToPrint);
     this._printSlowTests();
-    // TODO: 1.52: Make warning display prettier
-    // this._printWarnings();
     this._printSummary(summaryMessage);
   }
 
@@ -288,28 +286,6 @@ export class TerminalReporter implements ReporterV2 {
     });
     if (slowTests.length)
       console.log(this.screen.colors.yellow('  Consider running tests from slow files in parallel, see https://playwright.dev/docs/test-parallel.'));
-  }
-
-  private _printWarnings() {
-    const warningTests = this.suite.allTests().filter(test => test.annotations.some(a => a.type === 'warning'));
-    const encounteredWarnings = new Map<string, Array<TestCase>>();
-    for (const test of warningTests) {
-      for (const annotation of test.annotations) {
-        if (annotation.type !== 'warning' || annotation.description === undefined)
-          continue;
-        let tests = encounteredWarnings.get(annotation.description);
-        if (!tests) {
-          tests = [];
-          encounteredWarnings.set(annotation.description, tests);
-        }
-        tests.push(test);
-      }
-    }
-    for (const [description, tests] of encounteredWarnings) {
-      console.log(this.screen.colors.yellow('  Warning: ') + description);
-      for (const test of tests)
-        console.log(this.formatTestHeader(test, { indent: '    ', mode: 'default' }));
-    }
   }
 
   private _printSummary(summary: string) {
@@ -347,15 +323,18 @@ export function formatFailure(screen: Screen, config: FullConfig, test: TestCase
     const errors = formatResultFailure(screen, test, result, '    ');
     if (!errors.length)
       continue;
-    const retryLines = [];
     if (result.retry) {
-      retryLines.push('');
-      retryLines.push(screen.colors.gray(separator(screen, `    Retry #${result.retry}`)));
+      resultLines.push('');
+      resultLines.push(screen.colors.gray(separator(screen, `    Retry #${result.retry}`)));
     }
-    resultLines.push(...retryLines);
     resultLines.push(...errors.map(error => '\n' + error.message));
     for (let i = 0; i < result.attachments.length; ++i) {
       const attachment = result.attachments[i];
+      if (attachment.name.startsWith('_error-context') && attachment.path) {
+        resultLines.push('');
+        resultLines.push(screen.colors.dim(`    Error Context: ${relativeFilePath(screen, config, attachment.path)}`));
+        continue;
+      }
       if (attachment.name.startsWith('_'))
         continue;
       const hasPrintableContent = attachment.contentType.startsWith('text/');
