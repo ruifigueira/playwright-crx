@@ -24,6 +24,7 @@ import { Progress, ProgressController } from '../progress';
 import { SocksInterceptor } from '../socksInterceptor';
 import { WebSocketTransport } from '../transport';
 import { fetchData } from '../utils/network';
+import { resolveGlobToRegexPattern } from '../../utils/isomorphic/urlMatch';
 
 import type { HarBackend } from '../harBackend';
 import type { CallMetadata } from '../instrumentation';
@@ -91,7 +92,7 @@ export class LocalUtilsDispatcher extends Dispatcher<{ guid: string }, channels.
       };
       const wsEndpoint = await urlToWSEndpoint(progress, params.wsEndpoint);
 
-      const transport = await WebSocketTransport.connect(progress, wsEndpoint, wsHeaders, true, 'x-playwright-debug-log');
+      const transport = await WebSocketTransport.connect(progress, wsEndpoint, { headers: wsHeaders, followRedirects: true, debugLogHeader: 'x-playwright-debug-log' });
       const socksInterceptor = new SocksInterceptor(transport, params.exposeNetwork, params.socksProxyRedirectPortForTest);
       const pipe = new JsonPipeDispatcher(this);
       transport.onmessage = json => {
@@ -119,6 +120,11 @@ export class LocalUtilsDispatcher extends Dispatcher<{ guid: string }, channels.
       pipe.on('close', () => transport.close());
       return { pipe, headers: transport.headers };
     }, params.timeout || 0);
+  }
+
+  async globToRegex(params: channels.LocalUtilsGlobToRegexParams, metadata?: CallMetadata): Promise<channels.LocalUtilsGlobToRegexResult> {
+    const regex = resolveGlobToRegexPattern(params.baseURL, params.glob, params.webSocketUrl);
+    return { regex };
   }
 }
 

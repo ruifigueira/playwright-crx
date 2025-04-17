@@ -43,16 +43,21 @@ jobs:
       run: |
         BRANCH_NAME="roll-into-pw-${BROWSER}/${REVISION}"
         echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_OUTPUT
-        git config --global user.name github-actions
-        git config --global user.email 41898282+github-actions[bot]@users.noreply.github.com
+        git config --global user.name microsoft-playwright-automation[bot]
+        git config --global user.email 203992400+microsoft-playwright-automation[bot]@users.noreply.github.com
         git checkout -b "$BRANCH_NAME"
         git add .
         git commit -m "feat(${BROWSER}): roll to r${REVISION}"
         git push origin $BRANCH_NAME --force
+    - uses: actions/create-github-app-token@v2
+      id: app-token
+      with:
+        app-id: ${{ vars.PLAYWRIGHT_APP_ID }}
+        private-key: ${{ secrets.PLAYWRIGHT_PRIVATE_KEY }}
     - name: Create Pull Request
       uses: actions/github-script@v7
       with:
-        github-token: ${{ secrets.REPOSITORY_DISPATCH_PERSONAL_ACCESS_TOKEN }}
+        github-token: ${{ steps.app-token.outputs.token }}
         script: |
           const response = await github.rest.pulls.create({
             owner: 'microsoft',

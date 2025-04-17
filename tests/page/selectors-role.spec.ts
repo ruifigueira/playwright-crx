@@ -243,6 +243,64 @@ test('should support disabled', async ({ page }) => {
   ]);
 });
 
+test('should inherit disabled from the ancestor', async ({ page }) => {
+  await page.setContent(`
+    <span aria-disabled="true">
+      <button>Click me!</button>
+    </span>
+  `);
+  await expect(page.locator('button')).toBeDisabled();
+
+  await page.setContent(`
+    <span aria-disabled="true">
+      <h1>Heading</h1>
+    </span>
+  `);
+  await expect(page.locator('h1')).not.toBeDisabled();
+});
+
+test('should support disabled fieldset', async ({ page }) => {
+  await page.setContent(`
+    <fieldset disabled>
+      <input></input>
+      <button data-testid="inside-fieldset-element">x</button>
+      <legend>
+        <button data-testid="inside-legend-element">legend</button>
+      </legend>
+    </fieldset>
+
+    <fieldset disabled>
+      <legend>
+        <div>
+          <button data-testid="nested-inside-legend-element">x</button>
+        </div>
+      </legend>
+    </fieldset>
+
+    <fieldset disabled>
+      <div></div>
+      <legend>
+        <button data-testid="first-legend-element">x</button>
+      </legend>
+      <legend>
+        <button data-testid="second-legend-element">x</button>
+      </legend>
+    </fieldset>
+
+    <fieldset disabled>
+      <fieldset>
+        <button data-testid="deep-button">x</button>
+      </fieldset>
+    </fieldset>
+  `);
+
+  await expect.soft(page.getByTestId('inside-legend-element')).toBeEnabled();
+  await expect.soft(page.getByTestId('nested-inside-legend-element')).toBeEnabled();
+  await expect.soft(page.getByTestId('first-legend-element')).toBeEnabled();
+  await expect.soft(page.getByTestId('second-legend-element')).toBeDisabled();
+  await expect.soft(page.getByTestId('deep-button')).toBeDisabled();
+});
+
 test('should support level', async ({ page }) => {
   await page.setContent(`
     <h1>Hello</h1>

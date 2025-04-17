@@ -222,6 +222,47 @@ test.describe('toHaveClass', () => {
   });
 });
 
+test.describe('toContainClass', () => {
+  test('pass', async ({ page }) => {
+    await page.setContent('<div class="foo bar baz"></div>');
+    const locator = page.locator('div');
+    await expect(locator).toContainClass('');
+    await expect(locator).toContainClass('bar');
+    await expect(locator).toContainClass('baz bar');
+    await expect(locator).toContainClass('  bar   foo ');
+    await expect(locator).not.toContainClass('  baz   not-matching '); // Strip whitespace and match individual classes
+    expect(() => expect(locator).toContainClass(/foo|bar/ as any)).toThrow(/"expected\" argument in toContainClass cannot be a RegExp value/);
+  });
+
+  test('pass with SVGs', async ({ page }) => {
+    await page.setContent(`<svg class="c1 c2" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"></svg>`);
+    await expect(page.locator('svg')).toContainClass('c1');
+  });
+
+  test('fail', async ({ page }) => {
+    await page.setContent('<div class="bar baz"></div>');
+    const locator = page.locator('div');
+    const error = await expect(locator).toContainClass('does-not-exist', { timeout: 1000 }).catch(e => e);
+    expect(error.message).toContain('expect.toContainClass with timeout 1000ms');
+  });
+
+  test('pass with array', async ({ page }) => {
+    await page.setContent('<div class="foo"></div><div class="hello bar"></div><div class="baz"></div>');
+    const locator = page.locator('div');
+    await expect(locator).toContainClass(['foo', 'hello', 'baz']);
+    expect(() => expect(locator).toContainClass(['foo', 'hello', /baz/] as any)).toThrow(/"expected" argument in toContainClass cannot contain RegExp values/);
+    await expect(locator).not.toHaveClass(['not-there', 'hello', 'baz']); // Class not there
+    await expect(locator).not.toHaveClass(['foo', 'hello']); // Length mismatch
+  });
+
+  test('fail with array', async ({ page }) => {
+    await page.setContent('<div class="foo"></div><div class="bar"></div><div class="bar"></div>');
+    const locator = page.locator('div');
+    const error = await expect(locator).toContainClass(['foo', 'bar', 'baz'], { timeout: 1000 }).catch(e => e);
+    expect(error.message).toContain('expect.toContainClass with timeout 1000ms');
+  });
+});
+
 test.describe('toHaveTitle', () => {
   test('pass', async ({ page }) => {
     await page.setContent('<title>  Hello     world</title>');

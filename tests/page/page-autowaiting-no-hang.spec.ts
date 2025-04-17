@@ -31,7 +31,7 @@ it('calling window.stop async', async ({ page, server }) => {
   }, server.EMPTY_PAGE);
 });
 
-it('calling window.stop sync', async ({ page, server }) => {
+it('calling window.stop sync', async ({ page, server, browserName }) => {
   await page.evaluate(url => {
     window.location.href = url;
     window.stop();

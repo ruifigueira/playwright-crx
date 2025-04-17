@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import type { Locator } from '@playwright/test';
+import type { Locator, FrameLocator, Page } from '@playwright/test';
 import { test as it, expect } from './pageTest';
 
 function unshift(snapshot: string): string {
@@ -79,7 +79,8 @@ it('should snapshot complex', async ({ page }) => {
   await checkAndMatchSnapshot(page.locator('body'), `
     - list:
       - listitem:
-        - link "link"
+        - link "link":
+          - /url: about:blank
   `);
 });
 
@@ -149,7 +150,8 @@ it('should snapshot integration', async ({ page }) => {
       - listitem:
         - group: Verified
       - listitem:
-        - link "Sponsor"
+        - link "Sponsor":
+          - /url: about:blank
   `);
 });
 
@@ -220,7 +222,8 @@ it('should include pseudo in text', async ({ page }) => {
   `);
 
   await checkAndMatchSnapshot(page.locator('body'), `
-    - link "worldhello hellobye"
+    - link "worldhello hellobye":
+      - /url: about:blank
   `);
 });
 
@@ -243,7 +246,8 @@ it('should not include hidden pseudo in text', async ({ page }) => {
   `);
 
   await checkAndMatchSnapshot(page.locator('body'), `
-    - link "hello hello"
+    - link "hello hello":
+      - /url: about:blank
   `);
 });
 
@@ -266,7 +270,8 @@ it('should include new line for block pseudo', async ({ page }) => {
   `);
 
   await checkAndMatchSnapshot(page.locator('body'), `
-    - link "world hello hello bye"
+    - link "world hello hello bye":
+      - /url: about:blank
   `);
 });
 
@@ -411,13 +416,19 @@ it('should ignore presentation and none roles', async ({ page }) => {
   `);
 });
 
-it('should treat input value as text in templates', async ({ page }) => {
+it('should treat input value as text in templates, but not for checkbox/radio/file', async ({ page }) => {
   await page.setContent(`
     <input value='hello world'>
+    <input type=file>
+    <input type=checkbox checked>
+    <input type=radio checked>
   `);
 
   await checkAndMatchSnapshot(page.locator('body'), `
     - textbox: hello world
+    - button "Choose File"
+    - checkbox [checked]
+    - radio [checked]
   `);
 });
 
@@ -450,10 +461,12 @@ it('should respect aria-owns', async ({ page }) => {
   // - Disregarding these as aria-owns can't suggest multiple parts by spec.
   await checkAndMatchSnapshot(page.locator('body'), `
     - link "Link 1 Value Paragraph":
+      - /url: about:blank
       - region: Link 1
       - textbox: Value
       - paragraph: Paragraph
     - link "Link 2 Value Paragraph":
+      - /url: about:blank
       - region: Link 2
   `);
 });
@@ -467,6 +480,7 @@ it('should be ok with circular ownership', async ({ page }) => {
 
   await checkAndMatchSnapshot(page.locator('body'), `
     - link "Hello":
+      - /url: about:blank
       - region: Hello
   `);
 });
@@ -488,22 +502,30 @@ it('should escape yaml text in text nodes', async ({ page }) => {
   await checkAndMatchSnapshot(page.locator('body'), `
     - group:
       - text: "one:"
-      - link "link1"
+      - link "link1":
+        - /url: "#"
       - text: "\\\"two"
-      - link "link2"
+      - link "link2":
+        - /url: "#"
       - text: "'three"
-      - link "link3"
+      - link "link3":
+        - /url: "#"
       - text: "\`four"
     - list:
-      - link "one"
+      - link "one":
+        - /url: "#"
       - text: ","
-      - link "two"
+      - link "two":
+        - /url: "#"
       - text: (
-      - link "three"
+      - link "three":
+        - /url: "#"
       - text: ") {"
-      - link "four"
+      - link "four":
+        - /url: "#"
       - text: "} ["
-      - link "five"
+      - link "five":
+        - /url: "#"
       - text: "]"
     - text: "[Select all]"
   `);
@@ -521,7 +543,8 @@ it('should normalize whitespace', async ({ page }) => {
   await checkAndMatchSnapshot(page.locator('body'), `
     - group:
       - text: one two
-      - link "link 1"
+      - link "link 1":
+        - /url: "#"
     - textbox: hello world
     - button "helloworld"
   `);
@@ -532,7 +555,8 @@ it('should normalize whitespace', async ({ page }) => {
       - text: |
           one
           two
-      - link "  link     1 "
+      - link "  link     1 ":
+        - /url: "#"
     - textbox:        hello  world
     - button "he\u00adlloworld\u200b"
   `);
@@ -548,6 +572,7 @@ it('should handle long strings', async ({ page }) => {
 
   await checkAndMatchSnapshot(page.locator('body'), `
     - link:
+      - /url: about:blank
       - region: ${s}
   `);
 });
@@ -562,15 +587,20 @@ it('should escape special yaml characters', async ({ page }) => {
   `);
 
   await checkAndMatchSnapshot(page.locator('body'), `
-    - link "@hello"
+    - link "@hello":
+      - /url: "#"
     - text: "@hello"
-    - link "]hello"
+    - link "]hello":
+      - /url: "#"
     - text: "]hello"
-    - link "hello"
+    - link "hello":
+      - /url: "#"
     - text: hello
-    - link "hello"
+    - link "hello":
+      - /url: "#"
     - text: hello
-    - link "#hello"
+    - link "#hello":
+      - /url: "#"
     - text: "#hello"
   `);
 });
@@ -589,21 +619,29 @@ it('should escape special yaml values', async ({ page }) => {
   `);
 
   await checkAndMatchSnapshot(page.locator('body'), `
-    - link "true"
+    - link "true":
+      - /url: "#"
     - text: "False"
-    - link "NO"
+    - link "NO":
+      - /url: "#"
     - text: "yes"
-    - link "y"
+    - link "y":
+      - /url: "#"
     - text: "N"
-    - link "on"
+    - link "on":
+      - /url: "#"
     - text: "Off"
-    - link "null"
+    - link "null":
+      - /url: "#"
     - text: "NULL"
-    - link "123"
+    - link "123":
+      - /url: "#"
     - text: "123"
-    - link "-1.2"
+    - link "-1.2":
+      - /url: "#"
     - text: "-1.2"
-    - link "-"
+    - link "-":
+      - /url: "#"
     - text: "-"
     - textbox: "555"
   `);
@@ -620,4 +658,75 @@ it('should not report textarea textContent', async ({ page }) => {
   await checkAndMatchSnapshot(page.locator('body'), `
     - textbox: After
   `);
+});
+
+it('should generate refs', async ({ page }) => {
+  await page.setContent(`
+    <button>One</button>
+    <button>Two</button>
+    <button>Three</button>
+  `);
+
+  const snapshot1 = await page.locator('body').ariaSnapshot({ ref: true });
+  expect(snapshot1).toContain('- button "One" [ref=s1e3]');
+  expect(snapshot1).toContain('- button "Two" [ref=s1e4]');
+  expect(snapshot1).toContain('- button "Three" [ref=s1e5]');
+
+  await expect(page.locator('aria-ref=s1e3')).toHaveText('One');
+  await expect(page.locator('aria-ref=s1e4')).toHaveText('Two');
+  await expect(page.locator('aria-ref=s1e5')).toHaveText('Three');
+
+  const snapshot2 = await page.locator('body').ariaSnapshot({ ref: true });
+  expect(snapshot2).toContain('- button "One" [ref=s2e3]');
+  await expect(page.locator('aria-ref=s2e3')).toHaveText('One');
+
+  const e = await expect(page.locator('aria-ref=s1e3')).toHaveText('One').catch(e => e);
+  expect(e.message).toContain('Error: Stale aria-ref, expected s2e{number}, got s1e3');
+});
+
+it('should list iframes', async ({ page }) => {
+  await page.setContent(`
+    <h1>Hello</h1>
+    <iframe name="foo" src="data:text/html,<h1>World</h1>">
+  `);
+
+  const snapshot1 = await page.locator('body').ariaSnapshot({ ref: true });
+  expect(snapshot1).toContain('- iframe');
+
+  const frameSnapshot = await page.frameLocator(`iframe`).locator('body').ariaSnapshot();
+  expect(frameSnapshot).toEqual('- heading "World" [level=1]');
+});
+
+it('ref mode can be used to stitch all frame snapshots', async ({ page, server }) => {
+  await page.goto(server.PREFIX + '/frames/nested-frames.html');
+
+  async function allFrameSnapshot(frame: Page | FrameLocator): Promise<string> {
+    const snapshot = await frame.locator('body').ariaSnapshot({ ref: true });
+    const lines = snapshot.split('\n');
+    const result = [];
+    for (const line of lines) {
+      const match = line.match(/^(\s*)- iframe \[ref=(.*)\]/);
+      if (!match) {
+        result.push(line);
+        continue;
+      }
+
+      const leadingSpace = match[1];
+      const ref = match[2];
+      const childFrame = frame.frameLocator(`aria-ref=${ref}`);
+      const childSnapshot = await allFrameSnapshot(childFrame);
+      result.push(line + ':', childSnapshot.split('\n').map(l => leadingSpace + '  ' + l).join('\n'));
+    }
+    return result.join('\n');
+  }
+
+  expect(await allFrameSnapshot(page)).toEqual(`
+- iframe [ref=s1e3]:
+  - iframe [ref=s1e3]:
+    - text: Hi, I'm frame
+  - iframe [ref=s1e4]:
+    - text: Hi, I'm frame
+- iframe [ref=s1e4]:
+  - text: Hi, I'm frame
+  `.trim());
 });

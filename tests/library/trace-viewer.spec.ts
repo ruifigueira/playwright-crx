@@ -51,9 +51,9 @@ test.beforeAll(async function recordTrace({ browser, browserName, browserType, s
     console.error('Error');
     return new Promise(f => {
       // Generate exception.
-      window.builtinSetTimeout(() => {
+      window.builtins.setTimeout(() => {
         // And then resolve.
-        window.builtinSetTimeout(() => f('return ' + a), 0);
+        window.builtins.setTimeout(() => f('return ' + a), 0);
         throw new Error('Unhandled exception');
       }, 0);
     });
@@ -367,6 +367,7 @@ test('should filter network requests by resource type', async ({ page, runAndTra
   const traceViewer = await runAndTrace(async () => {
     server.setRoute('/api/endpoint', (_, res) => res.setHeader('Content-Type', 'application/json').end());
     await page.goto(`${server.PREFIX}/network-tab/network.html`);
+    await page.evaluate(() => (window as any).donePromise);
   });
   await traceViewer.selectAction('http://localhost');
   await traceViewer.showNetworkTab();
@@ -399,6 +400,7 @@ test('should filter network requests by resource type', async ({ page, runAndTra
 test('should show font preview', async ({ page, runAndTrace, server }) => {
   const traceViewer = await runAndTrace(async () => {
     await page.goto(`${server.PREFIX}/network-tab/network.html`);
+    await page.evaluate(() => (window as any).donePromise);
   });
   await traceViewer.selectAction('http://localhost');
   await traceViewer.showNetworkTab();
@@ -413,6 +415,7 @@ test('should show font preview', async ({ page, runAndTrace, server }) => {
 test('should filter network requests by url', async ({ page, runAndTrace, server }) => {
   const traceViewer = await runAndTrace(async () => {
     await page.goto(`${server.PREFIX}/network-tab/network.html`);
+    await page.evaluate(() => (window as any).donePromise);
   });
   await traceViewer.selectAction('http://localhost');
   await traceViewer.showNetworkTab();
@@ -467,7 +470,15 @@ test('should show snapshot URL', async ({ page, runAndTrace, server }) => {
     await page.evaluate('2+2');
   });
   await traceViewer.snapshotFrame('page.evaluate');
-  await expect(traceViewer.page.locator('.browser-frame-address-bar')).toHaveText(server.EMPTY_PAGE);
+  const browserFrameAddressBarLocator = traceViewer.page.locator('.browser-frame-address-bar');
+  await expect(browserFrameAddressBarLocator).toHaveText(server.EMPTY_PAGE);
+  const copySelectorLocator = browserFrameAddressBarLocator.getByRole('button', { name: 'Copy' });
+  await expect(copySelectorLocator).toBeHidden();
+  await browserFrameAddressBarLocator.hover();
+  await expect(copySelectorLocator).toBeVisible();
+  await traceViewer.page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await copySelectorLocator.click();
+  expect(await traceViewer.page.evaluate(() => navigator.clipboard.readText())).toBe(server.EMPTY_PAGE);
 });
 
 test('should popup snapshot', async ({ page, runAndTrace, server }) => {
@@ -1694,6 +1705,30 @@ test('should show a popover', async ({ runAndTrace, page, server, platform, brow
   await expect.poll(() => popover.evaluate(e => e.matches(':popover-open'))).toBe(true);
 });
 
+test('should show a modal dialog', async ({ runAndTrace, page, platform, browserName, macVersion }) => {
+  test.skip(platform === 'darwin' && macVersion === 13 && browserName === 'webkit', 'WebKit on macOS 13.7 reliably fails on this test for some reason');
+  const traceViewer = await runAndTrace(async () => {
+    await page.setContent(`
+      <button>Show the dialog</button>
+      <dialog>
+        <p>This is a modal dialog</p>
+      </dialog>
+      <script>
+        document.querySelector('button').addEventListener('click', () => {
+          document.querySelector('dialog').showModal();
+        });
+      </script>
+    `);
+    await page.getByRole('button').click();
+    await expect(page.locator('p')).toBeVisible();
+  });
+
+  const snapshot = await traceViewer.snapshotFrame('expect.toBeVisible');
+  const dialog = snapshot.locator('dialog');
+  await expect.poll(() => dialog.evaluate(e => e.matches(':open'))).toBe(true);
+  await expect.poll(() => dialog.evaluate(e => e.matches(':modal'))).toBe(true);
+});
+
 test('should open settings dialog', async ({ showTraceViewer }) => {
   const traceViewer = await showTraceViewer([traceFile]);
   await traceViewer.selectAction('http://localhost');
@@ -1749,4 +1784,59 @@ test('should toggle canvas rendering', async ({ runAndTrace, page }) => {
   snapshotRequest = await snapshotRequestPromise;
 
   expect(snapshotRequest.url()).toContain('shouldPopulateCanvasFromScreenshot');
+});
+
+test('should render blob trace received from message', async ({ showTraceViewer }) => {
+  const traceViewer = await showTraceViewer([], { host: 'localhost' });
+
+  await expect(traceViewer.page.locator('.drop-target')).toBeVisible();
+  await expect(traceViewer.actionTitles).not.toBeVisible();
+
+  await traceViewer.page.evaluate(trace => {
+    const uint8Array = Uint8Array.from(atob(trace), c => c.charCodeAt(0));
+
+    window.postMessage({
+      method: 'load',
+      params: {
+        trace: new Blob([uint8Array], { type: 'application/zip' }),
+      }
+    }, '*');
+  }, fs.readFileSync(traceFile, 'base64'));
+
+  await expect(traceViewer.page.locator('.drop-target')).not.toBeVisible();
+  await expect(traceViewer.actionTitles).toHaveText([
+    /browserContext.newPage/,
+    /page.gotodata:text\/html,<!DOCTYPE html><html>Hello world<\/html>/,
+    /page.setContent/,
+    /expect.toHaveTextlocator\('button'\)/,
+    /expect.toBeHiddengetByTestId\('amazing-btn'\)/,
+    /expect.toBeHiddengetByTestId\(\/amazing-btn-regex\/\)/,
+    /page.evaluate/,
+    /page.evaluate/,
+    /locator.clickgetByText\('Click'\)/,
+    /page.waitForNavigation/,
+    /page.waitForResponse/,
+    /page.waitForTimeout/,
+    /page.gotohttp:\/\/localhost:\d+\/frames\/frame.html/,
+    /page.setViewportSize/,
+  ]);
+});
+
+test("shouldn't render not-blob trace received from message", async ({ showTraceViewer }) => {
+  const traceViewer = await showTraceViewer([], { host: 'localhost' });
+
+  await expect(traceViewer.page.locator('.drop-target')).toBeVisible();
+  await expect(traceViewer.actionTitles).not.toBeVisible();
+
+  await traceViewer.page.evaluate(trace => {
+    window.postMessage({
+      method: 'load',
+      params: {
+        trace,
+      }
+    }, '*');
+  }, fs.readFileSync(traceFile, 'base64'));
+
+  await expect(traceViewer.page.locator('.drop-target')).toBeVisible();
+  await expect(traceViewer.actionTitles).not.toBeVisible();
 });

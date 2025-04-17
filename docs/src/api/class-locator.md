@@ -206,6 +206,13 @@ Below is the HTML markup and the respective ARIA snapshot:
     - link "About"
 ```
 
+### option: Locator.ariaSnapshot.ref
+* since: v1.52
+- `ref` <[boolean]>
+
+Generate symbolic reference for each element. One can use `aria-ref=<ref>` locator immediately after capturing the
+snapshot to perform actions on the element.
+
 ### option: Locator.ariaSnapshot.timeout = %%-input-timeout-%%
 * since: v1.49
 
@@ -876,11 +883,19 @@ If [`param: expression`] throws or rejects, this method throws.
 
 Optional argument to pass to [`param: expression`].
 
-### option: Locator.evaluate.timeout = %%-input-timeout-%%
+### option: Locator.evaluate.timeout
 * since: v1.14
+* langs: python, java, csharp
+- `timeout` <[float]>
 
-### option: Locator.evaluate.timeout = %%-input-timeout-js-%%
+Maximum time in milliseconds to wait for the locator before evaluating. Note that after locator is resolved, evaluation itself is not limited by the timeout. Defaults to `30000` (30 seconds). Pass `0` to disable timeout.
+
+### option: Locator.evaluate.timeout
 * since: v1.14
+* langs: js
+- `timeout` <[float]>
+
+Maximum time in milliseconds to wait for the locator before evaluating. Note that after locator is resolved, evaluation itself is not limited by the timeout. Defaults to `0` - no timeout.
 
 ## async method: Locator.evaluateAll
 * since: v1.14
@@ -965,11 +980,19 @@ See [`method: Page.evaluateHandle`] for more details.
 
 Optional argument to pass to [`param: expression`].
 
-### option: Locator.evaluateHandle.timeout = %%-input-timeout-%%
+### option: Locator.evaluateHandle.timeout
 * since: v1.14
+* langs: python, java, csharp
+- `timeout` <[float]>
 
-### option: Locator.evaluateHandle.timeout = %%-input-timeout-js-%%
+Maximum time in milliseconds to wait for the locator before evaluating. Note that after locator is resolved, evaluation itself is not limited by the timeout. Defaults to `30000` (30 seconds). Pass `0` to disable timeout.
+
+### option: Locator.evaluateHandle.timeout
 * since: v1.14
+* langs: js
+- `timeout` <[float]>
+
+Maximum time in milliseconds to wait for the locator before evaluating. Note that after locator is resolved, evaluation itself is not limited by the timeout. Defaults to `0` - no timeout.
 
 ## async method: Locator.fill
 * since: v1.14

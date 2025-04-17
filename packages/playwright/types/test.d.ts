@@ -676,6 +676,47 @@ interface TestProject<TestArgs = {}, WorkerArgs = {}> {
    * option for all projects.
    */
   timeout?: number;
+
+  /**
+   * The maximum number of concurrent worker processes to use for parallelizing tests from this project. Can also be set
+   * as percentage of logical CPU cores, e.g. `'50%'.`
+   *
+   * This could be useful, for example, when all tests from a project share a single resource like a test account, and
+   * therefore cannot be executed in parallel. Limiting workers to one for such a project will prevent simultaneous use
+   * of the shared resource.
+   *
+   * Note that the global [testConfig.workers](https://playwright.dev/docs/api/class-testconfig#test-config-workers)
+   * limit applies to the total number of worker processes. However, Playwright will limit the number of workers used
+   * for this project by the value of
+   * [testProject.workers](https://playwright.dev/docs/api/class-testproject#test-project-workers).
+   *
+   * By default, there is no limit per project. See
+   * [testConfig.workers](https://playwright.dev/docs/api/class-testconfig#test-config-workers) for the default of the
+   * total worker limit.
+   *
+   * **Usage**
+   *
+   * ```js
+   * // playwright.config.ts
+   * import { defineConfig } from '@playwright/test';
+   *
+   * export default defineConfig({
+   *   workers: 10,  // total workers limit
+   *
+   *   projects: [
+   *     {
+   *       name: 'runs in parallel',
+   *     },
+   *     {
+   *       name: 'one at a time',
+   *       workers: 1,  // workers limit for this project
+   *     },
+   *   ],
+   * });
+   * ```
+   *
+   */
+  workers?: number|string;
 }
 
 export interface Project<TestArgs = {}, WorkerArgs = {}> extends TestProject<TestArgs, WorkerArgs> {
@@ -916,12 +957,14 @@ interface TestConfig<TestArgs = {}, WorkerArgs = {}> {
    *     {
    *       command: 'npm run start',
    *       url: 'http://localhost:3000',
+   *       name: 'Frontend',
    *       timeout: 120 * 1000,
    *       reuseExistingServer: !process.env.CI,
    *     },
    *     {
    *       command: 'npm run backend',
    *       url: 'http://localhost:3333',
+   *       name: 'Backend',
    *       timeout: 120 * 1000,
    *       reuseExistingServer: !process.env.CI,
    *     }
@@ -1133,6 +1176,25 @@ interface TestConfig<TestArgs = {}, WorkerArgs = {}> {
       timeout?: number;
     };
   };
+
+  /**
+   * Whether to exit with an error if any tests are marked as flaky. Useful on CI.
+   *
+   * Also available in the [command line](https://playwright.dev/docs/test-cli) with the `--fail-on-flaky-tests` option.
+   *
+   * **Usage**
+   *
+   * ```js
+   * // playwright.config.ts
+   * import { defineConfig } from '@playwright/test';
+   *
+   * export default defineConfig({
+   *   failOnFlakyTests: !!process.env.CI,
+   * });
+   * ```
+   *
+   */
+  failOnFlakyTests?: boolean;
 
   /**
    * Whether to exit with an error if any tests or groups are marked as
@@ -3474,7 +3536,20 @@ export interface TestType<TestArgs extends {}, WorkerArgs extends {}> {
    *   test('runs in parallel 2', async ({ page }) => {});
    *   ```
    *
-   * - Running tests serially, retrying from the start.
+   * - Running tests in order, retrying each failed test independetly.
+   *
+   *   This is the default mode. It can be useful to set it explicitly to override project configuration that uses
+   *   `fullyParallel`.
+   *
+   *   ```js
+   *   // Tests in this file run in order. Retries, if any, run independently.
+   *   test.describe.configure({ mode: 'default' });
+   *   test('runs first', async ({ page }) => {});
+   *   test('runs second', async ({ page }) => {});
+   *   ```
+   *
+   * - Running tests serially, retrying from the start. If one of the serial tests fails, all subsequent tests are
+   *   skipped.
    *
    *   **NOTE** Running serially is not recommended. It is usually better to make your tests isolated, so they can be
    *   run independently.
@@ -6076,7 +6151,7 @@ export interface PlaywrightWorkerOptions {
   /**
    * Whether to run browser in headless mode. More details for
    * [Chromium](https://developers.google.com/web/updates/2017/04/headless-chrome) and
-   * [Firefox](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Headless_mode). Defaults to `true` unless the
+   * [Firefox](https://hacks.mozilla.org/2017/12/using-headless-mode-in-firefox/). Defaults to `true` unless the
    * [`devtools`](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-option-devtools) option is
    * `true`.
    *
@@ -8122,6 +8197,51 @@ interface LocatorAssertions {
   }): Promise<void>;
 
   /**
+   * Ensures the [Locator](https://playwright.dev/docs/api/class-locator) points to an element with given CSS classes.
+   * All classes from the asserted value, separated by spaces, must be present in the
+   * [Element.classList](https://developer.mozilla.org/en-US/docs/Web/API/Element/classList) in any order.
+   *
+   * **Usage**
+   *
+   * ```html
+   * <div class='middle selected row' id='component'></div>
+   * ```
+   *
+   * ```js
+   * const locator = page.locator('#component');
+   * await expect(locator).toContainClass('middle selected row');
+   * await expect(locator).toContainClass('selected');
+   * await expect(locator).toContainClass('row middle');
+   * ```
+   *
+   * When an array is passed, the method asserts that the list of elements located matches the corresponding list of
+   * expected class lists. Each element's class attribute is matched against the corresponding class in the array:
+   *
+   * ```html
+   * <div class='list'></div>
+   *   <div class='component inactive'></div>
+   *   <div class='component active'></div>
+   *   <div class='component inactive'></div>
+   * </div>
+   * ```
+   *
+   * ```js
+   * const locator = page.locator('list > .component');
+   * await expect(locator).toContainClass(['inactive', 'active', 'inactive']);
+   * ```
+   *
+   * @param expected A string containing expected class names, separated by spaces, or a list of such strings to assert multiple
+   * elements.
+   * @param options
+   */
+  toContainClass(expected: string|ReadonlyArray<string>, options?: {
+    /**
+     * Time to retry the assertion for in milliseconds. Defaults to `timeout` in `TestConfig.expect`.
+     */
+    timeout?: number;
+  }): Promise<void>;
+
+  /**
    * Ensures the [Locator](https://playwright.dev/docs/api/class-locator) points to an element that contains the given
    * text. All nested elements will be considered when computing the text content of the element. You can use regular
    * expressions for the value as well.
@@ -8328,8 +8448,8 @@ interface LocatorAssertions {
 
   /**
    * Ensures the [Locator](https://playwright.dev/docs/api/class-locator) points to an element with given CSS classes.
-   * When a string is provided, it must fully match the element's `class` attribute. To match individual classes or
-   * perform partial matches, use a regular expression:
+   * When a string is provided, it must fully match the element's `class` attribute. To match individual classes use
+   * [expect(locator).toContainClass(expected[, options])](https://playwright.dev/docs/api/class-locatorassertions#locator-assertions-to-contain-class).
    *
    * **Usage**
    *
@@ -9879,9 +9999,27 @@ interface TestConfigWebServer {
   env?: { [key: string]: string; };
 
   /**
+   * How to shut down the process. If unspecified, the process group is forcefully `SIGKILL`ed. If set to `{ signal:
+   * 'SIGTERM', timeout: 500 }`, the process group is sent a `SIGTERM` signal, followed by `SIGKILL` if it doesn't exit
+   * within 500ms. You can also use `SIGINT` as the signal instead. A `0` timeout means no `SIGKILL` will be sent.
+   * Windows doesn't support `SIGTERM` and `SIGINT` signals, so this option is ignored on Windows. Note that shutting
+   * down a Docker container requires `SIGTERM`.
+   */
+  gracefulShutdown?: {
+    signal: "SIGINT"|"SIGTERM";
+
+    timeout: number;
+  };
+
+  /**
    * Whether to ignore HTTPS errors when fetching the `url`. Defaults to `false`.
    */
   ignoreHTTPSErrors?: boolean;
+
+  /**
+   * Specifies a custom name for the web server. This name will be prefixed to log messages. Defaults to `[WebServer]`.
+   */
+  name?: string;
 
   /**
    * The port that your http server is expected to appear on. It does wait until it accepts connections. Either `port`
@@ -9898,33 +10036,20 @@ interface TestConfigWebServer {
   reuseExistingServer?: boolean;
 
   /**
+   * Whether to pipe the stderr of the command to the process stderr or ignore it. Defaults to `"pipe"`.
+   */
+  stderr?: "pipe"|"ignore";
+
+  /**
    * If `"pipe"`, it will pipe the stdout of the command to the process stdout. If `"ignore"`, it will ignore the stdout
    * of the command. Default to `"ignore"`.
    */
   stdout?: "pipe"|"ignore";
 
   /**
-   * Whether to pipe the stderr of the command to the process stderr or ignore it. Defaults to `"pipe"`.
-   */
-  stderr?: "pipe"|"ignore";
-
-  /**
    * How long to wait for the process to start up and be available in milliseconds. Defaults to 60000.
    */
   timeout?: number;
-
-  /**
-   * How to shut down the process. If unspecified, the process group is forcefully `SIGKILL`ed. If set to `{ signal:
-   * 'SIGTERM', timeout: 500 }`, the process group is sent a `SIGTERM` signal, followed by `SIGKILL` if it doesn't exit
-   * within 500ms. You can also use `SIGINT` as the signal instead. A `0` timeout means no `SIGKILL` will be sent.
-   * Windows doesn't support `SIGTERM` and `SIGINT` signals, so this option is ignored on Windows. Note that shutting
-   * down a Docker container requires `SIGTERM`.
-   */
-  gracefulShutdown?: {
-    signal: "SIGINT"|"SIGTERM";
-
-    timeout: number;
-  };
 
   /**
    * The url on your http server that is expected to return a 2xx, 3xx, 400, 401, 402, or 403 status code when the

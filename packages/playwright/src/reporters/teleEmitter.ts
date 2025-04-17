@@ -73,8 +73,8 @@ export class TeleReporterEmitter implements ReporterV2 {
     const testEnd: teleReceiver.JsonTestEnd = {
       testId: test.id,
       expectedStatus: test.expectedStatus,
-      annotations: test.annotations,
       timeout: test.timeout,
+      annotations: []
     };
     this._messageSink({
       method: 'onTestEnd',
@@ -237,6 +237,7 @@ export class TeleReporterEmitter implements ReporterV2 {
       status: result.status,
       errors: result.errors,
       attachments: this._serializeAttachments(result.attachments),
+      annotations: result.annotations?.length ? result.annotations : undefined,
     };
   }
 
