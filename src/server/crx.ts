@@ -138,21 +138,17 @@ export class Crx extends SdkObject {
   private async _startIncognitoCrxApplication(browser: CRBrowser, transport: CrxTransport, options?: channels.BrowserNewContextParams) {
     const windows = await chrome.windows.getAll().catch(() => {}) ?? [];
     const windowId = windows.find(window => window.incognito)?.id;
-    const incognitoTabIdPromise = new Promise<number>(resolve => {
-      const tabCreated = (tab: chrome.tabs.Tab) => {
-        if (!tab.incognito || !tab.id)
-          return;
-        chrome.tabs.onCreated.removeListener(tabCreated);
-        resolve(tab.id);
-      };
-      chrome.tabs.onCreated.addListener(tabCreated);
-    });
     if (!windowId)
       chrome.windows.create({ incognito: true, url: 'about:blank' });
     else
-      chrome.tabs.create({ url: 'about:blank', windowId });
+      // do not create but find exists one
+      chrome.tabs.query({windowId: windowId}, (tabIds) => {
+        if (!tabIds) {
+          chrome.tabs.create({ url: 'about:blank', windowId });
+        }
+      })
 
-    const incognitoTabId = await incognitoTabIdPromise;
+    const incognitoTabId = (await chrome.tabs.query({windowId: windowId, active: true}))[0].id!;
     let context!: CRBrowserContext;
     await transport.attach(incognitoTabId, async ({ browserContextId }) => {
       // ensure we create and initialize the new context before the Target.attachedToTarget event is emitted

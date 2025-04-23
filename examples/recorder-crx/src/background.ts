@@ -73,11 +73,11 @@ async function changeAction(tabId: number, mode?: CrxMode | 'detached') {
 // https://bugs.chromium.org/p/chromium/issues/detail?id=1450904
 chrome.tabs.onUpdated.addListener(tabId => changeAction(tabId));
 
-async function getCrxApp() {
+async function getCrxApp(isIncognito: boolean) {
   if (!crxAppPromise) {
     await settingsInitializing;
 
-    crxAppPromise = crx.start().then(crxApp => {
+    crxAppPromise = crx.start( { incognito: isIncognito } ).then(crxApp => {
       crxApp.recorder.addListener('hide', async () => {
         await crxApp.detachAll();
       });
@@ -104,6 +104,13 @@ async function getCrxApp() {
 async function attach(tab: chrome.tabs.Tab, mode?: Mode) {
   if (!tab?.id || (attachedTabIds.has(tab.id) && !mode))
     return;
+   // if the tab is incognito, chek if can be started in incognito mode.
+  if (tab.incognito) {
+    if (!await chrome.extension.isAllowedIncognitoAccess() || !settings.playInIncognito) {
+      console.error('Not authorized to launch in Incognito mode.');
+      return;
+    }
+  }
   const tabId = tab.id;
 
   const sidepanel = !isUnderTest() && settings.sidepanel;
@@ -114,8 +121,7 @@ async function attach(tab: chrome.tabs.Tab, mode?: Mode) {
 
   // ensure one attachment at a time
   chrome.action.disable();
-
-  const crxApp = await getCrxApp();
+  const crxApp = await getCrxApp(tab.incognito);
 
   try {
     if (crxApp.recorder.isHidden()) {
