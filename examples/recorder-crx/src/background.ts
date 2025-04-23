@@ -41,6 +41,11 @@ addSettingsChangedListener(newSettings => {
   setTestIdAttributeName(newSettings.testIdAttributeName);
 });
 
+let allowsIncognitoAccess = false;
+chrome.extension.isAllowedIncognitoAccess().then(allowed => {
+  allowsIncognitoAccess = allowed;
+});
+
 async function changeAction(tabId: number, mode?: CrxMode | 'detached') {
   if (!mode)
     mode = attachedTabIds.has(tabId) ? currentMode : 'detached';
@@ -73,11 +78,11 @@ async function changeAction(tabId: number, mode?: CrxMode | 'detached') {
 // https://bugs.chromium.org/p/chromium/issues/detail?id=1450904
 chrome.tabs.onUpdated.addListener(tabId => changeAction(tabId));
 
-async function getCrxApp(isIncognito: boolean) {
+async function getCrxApp(incognito: boolean) {
   if (!crxAppPromise) {
     await settingsInitializing;
 
-    crxAppPromise = crx.start( { incognito: isIncognito } ).then(crxApp => {
+    crxAppPromise = crx.start({ incognito }).then(crxApp => {
       crxApp.recorder.addListener('hide', async () => {
         await crxApp.detachAll();
       });
@@ -104,26 +109,39 @@ async function getCrxApp(isIncognito: boolean) {
 async function attach(tab: chrome.tabs.Tab, mode?: Mode) {
   if (!tab?.id || (attachedTabIds.has(tab.id) && !mode))
     return;
-   // if the tab is incognito, chek if can be started in incognito mode.
-  if (tab.incognito) {
-    if (!await chrome.extension.isAllowedIncognitoAccess() || !settings.playInIncognito) {
-      console.error('Not authorized to launch in Incognito mode.');
-      return;
-    }
-  }
-  const tabId = tab.id;
+
+  // if the tab is incognito, chek if can be started in incognito mode.
+  if (tab.incognito && !allowsIncognitoAccess)
+    throw new Error('Not authorized to launch in Incognito mode.');
 
   const sidepanel = !isUnderTest() && settings.sidepanel;
 
   // we need to open sidepanel before any async call
   if (sidepanel)
-    chrome.sidePanel.open({ windowId: tab.windowId });
+    await chrome.sidePanel.open({ windowId: tab.windowId });
 
   // ensure one attachment at a time
   chrome.action.disable();
+  if (tab.url?.startsWith('chrome://')) {
+    const windowId = tab.windowId;
+    tab = await new Promise(resolve => {
+      const listener = (tab: chrome.tabs.Tab) => {
+        if (tab.windowId !== windowId)
+          return;
+        chrome.tabs.onCreated.removeListener(listener);
+        resolve(tab);
+      };
+      chrome.tabs.onCreated.addListener(listener);
+      // we will not be able to attach to this tab, so we need to open a new one
+      chrome.tabs.create({ windowId, url: 'about:blank' }).catch(() => {});
+    });
+  }
+
   const crxApp = await getCrxApp(tab.incognito);
 
   try {
+    await crxApp.attach(tab.id!);
+
     if (crxApp.recorder.isHidden()) {
       await crxApp.recorder.show({
         mode: mode ?? 'recording',
@@ -133,12 +151,10 @@ async function attach(tab: chrome.tabs.Tab, mode?: Mode) {
       });
     }
 
-    await crxApp.attach(tabId);
+    await crxApp.attach(tab.id!);
+
     if (mode)
       await crxApp.recorder.setMode(mode);
-  } catch (e) {
-    // we just open a new page and attach it
-    await crxApp.newPage();
   } finally {
     chrome.action.enable();
   }
