@@ -84,7 +84,8 @@ async function getCrxApp(incognito: boolean) {
 
     crxAppPromise = crx.start({ incognito }).then(crxApp => {
       crxApp.recorder.addListener('hide', async () => {
-        await crxApp.detachAll();
+        await crxApp.close();
+        crxAppPromise = undefined;
       });
       crxApp.recorder.addListener('modechanged', async ({ mode }) => {
         await Promise.all([...attachedTabIds].map(tabId => changeAction(tabId, mode)));
@@ -98,11 +99,9 @@ async function getCrxApp(incognito: boolean) {
         await changeAction(tabId, 'detached');
       });
       setTestIdAttributeName(settings.testIdAttributeName);
-
       return crxApp;
     });
   }
-
   return await crxAppPromise;
 }
 
@@ -111,7 +110,7 @@ async function attach(tab: chrome.tabs.Tab, mode?: Mode) {
     return;
 
   // if the tab is incognito, chek if can be started in incognito mode.
-  if (tab.incognito && !allowsIncognitoAccess)
+  if (tab.incognito && (!allowsIncognitoAccess || !settings.playInIncognito))
     throw new Error('Not authorized to launch in Incognito mode.');
 
   const sidepanel = !isUnderTest() && settings.sidepanel;
@@ -125,22 +124,18 @@ async function attach(tab: chrome.tabs.Tab, mode?: Mode) {
   if (tab.url?.startsWith('chrome://')) {
     const windowId = tab.windowId;
     tab = await new Promise(resolve => {
-      const listener = (tab: chrome.tabs.Tab) => {
-        if (tab.windowId !== windowId)
-          return;
-        chrome.tabs.onCreated.removeListener(listener);
-        resolve(tab);
-      };
-      chrome.tabs.onCreated.addListener(listener);
       // we will not be able to attach to this tab, so we need to open a new one
-      chrome.tabs.create({ windowId, url: 'about:blank' }).catch(() => {});
+      chrome.tabs.create({ windowId, url: 'about:blank' }).
+          then(tab => {
+            resolve(tab);
+          }).
+          catch(() => {});
     });
   }
 
   const crxApp = await getCrxApp(tab.incognito);
 
   try {
-    await crxApp.attach(tab.id!);
 
     if (crxApp.recorder.isHidden()) {
       await crxApp.recorder.show({
