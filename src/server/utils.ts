@@ -38,12 +38,17 @@ export async function createTab({ incognito, ...params }: { incognito: boolean }
   ]);
 
   const tabId = tab.id!;
+
+  // if no window was found, it means we created the tab with chrome.windows.create,
+  // which doesn't support the params we passed to this function, so we need to update
+  // the tab with those params
   if (!windowId) {
-    const { index, ...updateParams } = params;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { index, windowId, ...updateParams } = params;
     if (typeof index === 'number')
       await chrome.tabs.move(tabId, { index });
     await chrome.tabs.update(tabId, updateParams);
   }
 
-  return tab.id!;
+  return tab;
 }

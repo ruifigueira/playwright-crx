@@ -137,11 +137,10 @@ export class Crx extends SdkObject {
 
   private async _startIncognitoCrxApplication(browser: CRBrowser, transport: CrxTransport, options?: channels.BrowserNewContextParams) {
     const windows = await chrome.windows.getAll().catch(() => {}) ?? [];
-    const windowId = windows.find(window => window.incognito)?.id;
-    if (!windowId)
-      await chrome.windows.create({ incognito: true, url: 'about:blank' });
+    const activeTabs = await chrome.tabs.query({ active: true });
+    const incognitoTab = activeTabs.find(t => t.incognito && !t.url?.startsWith('chrome://')) ??
+      await createTab({ incognito: true, windowId: windows.find(w => w.incognito)?.id, url: 'about:blank' });
 
-    const [incognitoTab] = await chrome.tabs.query({ windowId: windowId, active: true });
     const incognitoTabId = incognitoTab.id!;
 
     let context!: CRBrowserContext;
@@ -299,10 +298,10 @@ export class CrxApplication extends SdkObject {
   }
 
   async newPage(params: crxchannels.CrxApplicationNewPageParams) {
-    const tabId = await createTab({ incognito: this.isIncognito(), ...params });
-    if (!tabId)
+    const tab = await createTab({ incognito: this.isIncognito(), ...params });
+    if (!tab?.id)
       throw new Error(`No ID found for tab`);
-    return await this.attach(tabId);
+    return await this.attach(tab.id);
   }
 
   async close(options?: { closePages?: boolean, closeWindows?: boolean }) {

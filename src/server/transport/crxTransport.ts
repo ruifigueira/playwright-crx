@@ -106,8 +106,8 @@ export class CrxTransport implements ConnectionTransport {
       } else if (message.method === 'Target.createTarget') {
         const { browserContextId } = message.params;
         const incognito = !!browserContextId && browserContextId !== this._defaultBrowserContextId;
-        const tabId = await createTab({ incognito });
-        const { targetId } = await this.attach(tabId);
+        const tab = await createTab({ incognito });
+        const { targetId } = await this.attach(tab.id!);
         result = { targetId };
       } else if (message.method === 'Target.closeTarget') {
         const { targetId } = message.params;
