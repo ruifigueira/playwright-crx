@@ -1,6 +1,13 @@
 name: Build Playwright CRX
 
-on: [push]
+on:
+  push:
+    branches:
+      - main
+      - release-*
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
