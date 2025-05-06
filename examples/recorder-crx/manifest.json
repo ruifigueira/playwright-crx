@@ -34,7 +34,7 @@
     }
   },
   "side_panel": {
-    "default_path": "index.html"
+    "default_path": "empty.html"
   },
   "options_ui": {
     "page": "preferences.html",
