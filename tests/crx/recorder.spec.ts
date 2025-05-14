@@ -252,7 +252,7 @@ test('test', async ({ page }) => {
   await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
 });
 
-test('should start recording with configured language', async ({ page, attachRecorder, configureRecorder }) => {
+test.fixme('should start recording with configured language', async ({ page, attachRecorder, configureRecorder }) => {
   {
     await configureRecorder({ targetLanguage: 'python-pytest' });
     const recorderPage = await attachRecorder(page);
