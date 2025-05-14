@@ -110,7 +110,7 @@ async function attach(tab: chrome.tabs.Tab, mode?: Mode) {
     return;
 
   // if the tab is incognito, chek if can be started in incognito mode.
-  if (tab.incognito && (!allowsIncognitoAccess || !settings.playInIncognito))
+  if (tab.incognito && !allowsIncognitoAccess)
     throw new Error('Not authorized to launch in Incognito mode.');
 
   const sidepanel = !isUnderTest() && settings.sidepanel;
