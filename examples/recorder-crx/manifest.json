@@ -1,5 +1,5 @@
 {
-  "name": "Playwright CRX",
+  "name": "My Playwright Recorder",
   "version": "0.14.0",
   "manifest_version": 3,
   "icons": {
@@ -17,7 +17,7 @@
       "16": "icon-16x16.png",
       "32": "icon-32x32.png"
     },
-    "default_title": "Record"
+    "default_title": "My Recorder"
   },
   "commands": {
     "record": {

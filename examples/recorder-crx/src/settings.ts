@@ -22,7 +22,7 @@ export type CrxSettings = {
 };
 
 export const defaultSettings = {
-  testIdAttributeName: 'data-testid',
+  testIdAttributeName: 'data-cy',
   targetLanguage: 'playwright-test',
   sidepanel: true,
   experimental: false,

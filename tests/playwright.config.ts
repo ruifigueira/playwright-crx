@@ -26,6 +26,7 @@ export default defineConfig<CrxFixtureOptions>({
   use: {
     baseURL: 'http://127.0.0.1:3000',
     trace: 'on-first-retry',
+    testIdAttribute: 'data-cy',
   },
   projects: [
     {
