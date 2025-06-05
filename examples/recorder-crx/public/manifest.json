@@ -22,13 +22,13 @@
   "commands": {
     "record": {
       "suggested_key": {
-        "default": "Alt+Shift+R"
+        "default": "Shift+Alt+R"
       },
       "description": "Start recording"
     },
     "inspect": {
       "suggested_key": {
-        "default": "Alt+Shift+C"
+        "default": "Shift+Alt+C"
       },
       "description": "Start inspecting"
     }
