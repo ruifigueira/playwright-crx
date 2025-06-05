@@ -47,8 +47,8 @@ for (const [lang, { linenumber, line }] of Object.entries(langs)) {
     const [, locator] = /page\.(locator\([^\)]+\))/i.exec(line) ?? [];
 
     await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-      `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-      `▼ page.${locator} .click() ⏸️`,
+      `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+      `▼ Click( page.${locator} ) ⏸️`,
     ]);
 
     await Promise.all([

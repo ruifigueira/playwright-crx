@@ -36,9 +36,9 @@ test('should resume', async ({ recorderPage, baseURL }) => {
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `► page.locator('textarea') .click() ✅ — XXms`,
-    `► page.locator('textarea') .fill() ✅ — XXms`,
+    `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► Click( page.locator('textarea') ) ✅ — XXms`,
+    `► Fill "test"( page.locator('textarea') ) ✅ — XXms`,
   ]);
 });
 
@@ -52,8 +52,8 @@ test('should show errors', async ({ basePath, page, recorderPage, baseURL }) => 
   await expect(recorderPage.locator('.CodeMirror-line:has(.source-line-error-underline)')).toHaveCount(1);
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `▼ page.locator('textarea') .click() ❌ — XXms`,
+    `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `▼ Click( page.locator('textarea') ) ❌ — XXms`,
   ]);
 
   await Promise.all([
@@ -72,8 +72,8 @@ test('should clear errors when resuming after errors', async ({ basePath, page, 
   await expect(recorderPage.locator('.CodeMirror-line:has(.source-line-error-underline)')).toHaveCount(1);
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `▼ page.locator('textarea') .click() ❌ — XXms`,
+    `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `▼ Click( page.locator('textarea') ) ❌ — XXms`,
   ]);
 
   await page.route('**/*', route => route.fulfill({ path: `${basePath}/input/textarea.html` }));
@@ -81,9 +81,9 @@ test('should clear errors when resuming after errors', async ({ basePath, page, 
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `► page.locator('textarea') .click() ✅ — XXms`,
-    `► page.locator('textarea') .fill() ✅ — XXms`,
+    `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► Click( page.locator('textarea') ) ✅ — XXms`,
+    `► Fill "test"( page.locator('textarea') ) ✅ — XXms`,
   ]);
 
   await expect(recorderPage.locator('.CodeMirror-line:has(.source-line-error-underline)')).toHaveCount(0);
@@ -96,29 +96,29 @@ test('should step', async ({ recorderPage, baseURL }) => {
   await recorderPage.getByTitle('Step Over (F10)').click();
   await expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toHaveText(`  await page.goto('${baseURL}/input/textarea.html');`);
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `▼ page.goto( ${baseURL}/input/textarea.html ) ⏸️`,
+    `▼ Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ⏸️`,
   ]);
 
   await recorderPage.getByTitle('Step Over (F10)').click();
   await expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toHaveText(`  await page.locator('textarea').click();`);
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `▼ page.locator('textarea') .click() ⏸️`,
+    `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `▼ Click( page.locator('textarea') ) ⏸️`,
   ]);
 
   await recorderPage.getByTitle('Step Over (F10)').click();
   await expect(recorderPage.locator('.source-line-paused .CodeMirror-line')).toHaveText(`  await page.locator('textarea').fill('test');`);
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `► page.locator('textarea') .click() ✅ — XXms`,
-    `▼ page.locator('textarea') .fill() ⏸️`,
+    `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► Click( page.locator('textarea') ) ✅ — XXms`,
+    `▼ Fill "test"( page.locator('textarea') ) ⏸️`,
   ]);
 
   await recorderPage.getByTitle('Step Over (F10)').click();
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `► page.locator('textarea') .click() ✅ — XXms`,
-    `► page.locator('textarea') .fill() ✅ — XXms`,
+    `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► Click( page.locator('textarea') ) ✅ — XXms`,
+    `► Fill "test"( page.locator('textarea') ) ✅ — XXms`,
   ]);
 });
 
@@ -127,14 +127,14 @@ test('should step then resume', async ({ recorderPage, baseURL }) => {
 
   await recorderPage.getByTitle('Step Over (F10)').click();
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `▼ page.goto( ${baseURL}/input/textarea.html ) ⏸️`,
+    `▼ Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ⏸️`,
   ]);
 
   await recorderPage.getByTitle('Resume (F8)').click();
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `► page.locator('textarea') .click() ✅ — XXms`,
-    `► page.locator('textarea') .fill() ✅ — XXms`,
+    `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► Click( page.locator('textarea') ) ✅ — XXms`,
+    `► Fill "test"( page.locator('textarea') ) ✅ — XXms`,
   ]);
 });
 
@@ -143,14 +143,14 @@ test('should resume then step', async ({ recorderPage, baseURL }) => {
 
   await recorderPage.getByTitle('Resume (F8)').click();
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `► page.locator('textarea') .click() ✅ — XXms`,
-    `► page.locator('textarea') .fill() ✅ — XXms`,
+    `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► Click( page.locator('textarea') ) ✅ — XXms`,
+    `► Fill "test"( page.locator('textarea') ) ✅ — XXms`,
   ]);
 
   await recorderPage.getByTitle('Step Over (F10)').click();
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `▼ page.goto( ${baseURL}/input/textarea.html ) ⏸️`,
+    `▼ Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ⏸️`,
   ]);
 });
 
@@ -159,9 +159,9 @@ test('should resume then record then resume', async ({ recorderPage, recordActio
 
   await recorderPage.getByTitle('Resume (F8)').click();
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `► page.locator('textarea') .click() ✅ — XXms`,
-    `► page.locator('textarea') .fill() ✅ — XXms`,
+    `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► Click( page.locator('textarea') ) ✅ — XXms`,
+    `► Fill "test"( page.locator('textarea') ) ✅ — XXms`,
   ]);
 
   await recorderPage.getByTitle('Record').click();
@@ -173,11 +173,11 @@ test('should resume then record then resume', async ({ recorderPage, recordActio
 
   await recorderPage.getByTitle('Resume (F8)').click();
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `► page.locator('textarea') .click() ✅ — XXms`,
-    `► page.locator('textarea') .fill() ✅ — XXms`,
-    `► page.locator('input') .click() ✅ — XXms`,
-    `► page.locator('input') .fill() ✅ — XXms`,
+    `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► Click( page.locator('textarea') ) ✅ — XXms`,
+    `► Fill "test"( page.locator('textarea') ) ✅ — XXms`,
+    `► Click( page.locator('input') ) ✅ — XXms`,
+    `► Fill "another test"( page.locator('input') ) ✅ — XXms`,
   ]);
 });
 
@@ -196,13 +196,13 @@ test('should resume with multiple pages', async ({ context, attachRecorder, reco
 
   await recorderPage.getByTitle('Resume (F8)').click();
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `► page.locator('textarea') .click() ✅ — XXms`,
-    `► page.locator('textarea') .fill() ✅ — XXms`,
-    `► browserContext.newPage ✅ — XXms`,
-    `► page.goto( ${baseURL}/input/button.html ) ✅ — XXms`,
-    `► page.getByRole('button', { name: 'Click target' }) .click() ✅ — XXms`,
-    `► page.locator('input') .fill() ✅ — XXms`,
+    `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► Click( page.locator('textarea') ) ✅ — XXms`,
+    `► Fill "test"( page.locator('textarea') ) ✅ — XXms`,
+    `► newPage ✅ — XXms`,
+    `► Navigate to "/input/button.html"( ${baseURL}/input/button.html ) ✅ — XXms`,
+    `► Click( page.getByRole('button', { name: 'Click target' }) ) ✅ — XXms`,
+    `► Fill "another test"( page.locator('input') ) ✅ — XXms`,
   ]);
 
   await page1.close();
@@ -214,20 +214,20 @@ test('should reset call logs on resume', async ({ context, attachRecorder, recor
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `► page.locator('textarea') .click() ✅ — XXms`,
-    `► page.locator('textarea') .fill() ✅ — XXms`,
+    `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► Click( page.locator('textarea') ) ✅ — XXms`,
+    `► Fill "test"( page.locator('textarea') ) ✅ — XXms`,
   ]);
 
   await recorderPage.getByTitle('Step Over (F10)').click();
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `▼ page.goto( ${baseURL}/input/textarea.html ) ⏸️`,
+    `▼ Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ⏸️`,
   ]);
 
   await recorderPage.getByTitle('Resume (F8)').click();
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `► page.locator('textarea') .click() ✅ — XXms`,
-    `► page.locator('textarea') .fill() ✅ — XXms`,
+    `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► Click( page.locator('textarea') ) ✅ — XXms`,
+    `► Fill "test"( page.locator('textarea') ) ✅ — XXms`,
   ]);
 });

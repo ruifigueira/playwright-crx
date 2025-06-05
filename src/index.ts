@@ -27,15 +27,13 @@ import { PageBinding } from 'playwright-core/lib/server/page';
 
 import { wrapClientApis } from './client/crxZone';
 import { nodePlatform } from 'playwright-core/lib/utils';
-import { setPlatformForSelectors } from 'playwright-core/lib/client/selectors';
 
 export { debug as _debug } from 'debug';
 export { setUnderTest as _setUnderTest, isUnderTest as _isUnderTest } from 'playwright-core/lib/utils';
 
 // avoid conflicts with playwright when testing
-PageBinding.kPlaywrightBinding = '__crx__binding__';
+PageBinding.kBindingName = '__crx__binding__';
 
-setPlatformForSelectors(nodePlatform);
 const playwright = new CrxPlaywright();
 
 const clientConnection = new CrxConnection(nodePlatform);
@@ -55,7 +53,7 @@ const playwrightAPI = clientConnection.getObjectWithKnownName('Playwright') as C
 dispatcherConnection.onmessage = message => setImmediate(() => clientConnection.dispatch(message));
 clientConnection.onmessage = message => setImmediate(() => dispatcherConnection.dispatch(message));
 
-clientConnection.toImpl = (x: any) => x ? dispatcherConnection._dispatchers.get(x._guid)!._object : dispatcherConnection._dispatchers.get('');
+clientConnection.toImpl = (x: any) => x ? dispatcherConnection._dispatcherByGuid.get(x._guid)!._object : dispatcherConnection._dispatcherByGuid.get('');
 (playwrightAPI as any)._toImpl = clientConnection.toImpl;
 
 export const { _crx: crx, selectors, errors } = playwrightAPI;

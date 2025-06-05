@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 import type * as channels from '@protocol/channels';
-import { deviceDescriptors as descriptors } from 'playwright-core/lib/server/deviceDescriptors';
 import { AndroidDispatcher } from 'playwright-core/lib/server/dispatchers/androidDispatcher';
 import { BrowserTypeDispatcher } from 'playwright-core/lib/server/dispatchers/browserTypeDispatcher';
 import type { RootDispatcher } from 'playwright-core/lib/server/dispatchers/dispatcher';
@@ -22,11 +21,11 @@ import { Dispatcher } from 'playwright-core/lib/server/dispatchers/dispatcher';
 import { ElectronDispatcher } from 'playwright-core/lib/server/dispatchers/electronDispatcher';
 import { LocalUtilsDispatcher } from 'playwright-core/lib/server/dispatchers/localUtilsDispatcher';
 import { APIRequestContextDispatcher } from 'playwright-core/lib/server/dispatchers/networkDispatchers';
-import { SelectorsDispatcher } from 'playwright-core/lib/server/dispatchers/selectorsDispatcher';
 import { GlobalAPIRequestContext } from 'playwright-core/lib/server/fetch';
 import type { Playwright } from 'playwright-core/lib/server/playwright';
 import { CrxDispatcher } from './crxDispatcher';
 import type { CrxPlaywright } from '../crxPlaywright';
+import { CrxPlaywrightInitializer } from 'src/protocol/channels';
 
 // based on PlaywrightDispatcher
 export class CrxPlaywrightDispatcher extends Dispatcher<Playwright, channels.PlaywrightChannel, RootDispatcher> implements channels.PlaywrightChannel {
@@ -42,10 +41,8 @@ export class CrxPlaywrightDispatcher extends Dispatcher<Playwright, channels.Pla
       android: new AndroidDispatcher(scope, playwright.android),
       electron: new ElectronDispatcher(scope, playwright.electron),
       utils: new LocalUtilsDispatcher(scope, playwright),
-      deviceDescriptors: Object.entries(descriptors).map(([name, descriptor]) => ({ name, descriptor })),
-      selectors: new SelectorsDispatcher(scope, playwright.selectors),
       _crx: new CrxDispatcher(scope, playwright._crx),
-    });
+    } as CrxPlaywrightInitializer);
     this._type_Playwright = true;
   }
 

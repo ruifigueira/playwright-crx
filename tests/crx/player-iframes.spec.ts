@@ -23,8 +23,8 @@ test('should resume with iframes', async ({ recorderPage, recordAction, baseURL,
     'iframe-2.html': `<button onclick="this.innerText = 'Clicked 2'">Button2</button>`,
   });
   await recordAction(() => page.goto(`${baseURL}/root.html`));
-  await recordAction(() => page.frameLocator('iframe').getByRole('button', { name: 'Button1' }).click());
-  await recordAction(() => page.frameLocator('iframe').frameLocator('iframe').getByRole('button', { name: 'Button2' }).click());
+  await recordAction(() => page.locator('iframe').contentFrame().getByRole('button', { name: 'Button1' }).click());
+  await recordAction(() => page.locator('iframe').contentFrame().frameLocator('iframe').getByRole('button', { name: 'Button2' }).click());
 
   await recorderPage.getByTitle('Record').click();
 
@@ -33,11 +33,11 @@ test('should resume with iframes', async ({ recorderPage, recordAction, baseURL,
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
-    `► page.locator('iframe').contentFrame().getByRole('button', { name: 'Button1' }) .click() ✅ — XXms`,
-    `► page.locator('iframe').contentFrame().locator('iframe').contentFrame().getByRole('button', { name: 'Button2' }) .click() ✅ — XXms`
+    `► Navigate to "/root.html"( ${baseURL}/root.html ) ✅ — XXms`,
+    `► Click( page.locator('iframe').contentFrame().getByRole('button', { name: 'Button1' }) ) ✅ — XXms`,
+    `► Click( page.locator('iframe').contentFrame().locator('iframe').contentFrame().getByRole('button', { name: 'Button2' }) ) ✅ — XXms`
   ]);
 
-  await expect(page.frameLocator('iframe').getByRole('button')).toHaveText('Clicked 1');
-  await expect(page.frameLocator('iframe').frameLocator('iframe').getByRole('button')).toHaveText('Clicked 2');
+  await expect(page.locator('iframe').contentFrame().getByRole('button')).toHaveText('Clicked 1');
+  await expect(page.locator('iframe').contentFrame().frameLocator('iframe').getByRole('button')).toHaveText('Clicked 2');
 });

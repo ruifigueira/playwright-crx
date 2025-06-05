@@ -26,7 +26,11 @@ export function debugMode() {
   return _debugMode ? 'inspector' : '';
 }
 
-const _isUnderTest = getAsBooleanFromENV('PWTEST_UNDER_TEST');
+let _isUnderTest = getAsBooleanFromENV('PWTEST_UNDER_TEST');
+export function setUnderTest(): void {
+  _isUnderTest = true;
+}
+
 export function isUnderTest(): boolean {
   return _isUnderTest;
 }

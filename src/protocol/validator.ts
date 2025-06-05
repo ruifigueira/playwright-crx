@@ -44,7 +44,6 @@ scheme.PlaywrightInitializer = tObject({
   android: tChannel(['Android']),
   electron: tChannel(['Electron']),
   utils: tOptional(tChannel(['LocalUtils'])),
-  selectors: tChannel(['Selectors']),
   preLaunchedBrowser: tOptional(tChannel(['Browser'])),
   preConnectedAndroidDevice: tOptional(tChannel(['AndroidDevice'])),
   socksSupport: tOptional(tChannel(['SocksSupport'])),

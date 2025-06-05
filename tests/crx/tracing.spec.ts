@@ -37,16 +37,16 @@ test('should collect trace with resources, but no js', async ({ runCrxTestAndPar
 
   expect(events[0].type).toBe('context-options');
   expect(actions).toEqual([
-    'page.goto',
-    'page.setContent',
-    'page.click',
-    'mouse.move',
-    'mouse.dblclick',
-    'keyboard.insertText',
-    'page.goto',
-    'locator.setInputFiles',
-    'page.waitForTimeout',
-    'page.close',
+    'Frame.goto',
+    'Frame.setContent',
+    'Frame.click',
+    'Page.mouseMove',
+    'Page.mouseClick',
+    'Page.keyboardInsertText',
+    'Frame.goto',
+    'Frame.setInputFiles',
+    'Frame.waitForTimeout',
+    'Page.close',
   ]);
 
   expect(events.some(e => e.type === 'frame-snapshot')).toBeTruthy();
@@ -93,7 +93,7 @@ test('can call tracing.group/groupEnd at any time and auto-close', async ({ runC
 
   const groups = events.filter(e => e.method === 'tracingGroup');
   expect(groups).toHaveLength(1);
-  expect(groups[0].apiName).toBe('actual');
+  expect(groups[0].title).toBe('actual');
   expect(events.some(e => e.type === 'after' && e.callId === groups[0].callId)).toBe(true);
 });
 
@@ -105,7 +105,7 @@ test('should not include buffers in the trace', async ({ runCrxTestAndParseTrace
     await context.tracing.stop({ path: 'trace.zip' });
   });
 
-  const screenshotEvent = actionObjects.find(a => a.apiName === 'page.screenshot')!;
+  const screenshotEvent = actionObjects.find(a => a.method === 'screenshot')!;
   expect(screenshotEvent.beforeSnapshot).toBeTruthy();
   expect(screenshotEvent.afterSnapshot).toBeTruthy();
   expect(screenshotEvent.result).toEqual({
@@ -153,9 +153,9 @@ test('should collect two traces', async ({ runCrxTest, runCrxTestAndParseTraceRa
     const { events, actions } = await runCrxTestAndParseTraceRaw(async () => 'trace1.zip');
     expect(events[0].type).toBe('context-options');
     expect(actions).toEqual([
-      'page.goto',
-      'page.setContent',
-      'page.click',
+      'Frame.goto',
+      'Frame.setContent',
+      'Frame.click',
     ]);
   }
 
@@ -163,8 +163,8 @@ test('should collect two traces', async ({ runCrxTest, runCrxTestAndParseTraceRa
     const { events, actions } = await runCrxTestAndParseTraceRaw(async () => 'trace2.zip');
     expect(events[0].type).toBe('context-options');
     expect(actions).toEqual([
-      'page.dblclick',
-      'page.close',
+      'Frame.dblclick',
+      'Page.close',
     ]);
   }
 });
@@ -267,7 +267,7 @@ test('should include interrupted actions', async ({ context, runCrxTestAndParseT
     await context.tracing.stop({ path: 'trace.zip' });
   });
   await context.close();
-  const clickEvent = events.find(e => e.apiName === 'page.click');
+  const clickEvent = events.find(e => e.class === 'Frame' && e.method === 'click');
   expect(clickEvent).toBeTruthy();
 });
 
@@ -380,7 +380,7 @@ test('should ignore iframes in head', async ({ runCrxTestAndParseTraceRaw }) => 
   });
 
   expect(trace.actions).toEqual([
-    'page.click',
+    'Frame.click',
   ]);
   expect(trace.events.find(e => e.type === 'frame-snapshot')).toBeTruthy();
   expect(trace.events.find(e => e.type === 'frame-snapshot' && JSON.stringify(e.snapshot.html).includes('IFRAME'))).toBeFalsy();

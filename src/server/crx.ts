@@ -283,7 +283,7 @@ export class CrxApplication extends SdkObject {
 
   async detach(tabIdOrPage: number | Page) {
     const targetId = tabIdOrPage instanceof Page ?
-      (tabIdOrPage._delegate as CRPage)._targetId :
+      (tabIdOrPage.delegate as CRPage)._targetId :
       this._transport.getTargetId(tabIdOrPage);
 
     await this._doDetach(targetId);

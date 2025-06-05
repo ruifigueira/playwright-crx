@@ -49,14 +49,14 @@ test('should pass assertions', async ({ page, recorderPage, baseURL, recordActio
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
-    `► expect( page.getByRole('checkbox').first() ).toBeChecked() ✅ — XXms`,
-    `► expect( page.getByRole('checkbox').nth(1) ).toBeChecked() ✅ — XXms`,
-    `► expect( page.getByRole('textbox') ).toHaveValue() ✅ — XXms`,
-    `► expect( page.getByRole('combobox') ).toHaveValue() ✅ — XXms`,
-    `► expect( page.getByTestId('text') ).toContainText() ✅ — XXms`,
-    `► expect( page.getByTestId('text') ).toBeVisible() ✅ — XXms`,
-    `► expect( page.locator('body') ).toMatchAriaSnapshot() ✅ — XXms`,
+    `► Navigate to "/root.html"( ${baseURL}/root.html ) ✅ — XXms`,
+    `► Expect "to.be.checked"( page.getByRole('checkbox').first() ) ✅ — XXms`,
+    `► Expect "to.be.checked"( page.getByRole('checkbox').nth(1) ) ✅ — XXms`,
+    `► Expect "to.have.value"( page.getByRole('textbox') ) ✅ — XXms`,
+    `► Expect "to.have.value"( page.getByRole('combobox') ) ✅ — XXms`,
+    `► Expect "to.have.text"( page.getByTestId('text') ) ✅ — XXms`,
+    `► Expect "to.be.visible"( page.getByTestId('text') ) ✅ — XXms`,
+    `► Expect "to.match.aria"( page.locator('body') ) ✅ — XXms`,
   ]);
 });
 
@@ -74,8 +74,8 @@ test('should fail assertChecked=true', async ({ page, recorderPage, baseURL, rec
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ expect( page.getByRole('checkbox').first() ).toBeChecked() ❌ — XXms`,
+    `► Navigate to "/root.html"( ${baseURL}/root.html ) ✅ — XXms`,
+    `▼ Expect "to.be.checked"( page.getByRole('checkbox').first() ) ❌ — XXms`,
   ]);
 });
 
@@ -93,8 +93,8 @@ test('should fail assertChecked=false', async ({ page, recorderPage, baseURL, re
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ expect( page.getByRole('checkbox').nth(1) ).toBeChecked() ❌ — XXms`,
+    `► Navigate to "/root.html"( ${baseURL}/root.html ) ✅ — XXms`,
+    `▼ Expect "to.be.checked"( page.getByRole('checkbox').nth(1) ) ❌ — XXms`,
   ]);
 });
 
@@ -112,8 +112,8 @@ test('should fail assertValue in textbox', async ({ page, recorderPage, baseURL,
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ expect( page.getByRole('textbox') ).toHaveValue() ❌ — XXms`,
+    `► Navigate to "/root.html"( ${baseURL}/root.html ) ✅ — XXms`,
+    `▼ Expect "to.have.value"( page.getByRole('textbox') ) ❌ — XXms`,
   ]);
 });
 
@@ -131,8 +131,8 @@ test('should fail assertValue in select', async ({ page, recorderPage, baseURL, 
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ expect( page.getByRole('combobox') ).toHaveValue() ❌ — XXms`,
+    `► Navigate to "/root.html"( ${baseURL}/root.html ) ✅ — XXms`,
+    `▼ Expect "to.have.value"( page.getByRole('combobox') ) ❌ — XXms`,
   ]);
 });
 
@@ -150,8 +150,8 @@ test('should fail assertText', async ({ page, recorderPage, baseURL, recordActio
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ expect( page.getByTestId('text') ).toContainText() ❌ — XXms`,
+    `► Navigate to "/root.html"( ${baseURL}/root.html ) ✅ — XXms`,
+    `▼ Expect "to.have.text"( page.getByTestId('text') ) ❌ — XXms`,
   ]);
 });
 
@@ -171,8 +171,8 @@ test('should fail assertVisible', async ({ page, recorderPage, baseURL, recordAc
   await recorderPage.getByTitle('Step over (F10)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ expect( page.getByTestId('text') ).toBeVisible() ⏸️`,
+    `► Navigate to "/root.html"( ${baseURL}/root.html ) ✅ — XXms`,
+    `▼ Expect "to.be.visible"( page.getByTestId('text') ) ⏸️`,
   ]);
 
   // remove element
@@ -182,7 +182,7 @@ test('should fail assertVisible', async ({ page, recorderPage, baseURL, recordAc
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ expect( page.getByTestId('text') ).toBeVisible() ❌ — XXms`,
+    `► Navigate to "/root.html"( ${baseURL}/root.html ) ✅ — XXms`,
+    `▼ Expect "to.be.visible"( page.getByTestId('text') ) ❌ — XXms`,
   ]);
 });

@@ -98,15 +98,15 @@ test('should play all supported actions except setInputFiles', async ({ context,
   expect(closedPage.isClosed()).toBeTruthy();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
-    `► page.getByRole('checkbox') .check() ✅ — XXms`,
-    `► page.getByRole('button', { name: 'button' }) .click() ✅ — XXms`,
-    `► page.getByRole('textbox') .fill() ✅ — XXms`,
-    `► page.getByRole('textbox') .press() ✅ — XXms`,
-    `► page.getByRole('combobox') .selectOption() ✅ — XXms`,
-    `► page.getByRole('checkbox') .uncheck() ✅ — XXms`,
-    `► browserContext.newPage ✅ — XXms`,
-    `► page.close ✅ — XXms`,
+    `► Navigate to "/root.html"( ${baseURL}/root.html ) ✅ — XXms`,
+    `► Check( page.getByRole('checkbox') ) ✅ — XXms`,
+    `► Click( page.getByRole('button', { name: 'button' }) ) ✅ — XXms`,
+    `► Fill "Hello world"( page.getByRole('textbox') ) ✅ — XXms`,
+    `► Press "Tab"( page.getByRole('textbox') ) ✅ — XXms`,
+    `► Select option( page.getByRole('combobox') ) ✅ — XXms`,
+    `► Uncheck( page.getByRole('checkbox') ) ✅ — XXms`,
+    `► newPage ✅ — XXms`,
+    `► close ✅ — XXms`,
   ]);
 });
 
@@ -132,8 +132,8 @@ test('should fail while playing setInputFiles', async ({ page, recorderPage, bas
   await recorderPage.getByTitle('Resume (F8)').click();
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/root.html ) ✅ — XXms`,
-    `▼ page.getByRole('button', { name: 'Choose File' }) .setInputFiles() ❌ — XXms`,
+    `► Navigate to "/root.html"( ${baseURL}/root.html ) ✅ — XXms`,
+    `▼ Set input files( page.getByRole('button', { name: 'Choose File' }) ) ❌ — XXms`,
   ]);
 
   await Promise.all([

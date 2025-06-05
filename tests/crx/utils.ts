@@ -148,7 +148,7 @@ export async function parseTraceRaw(file: string): Promise<{ events: any[], reso
   return {
     events,
     resources,
-    actions: actionObjects.map(a => a.apiName),
+    actions: actionObjects.map(a => `${a.class}.${a.method}`),
     actionObjects,
     stacks,
   };

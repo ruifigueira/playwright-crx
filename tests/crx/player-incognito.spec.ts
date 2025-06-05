@@ -42,8 +42,8 @@ test('test', async ({ page }) => {
   await incognitoPagePromise;
 
   await expect.poll(dumpLogHeaders(recorderPage)).toEqual([
-    `► page.goto( ${baseURL}/input/textarea.html ) ✅ — XXms`,
-    `► page.locator('textarea') .fill() ✅ — XXms`,
+    `► Navigate to "/input/textarea.html"( ${baseURL}/input/textarea.html ) ✅ — XXms`,
+    `► Fill \"some test\"( page.locator('textarea') ) ✅ — XXms`,
   ]);
 });
 

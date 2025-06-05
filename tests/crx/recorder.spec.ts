@@ -229,7 +229,7 @@ test('should record with custom testid', async ({ page, attachRecorder, recordAc
 test('test', async ({ page }) => {
   await page.goto('${baseURL}/empty.html');
   await page.getByTestId('btn-testid').click();
-  await page.getByTestId('btn-foobar').click();
+  await page.getByRole('button', { name: 'Button' }).nth(1).click();
 });`;
 
   await expect(recorderPage.locator('.CodeMirror-line')).toHaveText(code.split('\n'));
