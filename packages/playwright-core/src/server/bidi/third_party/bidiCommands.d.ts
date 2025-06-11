@@ -7,7 +7,7 @@
 
 // Copied from upstream: https://github.com/puppeteer/puppeteer/blob/main/packages/puppeteer-core/src/bidi/core/Connection.ts
 
-import * as Bidi from './bidiProtocol';
+import type * as Bidi from './bidiProtocol';
 
 export interface Commands {
   'script.evaluate': {
@@ -110,6 +110,16 @@ export interface Commands {
   };
   'input.setFiles': {
     params: Bidi.Input.SetFilesParameters;
+    returnType: Bidi.EmptyResult;
+  };
+
+  'emulation.setGeolocationOverride': {
+    params: Bidi.Emulation.SetGeolocationOverrideParameters;
+    returnType: Bidi.EmptyResult;
+  };
+
+  'permissions.setPermission': {
+    params: Bidi.Permissions.SetPermissionParameters;
     returnType: Bidi.EmptyResult;
   };
 

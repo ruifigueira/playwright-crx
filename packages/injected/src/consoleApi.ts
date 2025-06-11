@@ -75,11 +75,14 @@ declare global {
   }
 }
 
-class ConsoleAPI {
+export class ConsoleAPI {
   private _injectedScript: InjectedScript;
 
   constructor(injectedScript: InjectedScript) {
     this._injectedScript = injectedScript;
+  }
+
+  install() {
     if (this._injectedScript.window.playwright)
       return;
     this._injectedScript.window.playwright = {
@@ -88,11 +91,11 @@ class ConsoleAPI {
       inspect: (selector: string) => this._inspect(selector),
       selector: (element: Element) => this._selector(element),
       generateLocator: (element: Element, language?: Language) => this._generateLocator(element, language),
-      ariaSnapshot: (element?: Element, options?: { ref?: boolean }) => {
+      ariaSnapshot: (element?: Element, options?: { forAI?: boolean }) => {
         return this._injectedScript.ariaSnapshot(element || this._injectedScript.document.body, options);
       },
       resume: () => this._resume(),
-      ...new Locator(injectedScript, ''),
+      ...new Locator(this._injectedScript, ''),
     };
     delete this._injectedScript.window.playwright.filter;
     delete this._injectedScript.window.playwright.first;
@@ -139,5 +142,3 @@ class ConsoleAPI {
     this._injectedScript.window.__pw_resume().catch(() => {});
   }
 }
-
-export default ConsoleAPI;

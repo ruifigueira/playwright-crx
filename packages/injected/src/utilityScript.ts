@@ -14,31 +14,65 @@
  * limitations under the License.
  */
 
-import { builtins } from '@isomorphic/builtins';
-import { source } from '@isomorphic/utilityScriptSerializers';
+import { parseEvaluationResultValue, serializeAsCallArgument } from '@isomorphic/utilityScriptSerializers';
+
+// Keep in sync with eslint.config.mjs
+export type Builtins = {
+  setTimeout: Window['setTimeout'],
+  clearTimeout: Window['clearTimeout'],
+  setInterval: Window['setInterval'],
+  clearInterval: Window['clearInterval'],
+  requestAnimationFrame: Window['requestAnimationFrame'],
+  cancelAnimationFrame: Window['cancelAnimationFrame'],
+  requestIdleCallback: Window['requestIdleCallback'],
+  cancelIdleCallback: Window['cancelIdleCallback'],
+  performance: Window['performance'],
+  // eslint-disable-next-line no-restricted-globals
+  Intl: typeof window['Intl'],
+  // eslint-disable-next-line no-restricted-globals
+  Date: typeof window['Date'],
+};
 
 export class UtilityScript {
-  constructor(isUnderTest: boolean) {
-    if (isUnderTest) {
-      // eslint-disable-next-line no-restricted-globals
-      (globalThis as any).builtins = builtins();
-    }
-    const result = source(builtins());
-    this.serializeAsCallArgument = result.serializeAsCallArgument;
-    this.parseEvaluationResultValue = result.parseEvaluationResultValue;
-  }
+  // eslint-disable-next-line no-restricted-globals
+  readonly global: typeof globalThis;
+  // Builtins protect injected code from clock emulation.
+  readonly builtins: Builtins;
+  readonly isUnderTest: boolean;
 
-  readonly serializeAsCallArgument;
-  readonly parseEvaluationResultValue;
+  // eslint-disable-next-line no-restricted-globals
+  constructor(global: typeof globalThis, isUnderTest: boolean) {
+    this.global = global;
+    this.isUnderTest = isUnderTest;
+    if ((global as any).__pwClock) {
+      this.builtins = (global as any).__pwClock.builtins;
+    } else {
+      this.builtins = {
+        setTimeout: global.setTimeout?.bind(global),
+        clearTimeout: global.clearTimeout?.bind(global),
+        setInterval: global.setInterval?.bind(global),
+        clearInterval: global.clearInterval?.bind(global),
+        requestAnimationFrame: global.requestAnimationFrame?.bind(global),
+        cancelAnimationFrame: global.cancelAnimationFrame?.bind(global),
+        requestIdleCallback: global.requestIdleCallback?.bind(global),
+        cancelIdleCallback: global.cancelIdleCallback?.bind(global),
+        performance: global.performance,
+        Intl: global.Intl,
+        Date: global.Date,
+      } satisfies Builtins;
+    }
+    if (this.isUnderTest)
+      (global as any).builtins = this.builtins;
+  }
 
   evaluate(isFunction: boolean | undefined, returnByValue: boolean, expression: string, argCount: number, ...argsAndHandles: any[]) {
     const args = argsAndHandles.slice(0, argCount);
     const handles = argsAndHandles.slice(argCount);
     const parameters = [];
     for (let i = 0; i < args.length; i++)
-      parameters[i] = this.parseEvaluationResultValue(args[i], handles);
+      parameters[i] = parseEvaluationResultValue(args[i], handles);
 
-    let result = builtins().eval(expression);
+    let result = this.global.eval(expression);
     if (isFunction === true) {
       result = result(...parameters);
     } else if (isFunction === false) {
@@ -55,7 +89,7 @@ export class UtilityScript {
     // Special handling of undefined to work-around multi-step returnByValue handling in WebKit.
     if (value === undefined)
       return undefined;
-    return this.serializeAsCallArgument(value, (value: any) => ({ fallThrough: value }));
+    return serializeAsCallArgument(value, (value: any) => ({ fallThrough: value }));
   }
 
   private _promiseAwareJsonValueNoThrow(value: any) {

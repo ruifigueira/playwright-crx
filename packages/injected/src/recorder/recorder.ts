@@ -23,7 +23,6 @@ import type { ElementText } from '../selectorUtils';
 import type * as actions from '@recorder/actions';
 import type { ElementInfo, Mode, OverlayState, UIState } from '@recorder/recorderTypes';
 import type { Language } from '@isomorphic/locatorGenerators';
-import type { Set, Map } from '@isomorphic/builtins';
 
 const HighlightColors = {
   multiple: '#f6b26b7f',
@@ -198,7 +197,7 @@ class RecordActionTool implements RecorderTool {
 
   constructor(recorder: Recorder) {
     this._recorder = recorder;
-    this._performingActions = new recorder.injectedScript.utils.builtins.Set();
+    this._performingActions = new Set();
   }
 
   cursor() {
@@ -546,6 +545,10 @@ class RecordActionTool implements RecorderTool {
   }
 
   private _shouldGenerateKeyPressFor(event: KeyboardEvent): boolean {
+    // IME can generate keyboard events that don't provide a value for the key property (e.g. chrome autofill)
+    if (typeof event.key !== 'string')
+      return false;
+
     // Enter aka. new line is handled in input event.
     if (event.key === 'Enter' && (this._recorder.deepEventTarget(event).nodeName === 'TEXTAREA' || this._recorder.deepEventTarget(event).isContentEditable))
       return false;
@@ -600,7 +603,7 @@ class TextAssertionTool implements RecorderTool {
 
   constructor(recorder: Recorder, kind: 'text' | 'value' | 'snapshot') {
     this._recorder = recorder;
-    this._textCache = new recorder.injectedScript.utils.builtins.Map();
+    this._textCache = new Map();
     this._kind = kind;
     this._dialog = new Dialog(recorder);
   }
@@ -1055,6 +1058,7 @@ export class Recorder {
     injectedScript.utils.cacheNormalizedWhitespaces();
     if (injectedScript.isUnderTest)
       console.error('Recorder script ready for test'); // eslint-disable-line no-console
+    injectedScript.consoleApi.install();
   }
 
   installListeners() {

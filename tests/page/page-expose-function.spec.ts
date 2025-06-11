@@ -95,7 +95,7 @@ it('should be callable from-inside addInitScript', async ({ page, server }) => {
   });
   await page.addInitScript(() => window['woof']());
   await page.reload();
-  expect(called).toBe(true);
+  await expect.poll(() => called).toBe(true);
 });
 
 it('should survive navigation', async ({ page, server }) => {
@@ -308,42 +308,4 @@ it('should fail with busted Array.prototype.toJSON', async ({ page }) => {
   await expect(() => page.evaluate(`add(5, 6)`)).rejects.toThrowError('serializedArgs is not an array. This can happen when Array.prototype.toJSON is defined incorrectly');
 
   expect.soft(await page.evaluate(() => ([] as any).toJSON())).toBe('"[]"');
-});
-
-it('should work with overridden eval', {
-  annotation: { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/34628' },
-}, async ({ page, server }) => {
-  await page.exposeFunction('add', (a, b) => a + b);
-
-  server.setRoute('/page', (req, res) => {
-    res.setHeader('Content-Type', 'text/html');
-    res.end(`
-      <script>
-        window.eval = () => 42;
-      </script>
-    `);
-  });
-  await page.goto(server.PREFIX + '/page');
-  expect(await page.evaluate(async () => {
-    return { value: await (window as any)['add'](5, 6) };
-  })).toEqual({ value: 11 });
-});
-
-it('should work with deleted Map', {
-  annotation: { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/34443' },
-}, async ({ page, server }) => {
-  await page.exposeFunction('add', (a, b) => a + b);
-
-  server.setRoute('/page', (req, res) => {
-    res.setHeader('Content-Type', 'text/html');
-    res.end(`
-      <script>
-        delete window.Map;
-      </script>
-    `);
-  });
-  await page.goto(server.PREFIX + '/page');
-  expect(await page.evaluate(async () => {
-    return { value: await (window as any)['add'](5, 6) };
-  })).toEqual({ value: 11 });
 });
