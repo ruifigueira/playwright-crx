@@ -4,6 +4,30 @@ title: "Release notes"
 toc_max_heading_level: 2
 ---
 
+## Version 1.53
+
+### Miscellaneous
+
+- New Steps in Trace Viewer: 
+  ![New Trace Viewer Steps](https://github.com/user-attachments/assets/1963ff7d-4070-41be-a79b-4333176921a2)
+- New method [`method: Locator.describe`] to describe a locator. Used for trace viewer.
+  ```python
+  button = page.get_by_test_id("btn-sub").describe("Subscribe button")
+  button.click()
+  ```
+- `python -m playwright install --list` will now list all installed browsers, versions and locations.
+
+### Browser Versions
+
+- Chromium 138.0.7204.4
+- Mozilla Firefox 139.0
+- WebKit 18.5
+
+This version was also tested against the following stable channels:
+
+- Google Chrome 137
+- Microsoft Edge 137
+
 ## Version 1.52
 
 ### Highlights
@@ -30,12 +54,10 @@ toc_max_heading_level: 2
 ### Miscellaneous
 
 - New option [`option: APIRequest.newContext.maxRedirects`] in [`method: APIRequest.newContext`] to control the maximum number of redirects.
-- New option [`option: Locator.ariaSnapshot.ref`] in [`method: Locator.ariaSnapshot`] to generate reference for each element in the snapshot which can later be used to locate the element.
-- HTML reporter now supports *NOT filtering* via `!@my-tag` or `!my-file.spec.ts` or `!p:my-project`.
+- New option `ref` in [`method: Locator.ariaSnapshot`] to generate reference for each element in the snapshot which can later be used to locate the element.
 
 ### Breaking Changes
 
-- Base URL matching is not supported in [`method: Page.frame`] anymore. We recommend migrating to [`method: Page.frameLocator`] instead for having a more convenient API. 
 - Glob URL patterns in methods like [`method: Page.route`] do not support `?` and `[]` anymore. We recommend using regular expressions instead.
 - Method [`method: Route.continue`] does not allow to override the `Cookie` header anymore. If a `Cookie` header is provided, it will be ignored, and the cookie will be loaded from the browser's cookie store. To set custom cookies, use [`method: BrowserContext.addCookies`].
 - macOS 13 is now deprecated and will no longer receive WebKit updates. Please upgrade to a more recent macOS version to continue benefiting from the latest WebKit improvements.

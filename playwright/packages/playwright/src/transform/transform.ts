@@ -22,8 +22,9 @@ import url from 'url';
 
 import { loadTsConfig } from '../third_party/tsconfig-loader';
 import { createFileMatcher, fileIsModule, resolveImportSpecifierAfterMapping } from '../util';
-import { pirates, sourceMapSupport } from '../utilsBundle';
+import { sourceMapSupport } from '../utilsBundle';
 import { belongsToNodeModules, currentFileDepsCollector, getFromCompilationCache, installSourceMapSupport } from './compilationCache';
+import { addHook } from '../third_party/pirates';
 
 import type { BabelPlugin, BabelTransformFunction } from './babelBundle';
 import type { Location } from '../../types/testReporter';
@@ -259,8 +260,16 @@ export async function requireOrImport(file: string) {
   installTransformIfNeeded();
   const isModule = fileIsModule(file);
   const esmImport = () => eval(`import(${JSON.stringify(url.pathToFileURL(file))})`);
-  if (isModule)
-    return await esmImport();
+  if (isModule) {
+    return await esmImport().finally(async () => {
+      // Compilation cache, which includes source maps, is populated in a post task.
+      // When importing a module results in an error, the very next access to `error.stack`
+      // will need source maps. To make sure source maps have arrived, we insert a task
+      // that will be processed after compilation cache and guarantee that
+      // source maps are available, before `error.stack` is accessed.
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+  }
   const result = require(file);
   const depsCollector = currentFileDepsCollector();
   if (depsCollector) {
@@ -291,11 +300,10 @@ function installTransformIfNeeded() {
   }
   (Module as any)._resolveFilename = resolveFilename;
 
-  pirates.addHook((code: string, filename: string) => {
-    if (!shouldTransform(filename))
-      return code;
+  // Hopefully, one day we can migrate to synchronous loader hooks instead, similar to our esmLoader...
+  addHook((code, filename) => {
     return transformHook(code, filename).code;
-  }, { exts: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.mts', '.cjs', '.cts'] });
+  }, shouldTransform, ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.mts', '.cjs', '.cts']);
 }
 
 const collectCJSDependencies = (module: Module, dependencies: Set<string>) => {

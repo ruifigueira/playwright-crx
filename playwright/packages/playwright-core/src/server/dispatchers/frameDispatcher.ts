@@ -15,7 +15,7 @@
  */
 
 import { Frame } from '../frames';
-import { Dispatcher, existingDispatcher } from './dispatcher';
+import { Dispatcher } from './dispatcher';
 import { ElementHandleDispatcher } from './elementHandlerDispatcher';
 import { parseArgument, serializeResult } from './jsHandleDispatcher';
 import { ResponseDispatcher } from './networkDispatchers';
@@ -35,7 +35,7 @@ export class FrameDispatcher extends Dispatcher<Frame, channels.FrameChannel, Br
   private _browserContextDispatcher: BrowserContextDispatcher;
 
   static from(scope: BrowserContextDispatcher, frame: Frame): FrameDispatcher {
-    const result = existingDispatcher<FrameDispatcher>(frame);
+    const result = scope.connection.existingDispatcher<FrameDispatcher>(frame);
     return result || new FrameDispatcher(scope, frame);
   }
 
@@ -50,7 +50,7 @@ export class FrameDispatcher extends Dispatcher<Frame, channels.FrameChannel, Br
     // methods on Page that redirect to the main frame remain operational.
     // Note: we cannot check parentFrame() here because it may be null after the frame has been detached.
     const gcBucket = frame._page.mainFrame() === frame ? 'MainFrame' : 'Frame';
-    const pageDispatcher = existingDispatcher<PageDispatcher>(frame._page);
+    const pageDispatcher = scope.connection.existingDispatcher<PageDispatcher>(frame._page);
     super(pageDispatcher || scope, frame, 'Frame', {
       url: frame.url(),
       name: frame.name(),
@@ -88,7 +88,7 @@ export class FrameDispatcher extends Dispatcher<Frame, channels.FrameChannel, Br
   }
 
   async evaluateExpressionHandle(params: channels.FrameEvaluateExpressionHandleParams, metadata: CallMetadata): Promise<channels.FrameEvaluateExpressionHandleResult> {
-    return { handle: ElementHandleDispatcher.fromJSHandle(this, await this._frame.evaluateExpressionHandle(params.expression, { isFunction: params.isFunction }, parseArgument(params.arg))) };
+    return { handle: ElementHandleDispatcher.fromJSOrElementHandle(this, await this._frame.evaluateExpressionHandle(params.expression, { isFunction: params.isFunction }, parseArgument(params.arg))) };
   }
 
   async waitForSelector(params: channels.FrameWaitForSelectorParams, metadata: CallMetadata): Promise<channels.FrameWaitForSelectorResult> {
@@ -246,7 +246,7 @@ export class FrameDispatcher extends Dispatcher<Frame, channels.FrameChannel, Br
   }
 
   async waitForFunction(params: channels.FrameWaitForFunctionParams, metadata: CallMetadata): Promise<channels.FrameWaitForFunctionResult> {
-    return { handle: ElementHandleDispatcher.fromJSHandle(this, await this._frame._waitForFunctionExpression(metadata, params.expression, params.isFunction, parseArgument(params.arg), params)) };
+    return { handle: ElementHandleDispatcher.fromJSOrElementHandle(this, await this._frame._waitForFunctionExpression(metadata, params.expression, params.isFunction, parseArgument(params.arg), params)) };
   }
 
   async title(params: channels.FrameTitleParams, metadata: CallMetadata): Promise<channels.FrameTitleResult> {

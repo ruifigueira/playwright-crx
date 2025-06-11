@@ -46,6 +46,13 @@ type TestSummary = {
   fatalErrors: TestError[];
 };
 
+export type CommonReporterOptions = {
+  configDir: string,
+  _mode: 'list' | 'test' | 'merge',
+  _isTestServer: boolean,
+  _commandHash: string,
+};
+
 export type Screen = {
   resolveFiles: 'cwd' | 'rootDir';
   colors: Colors;
@@ -285,7 +292,7 @@ export class TerminalReporter implements ReporterV2 {
       console.log(this.screen.colors.yellow('  Slow test file: ') + file + this.screen.colors.yellow(` (${milliseconds(duration)})`));
     });
     if (slowTests.length)
-      console.log(this.screen.colors.yellow('  Consider running tests from slow files in parallel, see https://playwright.dev/docs/test-parallel.'));
+      console.log(this.screen.colors.yellow('  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel'));
   }
 
   private _printSummary(summary: string) {
@@ -330,7 +337,7 @@ export function formatFailure(screen: Screen, config: FullConfig, test: TestCase
     resultLines.push(...errors.map(error => '\n' + error.message));
     for (let i = 0; i < result.attachments.length; ++i) {
       const attachment = result.attachments[i];
-      if (attachment.name.startsWith('_error-context') && attachment.path) {
+      if (attachment.name === 'error-context' && attachment.path) {
         resultLines.push('');
         resultLines.push(screen.colors.dim(`    Error Context: ${relativeFilePath(screen, config, attachment.path)}`));
         continue;
@@ -591,7 +598,7 @@ export function resolveOutputFile(reporterName: string, options: {
       fileName: string,
       outputDir: string,
     }
-  }):  { outputFile: string, outputDir?: string } |undefined {
+  }): { outputFile: string, outputDir?: string } | undefined {
   const name = reporterName.toUpperCase();
   let outputFile = resolveFromEnv(`PLAYWRIGHT_${name}_OUTPUT_FILE`);
   if (!outputFile && options.outputFile)

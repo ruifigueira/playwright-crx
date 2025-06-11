@@ -206,13 +206,6 @@ Below is the HTML markup and the respective ARIA snapshot:
     - link "About"
 ```
 
-### option: Locator.ariaSnapshot.ref
-* since: v1.52
-- `ref` <[boolean]>
-
-Generate symbolic reference for each element. One can use `aria-ref=<ref>` locator immediately after capturing the
-snapshot to perform actions on the element.
-
 ### option: Locator.ariaSnapshot.timeout = %%-input-timeout-%%
 * since: v1.49
 
@@ -587,6 +580,46 @@ When all steps combined have not finished during the specified [`option: timeout
 ### option: Locator.dblclick.trial = %%-input-trial-with-modifiers-%%
 * since: v1.14
 
+## method: Locator.describe
+* since: v1.53
+- returns: <[Locator]>
+
+Describes the locator, description is used in the trace viewer and reports.
+Returns the locator pointing to the same element.
+
+**Usage**
+
+```js
+const button = page.getByTestId('btn-sub').describe('Subscribe button');
+await button.click();
+```
+
+```java
+Locator button = page.getByTestId("btn-sub").describe("Subscribe button");
+button.click();
+```
+
+```python async
+button = page.get_by_test_id("btn-sub").describe("Subscribe button")
+await button.click()
+```
+
+```python sync
+button = page.get_by_test_id("btn-sub").describe("Subscribe button")
+button.click()
+```
+
+```csharp
+var button = Page.GetByTestId("btn-sub").Describe("Subscribe button");
+await button.ClickAsync();
+```
+
+### param: Locator.describe.description
+* since: v1.53
+- `description` <[string]>
+
+Locator description.
+
 ## async method: Locator.dispatchEvent
 * since: v1.14
 
@@ -870,6 +903,37 @@ If [`param: expression`] returns a [Promise], this method will wait for the prom
 If [`param: expression`] throws or rejects, this method throws.
 
 **Usage**
+
+Passing argument to [`param: expression`]:
+
+```js
+const result = await page.getByTestId('myId').evaluate((element, [x, y]) => {
+  return element.textContent + ' ' + x * y;
+}, [7, 8]);
+console.log(result); // prints "myId text 56"
+```
+
+```java
+Object result = page.getByTestId("myId").evaluate("(element, [x, y]) => {\n" +
+  "  return element.textContent + ' ' + x * y;\n" +
+  "}", Arrays.asList(7, 8));
+System.out.println(result); // prints "myId text 56"
+```
+
+```python async
+result = await page.get_by_testid("myId").evaluate("(element, [x, y]) => element.textContent + ' ' + x * y", [7, 8])
+print(result) # prints "myId text 56"
+```
+
+```python sync
+result = page.get_by_testid("myId").evaluate("(element, [x, y]) => element.textContent + ' ' + x * y", [7, 8])
+print(result) # prints "myId text 56"
+```
+
+```csharp
+var result = await page.GetByTestId("myId").EvaluateAsync<string>("(element, [x, y]) => element.textContent + ' ' + x * y)", new[] { 7, 8 });
+Console.WriteLine(result); // prints "myId text 56"
+```
 
 ### param: Locator.evaluate.expression = %%-evaluate-expression-%%
 * since: v1.14

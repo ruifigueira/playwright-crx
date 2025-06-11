@@ -21,7 +21,7 @@ import { assert } from '../../utils/isomorphic/assert';
 import { createGuid } from '../utils/crypto';
 import { Artifact } from '../artifact';
 import { Browser } from '../browser';
-import { BrowserContext, assertBrowserContextIsNotOwned, verifyGeolocation } from '../browserContext';
+import { BrowserContext, verifyGeolocation } from '../browserContext';
 import { Frame } from '../frames';
 import * as network from '../network';
 import { Page } from '../page';
@@ -30,7 +30,6 @@ import { CRPage } from './crPage';
 import { saveProtocolStream } from './crProtocolHelper';
 import { CRServiceWorker } from './crServiceWorker';
 
-import type { Dialog } from '../dialog';
 import type { InitScript, Worker } from '../page';
 import type { ConnectionTransport } from '../transport';
 import type * as types from '../types';
@@ -245,7 +244,7 @@ export class CRBrowser extends Browser {
 
   private _findOwningPage(frameId: string) {
     for (const crPage of this._crPages.values()) {
-      const frame = crPage._page._frameManager.frame(frameId);
+      const frame = crPage._page.frameManager.frame(frameId);
       if (frame)
         return crPage;
     }
@@ -288,7 +287,7 @@ export class CRBrowser extends Browser {
 
   async startTracing(page?: Page, options: { screenshots?: boolean; categories?: string[]; } = {}) {
     assert(!this._tracingRecording, 'Cannot start recording trace while already recording trace.');
-    this._tracingClient = page ? (page._delegate as CRPage)._mainFrameSession._client : this._session;
+    this._tracingClient = page ? (page.delegate as CRPage)._mainFrameSession._client : this._session;
 
     const defaultCategories = [
       '-*', 'devtools.timeline', 'v8.execute', 'disabled-by-default-devtools.timeline',
@@ -371,10 +370,12 @@ export class CRBrowserContext extends BrowserContext {
     return this._crPages().map(crPage => crPage._page);
   }
 
-  override async doCreateNewPage(): Promise<Page> {
-    assertBrowserContextIsNotOwned(this);
+  override async doCreateNewPage(markAsServerSideOnly?: boolean): Promise<Page> {
     const { targetId } = await this._browser._session.send('Target.createTarget', { url: 'about:blank', browserContextId: this._browserContextId });
-    return this._browser._crPages.get(targetId)!._page;
+    const page = this._browser._crPages.get(targetId)!._page;
+    if (markAsServerSideOnly)
+      page.markAsServerSideOnly();
+    return page;
   }
 
   async doGetCookies(urls: string[]): Promise<channels.NetworkCookie[]> {
@@ -435,13 +436,13 @@ export class CRBrowserContext extends BrowserContext {
     verifyGeolocation(geolocation);
     this._options.geolocation = geolocation;
     for (const page of this.pages())
-      await (page._delegate as CRPage).updateGeolocation();
+      await (page.delegate as CRPage).updateGeolocation();
   }
 
   async setExtraHTTPHeaders(headers: types.HeadersArray): Promise<void> {
     this._options.extraHTTPHeaders = headers;
     for (const page of this.pages())
-      await (page._delegate as CRPage).updateExtraHTTPHeaders();
+      await (page.delegate as CRPage).updateExtraHTTPHeaders();
     for (const sw of this.serviceWorkers())
       await (sw as CRServiceWorker).updateExtraHTTPHeaders();
   }
@@ -449,14 +450,14 @@ export class CRBrowserContext extends BrowserContext {
   async setUserAgent(userAgent: string | undefined): Promise<void> {
     this._options.userAgent = userAgent;
     for (const page of this.pages())
-      await (page._delegate as CRPage).updateUserAgent();
+      await (page.delegate as CRPage).updateUserAgent();
     // TODO: service workers don't have Emulation domain?
   }
 
   async setOffline(offline: boolean): Promise<void> {
     this._options.offline = offline;
     for (const page of this.pages())
-      await (page._delegate as CRPage).updateOffline();
+      await (page.delegate as CRPage).updateOffline();
     for (const sw of this.serviceWorkers())
       await (sw as CRServiceWorker).updateOffline();
   }
@@ -464,26 +465,31 @@ export class CRBrowserContext extends BrowserContext {
   async doSetHTTPCredentials(httpCredentials?: types.Credentials): Promise<void> {
     this._options.httpCredentials = httpCredentials;
     for (const page of this.pages())
-      await (page._delegate as CRPage).updateHttpCredentials();
+      await (page.delegate as CRPage).updateHttpCredentials();
     for (const sw of this.serviceWorkers())
       await (sw as CRServiceWorker).updateHttpCredentials();
   }
 
   async doAddInitScript(initScript: InitScript) {
     for (const page of this.pages())
-      await (page._delegate as CRPage).addInitScript(initScript);
+      await (page.delegate as CRPage).addInitScript(initScript);
   }
 
-  async doRemoveNonInternalInitScripts() {
+  async doRemoveInitScripts(initScripts: InitScript[]) {
     for (const page of this.pages())
-      await (page._delegate as CRPage).removeNonInternalInitScripts();
+      await (page.delegate as CRPage).removeInitScripts(initScripts);
   }
 
   async doUpdateRequestInterception(): Promise<void> {
     for (const page of this.pages())
-      await (page._delegate as CRPage).updateRequestInterception();
+      await (page.delegate as CRPage).updateRequestInterception();
     for (const sw of this.serviceWorkers())
       await (sw as CRServiceWorker).updateRequestInterception();
+  }
+
+  override async doExposePlaywrightBinding() {
+    for (const page of this._crPages())
+      await page.exposePlaywrightBinding();
   }
 
   async doClose(reason: string | undefined) {
@@ -491,12 +497,7 @@ export class CRBrowserContext extends BrowserContext {
     // dialogs, so we should close all that are currently opened.
     // We also won't get new ones since `Target.disposeBrowserContext` does not trigger
     // beforeunload.
-    const openedBeforeUnloadDialogs: Dialog[] = [];
-    for (const crPage of this._crPages()) {
-      const dialogs = [...crPage._page._frameManager._openedDialogs].filter(dialog => dialog.type() === 'beforeunload');
-      openedBeforeUnloadDialogs.push(...dialogs);
-    }
-    await Promise.all(openedBeforeUnloadDialogs.map(dialog => dialog.dismiss()));
+    await this.dialogManager.closeBeforeUnloadDialogs();
 
     if (!this._browserContextId) {
       await this.stopVideoRecording();
@@ -508,7 +509,7 @@ export class CRBrowserContext extends BrowserContext {
     await this._browser._session.send('Target.disposeBrowserContext', { browserContextId: this._browserContextId });
     this._browser._contexts.delete(this._browserContextId);
     for (const [targetId, serviceWorker] of this._browser._serviceWorkers) {
-      if (serviceWorker._browserContext !== this)
+      if (serviceWorker.browserContext !== this)
         continue;
       // When closing a browser context, service workers are shutdown
       // asynchronously and we get detached from them later.
@@ -559,15 +560,15 @@ export class CRBrowserContext extends BrowserContext {
   }
 
   serviceWorkers(): Worker[] {
-    return Array.from(this._browser._serviceWorkers.values()).filter(serviceWorker => serviceWorker._browserContext === this);
+    return Array.from(this._browser._serviceWorkers.values()).filter(serviceWorker => serviceWorker.browserContext === this);
   }
 
   async newCDPSession(page: Page | Frame): Promise<CDPSession> {
     let targetId: string | null = null;
     if (page instanceof Page) {
-      targetId = (page._delegate as CRPage)._targetId;
+      targetId = (page.delegate as CRPage)._targetId;
     } else if (page instanceof Frame) {
-      const session = (page._page._delegate as CRPage)._sessions.get(page._id);
+      const session = (page._page.delegate as CRPage)._sessions.get(page._id);
       if (!session)
         throw new Error(`This frame does not have a separate CDP session, it is a part of the parent frame's session`);
       targetId = session._targetId;

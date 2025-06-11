@@ -6,6 +6,42 @@ toc_max_heading_level: 2
 
 import LiteYouTube from '@site/src/components/LiteYouTube';
 
+## Version 1.53
+
+### Trace Viewer and HTML Reporter Updates
+
+- New Steps in Trace Viewer and HTML reporter: 
+  ![New Trace Viewer Steps](https://github.com/user-attachments/assets/1963ff7d-4070-41be-a79b-4333176921a2)
+- New option in `'html'` reporter to set the title of a specific test run:
+  ```js
+  import { defineConfig } from '@playwright/test';
+
+  export default defineConfig({
+    reporter: [['html', { title: 'Custom test run #1028' }]]
+  });
+  ```
+
+### Miscellaneous
+
+- New option [`option: TestInfo.snapshotPath.kind`] in [`method: TestInfo.snapshotPath`] controls which snapshot path template is used.
+- New method [`method: Locator.describe`] to describe a locator. Used for trace viewer and reports.
+  ```js
+  const button = page.getByTestId('btn-sub').describe('Subscribe button');
+  await button.click();
+  ```
+- `npx playwright install --list` will now list all installed browsers, versions and locations.
+
+### Browser Versions
+
+- Chromium 138.0.7204.4
+- Mozilla Firefox 139.0
+- WebKit 18.5
+
+This version was also tested against the following stable channels:
+
+- Google Chrome 137
+- Microsoft Edge 137
+
 ## Version 1.52
 
 ### Highlights
@@ -38,7 +74,7 @@ import LiteYouTube from '@site/src/components/LiteYouTube';
 ### Miscellaneous
 
 - New option [`option: APIRequest.newContext.maxRedirects`] in [`method: APIRequest.newContext`] to control the maximum number of redirects.
-- New option [`option: Locator.ariaSnapshot.ref`] in [`method: Locator.ariaSnapshot`] to generate reference for each element in the snapshot which can later be used to locate the element.
+- New option `ref` in [`method: Locator.ariaSnapshot`] to generate reference for each element in the snapshot which can later be used to locate the element.
 - HTML reporter now supports *NOT filtering* via `!@my-tag` or `!my-file.spec.ts` or `!p:my-project`.
 
 ### Breaking Changes
@@ -841,7 +877,7 @@ test('test customer login', {
 npx playwright test --grep @fast
 ```
 
-- `--project` command line [flag](./test-cli#reference) now supports '*' wildcard:
+- `--project` command line [flag](./test-cli#all-options) now supports '*' wildcard:
 ```sh
 npx playwright test --project='*mobile*'
 ```

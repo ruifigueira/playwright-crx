@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Map, Set } from '@isomorphic/builtins';
+import * as css from '@isomorphic/cssTokenizer';
 
 import { getGlobalOptions, closestCrossShadow, elementSafeTagName, enclosingShadowRootOrDocument, getElementComputedStyle, isElementStyleVisibilityVisible, isVisibleTextNode, parentElementOrShadowHost } from './domUtils';
 
@@ -357,41 +357,80 @@ function queryInAriaOwned(element: Element, selector: string): Element[] {
   return result;
 }
 
-export function getPseudoContent(element: Element, pseudo: '::before' | '::after') {
-  const cache = pseudo === '::before' ? cachePseudoContentBefore : cachePseudoContentAfter;
+export function getCSSContent(element: Element, pseudo?: '::before' | '::after') {
+  // Relevant spec: 2.6.2 from https://w3c.github.io/accname/#computation-steps.
+  // Additional considerations: https://github.com/w3c/accname/issues/204.
+  const cache = pseudo === '::before' ? cachePseudoContentBefore : (pseudo === '::after' ? cachePseudoContentAfter : cachePseudoContent);
   if (cache?.has(element))
-    return cache?.get(element) || '';
-  const pseudoStyle = getElementComputedStyle(element, pseudo);
-  const content = getPseudoContentImpl(element, pseudoStyle);
+    return cache?.get(element);
+
+  const style = getElementComputedStyle(element, pseudo);
+  let content: string | undefined;
+  if (style && style.display !== 'none' && style.visibility !== 'hidden') {
+    // Note: all browsers ignore display:none and visibility:hidden pseudos.
+    content = parseCSSContentPropertyAsString(element, style.content, !!pseudo);
+  }
+
+  if (pseudo && content !== undefined) {
+    // SPEC DIFFERENCE.
+    // Spec says "CSS textual content, without a space", but we account for display
+    // to pass "name_file-label-inline-block-styles-manual.html"
+    const display = style?.display || 'inline';
+    if (display !== 'inline')
+      content =  ' ' + content + ' ';
+  }
+
   if (cache)
     cache.set(element, content);
   return content;
 }
 
-function getPseudoContentImpl(element: Element, pseudoStyle: CSSStyleDeclaration | undefined) {
-  // Note: all browsers ignore display:none and visibility:hidden pseudos.
-  if (!pseudoStyle || pseudoStyle.display === 'none' || pseudoStyle.visibility === 'hidden')
-    return '';
-  const content = pseudoStyle.content;
-  let resolvedContent: string | undefined;
-  if ((content[0] === '\'' && content[content.length - 1] === '\'') ||
-    (content[0] === '"' && content[content.length - 1] === '"')) {
-    resolvedContent = content.substring(1, content.length - 1);
-  } else if (content.startsWith('attr(') && content.endsWith(')')) {
-    // Firefox does not resolve attribute accessors in content.
-    const attrName = content.substring('attr('.length, content.length - 1).trim();
-    resolvedContent = element.getAttribute(attrName) || '';
+function parseCSSContentPropertyAsString(element: Element, content: string, isPseudo: boolean): string | undefined {
+  // Welcome to the mini CSS parser!
+  // It aims to support the following syntax and any subset of it:
+  // content: "one" attr(...) "two" "three" / "alt" attr(...) "more alt"
+  // See https://developer.mozilla.org/en-US/docs/Web/CSS/content for more details.
+
+  if (!content || content === 'none' || content === 'normal') {
+    // Common fast path.
+    return;
   }
-  if (resolvedContent !== undefined) {
-    // SPEC DIFFERENCE.
-    // Spec says "CSS textual content, without a space", but we account for display
-    // to pass "name_file-label-inline-block-styles-manual.html"
-    const display = pseudoStyle.display || 'inline';
-    if (display !== 'inline')
-      return ' ' + resolvedContent + ' ';
-    return resolvedContent;
+
+  try {
+    let tokens = css.tokenize(content).filter(token => !(token instanceof css.WhitespaceToken));
+    const delimIndex = tokens.findIndex(token => token instanceof css.DelimToken && token.value === '/');
+    if (delimIndex !== -1) {
+      // Use the alternative text part when exists.
+      // content: ... / "alternative text"
+      tokens = tokens.slice(delimIndex + 1);
+    } else if (!isPseudo) {
+      // For non-pseudo elements, the only valid content is a url() or various gradients.
+      // Therefore, we follow Chrome and only consider the alternative text.
+      // Firefox, on the other hand, calculates accessible name to be empty.
+      return;
+    }
+
+    const accumulated: string[] = [];
+    let index = 0;
+    while (index < tokens.length) {
+      if (tokens[index] instanceof css.StringToken) {
+        // content: "some text"
+        accumulated.push(tokens[index].value as string);
+        index++;
+      } else if (index + 2 < tokens.length && tokens[index] instanceof css.FunctionToken && tokens[index].value === 'attr' && tokens[index + 1] instanceof css.IdentToken && tokens[index + 2] instanceof css.CloseParenToken) {
+        // content: attr(...)
+        // Firefox does not resolve attribute accessors in content, so we do it manually.
+        const attrName = tokens[index + 1].value as string;
+        accumulated.push(element.getAttribute(attrName) || '');
+        index += 3;
+      } else {
+        // Failed to parse the content, so ignore it.
+        return;
+      }
+    }
+    return accumulated.join('');
+  } catch {
   }
-  return '';
 }
 
 export function getAriaLabelledByElements(element: Element): Element[] | null {
@@ -476,13 +515,10 @@ export function getElementAccessibleDescription(element: Element, includeHidden:
   return accessibleDescription;
 }
 
-// https://www.w3.org/TR/wai-aria-1.2/#aria-invalid
-const kAriaInvalidRoles = ['application', 'checkbox', 'combobox', 'gridcell', 'listbox', 'radiogroup', 'slider', 'spinbutton', 'textbox', 'tree', 'columnheader', 'rowheader', 'searchbox', 'switch', 'treegrid'];
-
 function getAriaInvalid(element: Element): 'false' | 'true' | 'grammar' | 'spelling' {
-  const role = getAriaRole(element) || '';
-  if (!role || !kAriaInvalidRoles.includes(role))
-    return 'false';
+  // https://www.w3.org/TR/wai-aria-1.2/#aria-invalid
+  // This state is being deprecated as a global state in ARIA 1.2.
+  // In future versions it will only be allowed on roles where it is specifically supported.
   const ariaInvalid = element.getAttribute('aria-invalid');
   if (!ariaInvalid || ariaInvalid.trim() === '' || ariaInvalid.toLocaleLowerCase() === 'false')
     return 'false';
@@ -881,22 +917,31 @@ function innerAccumulatedElementText(element: Element, options: AccessibleNameOp
       tokens.push(node.textContent || '');
     }
   };
-  tokens.push(getPseudoContent(element, '::before'));
-  const assignedNodes = element.nodeName === 'SLOT' ? (element as HTMLSlotElement).assignedNodes() : [];
-  if (assignedNodes.length) {
-    for (const child of assignedNodes)
-      visit(child, false);
+  tokens.push(getCSSContent(element, '::before') || '');
+  const content = getCSSContent(element);
+  if (content !== undefined) {
+    // `content` CSS property replaces everything inside the element.
+    // I was not able to find any spec or description on how this interacts with accname,
+    // so this is a guess based on what browsers do.
+    tokens.push(content);
   } else {
-    for (let child = element.firstChild; child; child = child.nextSibling)
-      visit(child, true);
-    if (element.shadowRoot) {
-      for (let child = element.shadowRoot.firstChild; child; child = child.nextSibling)
+    // step 2h.
+    const assignedNodes = element.nodeName === 'SLOT' ? (element as HTMLSlotElement).assignedNodes() : [];
+    if (assignedNodes.length) {
+      for (const child of assignedNodes)
+        visit(child, false);
+    } else {
+      for (let child = element.firstChild; child; child = child.nextSibling)
         visit(child, true);
+      if (element.shadowRoot) {
+        for (let child = element.shadowRoot.firstChild; child; child = child.nextSibling)
+          visit(child, true);
+      }
+      for (const owned of getIdRefs(element, element.getAttribute('aria-owns')))
+        visit(owned, true);
     }
-    for (const owned of getIdRefs(element, element.getAttribute('aria-owns')))
-      visit(owned, true);
   }
-  tokens.push(getPseudoContent(element, '::after'));
+  tokens.push(getCSSContent(element, '::after') || '');
   return tokens.join('');
 }
 
@@ -1053,14 +1098,50 @@ function getAccessibleNameFromAssociatedLabels(labels: Iterable<HTMLLabelElement
   })).filter(accessibleName => !!accessibleName).join(' ');
 }
 
+export function receivesPointerEvents(element: Element): boolean {
+  const cache = cachePointerEvents!;
+  let e: Element | undefined = element;
+  let result: boolean | undefined;
+  const parents: Element[] = [];
+  for (; e; e = parentElementOrShadowHost(e!)) {
+    const cached = cache.get(e);
+    if (cached !== undefined) {
+      result = cached;
+      break;
+    }
+
+    parents.push(e);
+    const style = getElementComputedStyle(e);
+    if (!style) {
+      result = true;
+      break;
+    }
+
+    const value = style.pointerEvents;
+    if (value) {
+      result = value !== 'none';
+      break;
+    }
+  }
+
+  if (result === undefined)
+    result = true;
+
+  for (const parent of parents)
+    cache.set(parent, result);
+  return result;
+}
+
 let cacheAccessibleName: Map<Element, string> | undefined;
 let cacheAccessibleNameHidden: Map<Element, string> | undefined;
 let cacheAccessibleDescription: Map<Element, string> | undefined;
 let cacheAccessibleDescriptionHidden: Map<Element, string> | undefined;
 let cacheAccessibleErrorMessage: Map<Element, string> | undefined;
 let cacheIsHidden: Map<Element, boolean> | undefined;
-let cachePseudoContentBefore: Map<Element, string> | undefined;
-let cachePseudoContentAfter: Map<Element, string> | undefined;
+let cachePseudoContent: Map<Element, string | undefined> | undefined;
+let cachePseudoContentBefore: Map<Element, string | undefined> | undefined;
+let cachePseudoContentAfter: Map<Element, string | undefined> | undefined;
+let cachePointerEvents: Map<Element, boolean> | undefined;
 let cachesCounter = 0;
 
 export function beginAriaCaches() {
@@ -1071,8 +1152,10 @@ export function beginAriaCaches() {
   cacheAccessibleDescriptionHidden ??= new Map();
   cacheAccessibleErrorMessage ??= new Map();
   cacheIsHidden ??= new Map();
+  cachePseudoContent ??= new Map();
   cachePseudoContentBefore ??= new Map();
   cachePseudoContentAfter ??= new Map();
+  cachePointerEvents ??= new Map();
 }
 
 export function endAriaCaches() {
@@ -1083,8 +1166,10 @@ export function endAriaCaches() {
     cacheAccessibleDescriptionHidden = undefined;
     cacheAccessibleErrorMessage = undefined;
     cacheIsHidden = undefined;
+    cachePseudoContent = undefined;
     cachePseudoContentBefore = undefined;
     cachePseudoContentAfter = undefined;
+    cachePointerEvents = undefined;
   }
 }
 

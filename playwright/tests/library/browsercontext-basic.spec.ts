@@ -23,12 +23,14 @@ import type { Page } from '@playwright/test';
 it('should create new context @smoke', async function({ browser }) {
   expect(browser.contexts().length).toBe(0);
   const context = await browser.newContext();
-  expect(browser.contexts().length).toBe(1);
-  expect(browser.contexts().indexOf(context) !== -1).toBe(true);
+  expect(browser.contexts()).toEqual([context]);
   expect(browser).toBe(context.browser());
+  const context2 = await browser.newContext();
+  expect(browser.contexts()).toEqual([context, context2]);
   await context.close();
-  expect(browser.contexts().length).toBe(0);
+  expect(browser.contexts()).toEqual([context2]);
   expect(browser).toBe(context.browser());
+  await context2.close();
 });
 
 it('should be able to click across browser contexts', async function({ browser }) {
@@ -289,6 +291,34 @@ it('should work with offline option', async ({ browser, server, browserName }) =
   const response = await page.goto(server.EMPTY_PAGE);
   expect(response!.status()).toBe(200);
   await context.close();
+});
+
+it('fetch with keepalive should throw when offline', {
+  annotation: { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/35701' },
+}, async ({ contextFactory, server }) => {
+  const context = await contextFactory();
+  const page = await context.newPage();
+  await page.goto(server.EMPTY_PAGE);
+
+  const url = server.PREFIX + '/fetch';
+  server.setRoute('/fetch', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify('hello'));
+  });
+
+  const okResponse = await page.evaluate(url => fetch(url, { cache: 'no-store', keepalive: true }).then(response => response.json()), url);
+  expect(okResponse).toEqual('hello');
+
+  await context.setOffline(true);
+  const offlineResponse = await page.evaluate(async url => {
+    try {
+      const response = await fetch(url, { cache: 'no-store', keepalive: true });
+      return await response.json();
+    } catch {
+      return 'error';
+    }
+  }, url);
+  expect(offlineResponse).toEqual('error');
 });
 
 it('should emulate navigator.onLine', async ({ browser, server }) => {

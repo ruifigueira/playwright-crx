@@ -194,7 +194,8 @@ for (const useIntermediateMergeReport of [false, true] as const) {
       const result = await runInlineTest({
         'a.test.js': `
           const { test, expect } = require('@playwright/test');
-          test('one', async ({}) => {
+          test('one', async ({ page }) => {
+            await page.setContent('<div>hello</div>');
             expect(1).toBe(0);
           });
         `,

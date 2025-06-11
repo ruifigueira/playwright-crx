@@ -424,6 +424,7 @@ it('should return undefined for non-serializable objects', async ({ page }) => {
 it('should throw for too deep reference chain', {
   annotation: { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/33997' }
 }, async ({ page, browserName }) => {
+  it.fixme(browserName === 'firefox', 'Firefox Juggler -> Playwright serialiser does not throw for deep references.\nThis causes large objects to get serialised back to the Playwright client.\nThere our validators throw \'Maximum call stack size exceeded\'.');
   await expect(page.evaluate(depth => {
     const obj = {};
     let temp = obj;
@@ -432,9 +433,7 @@ it('should throw for too deep reference chain', {
       temp = temp[i];
     }
     return obj;
-  }, 1000)).rejects.toThrow(browserName === 'firefox'
-    ? 'Maximum call stack size exceeded'
-    : 'Cannot serialize result: object reference chain is too long.');
+  }, 1000)).rejects.toThrow('Cannot serialize result: object reference chain is too long.');
 });
 
 it('should throw usable message for unserializable shallow function', async ({ page }) => {
@@ -851,34 +850,11 @@ it('should work with Array.from/map', async ({ page }) => {
   })).toBe('([a-f0-9]{2})([a-f0-9]{2})([a-f0-9]{2})');
 });
 
-it('should work with overridden eval', {
-  annotation: { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/34628' },
-}, async ({ page, server }) => {
-  server.setRoute('/page', (req, res) => {
-    res.setHeader('Content-Type', 'text/html');
-    res.end(`
-      <script>
-        window.eval = () => 42;
-      </script>
-    `);
-  });
-  await page.goto(server.PREFIX + '/page');
-  expect(await page.evaluate(x => ({ value: 2 * x }), 17)).toEqual({ value: 34 });
-});
-
-it('should work with deleted Map', {
-  annotation: { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/34443' },
-}, async ({ page, server }) => {
-  it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/34443' });
-
-  server.setRoute('/page', (req, res) => {
-    res.setHeader('Content-Type', 'text/html');
-    res.end(`
-      <script>
-        delete window.Map;
-      </script>
-    `);
-  });
-  await page.goto(server.PREFIX + '/page');
-  expect(await page.evaluate(x => ({ value: 2 * x }), 17)).toEqual({ value: 34 });
+it('should ignore dangerous object keys', async ({ page }) => {
+  const input = {
+    __proto__: { polluted: true },
+    safeKey: 'safeValue'
+  };
+  const result = await page.evaluate(arg => arg, input);
+  expect(result).toEqual({ safeKey: 'safeValue' });
 });

@@ -435,6 +435,27 @@ for (const useIntermediateMergeReport of [true, false] as const) {
       await expect(page.locator('div').filter({ hasText: /^Tracestrace$/ }).getByRole('link').first()).toHaveAttribute('href', /trace=(https:\/\/some-url\.com\/)[^/\s]+?\.[^/\s]+/);
     });
 
+    test('should display title if provided', async ({ runInlineTest, page, showReport }, testInfo) => {
+      const result = await runInlineTest({
+        'playwright.config.ts': `
+          module.exports = {
+            reporter: [['html', { title: 'Custom report title' }], ['line']]
+          };
+        `,
+        'a.test.js': `
+          import { test, expect } from '@playwright/test';
+          test('passes', async ({ page }) => {
+            await page.evaluate('2 + 2');
+          });
+        `
+      }, {}, { PLAYWRIGHT_HTML_OPEN: 'never' });
+      expect(result.exitCode).toBe(0);
+      expect(result.passed).toBe(1);
+
+      await showReport();
+      await expect(page.locator('.header-title')).toHaveText('Custom report title');
+    });
+
     test('should include stdio', async ({ runInlineTest, page, showReport }) => {
       const result = await runInlineTest({
         'a.test.js': `
@@ -496,7 +517,7 @@ for (const useIntermediateMergeReport of [true, false] as const) {
       await showReport();
       await page.getByRole('link', { name: 'passes' }).click();
       await page.click('img');
-      await page.click('.action-title >> text=page.evaluate');
+      await page.click('.action-title >> text=EVALUATE');
       await page.click('text=Source');
 
       await expect(page.locator('.CodeMirror-line')).toContainText([
@@ -529,7 +550,7 @@ for (const useIntermediateMergeReport of [true, false] as const) {
       await showReport();
       await page.getByRole('link', { name: 'passes' }).click();
       await page.click('img');
-      await page.click('.action-title >> text=page.evaluate');
+      await page.click('.action-title >> text=EVALUATE');
       await page.click('text=Source');
 
       await expect(page.locator('.CodeMirror-line')).toContainText([
@@ -587,11 +608,11 @@ for (const useIntermediateMergeReport of [true, false] as const) {
       await expect(page.locator('a', { hasText: 'trace' })).toHaveText(['trace']);
 
       await page.click('img');
-      await page.click('.action-title >> text=page.evaluate');
+      await page.click('.action-title >> text=EVALUATE');
       await page.click('text=Source');
       await expect(page.locator('.source-line-running')).toContainText('page.evaluate');
 
-      await page.click('.action-title >> text=apiRequestContext.get');
+      await page.click('.action-title >> text=FETCH');
       await page.click('text=Source');
       await expect(page.locator('.source-line-running')).toContainText('request.get');
     });
@@ -622,10 +643,10 @@ for (const useIntermediateMergeReport of [true, false] as const) {
       await page.getByRole('link', { name: 'View Trace' }).click();
 
       // Trace viewer should not hang here when displaying parallal requests.
-      await expect(page.getByTestId('actions-tree')).toContainText('apiRequestContext.get');
-      await page.getByText('apiRequestContext.get').nth(2).click();
-      await page.getByText('apiRequestContext.get').nth(1).click();
-      await page.getByText('apiRequestContext.get').nth(0).click();
+      await expect(page.getByTestId('actions-tree')).toContainText('Fetch');
+      await page.getByText('Fetch').nth(2).click();
+      await page.getByText('Fetch').nth(1).click();
+      await page.getByText('Fetch').nth(0).click();
     });
 
     test('should warn user when viewing via file:// protocol', async ({ runInlineTest, page, showReport }, testInfo) => {
@@ -707,7 +728,7 @@ for (const useIntermediateMergeReport of [true, false] as const) {
       await page.click('.tree-item:has-text("outer error") >> text=outer error');
       await page.click('.tree-item:has-text("outer error") >> .tree-item >> text=inner error');
       await expect(page.locator('.tree-item:has-text("outer error") svg.color-text-danger')).toHaveCount(3);
-      await expect(page.locator('.tree-item:has-text("expect.soft.toBe"):not(:has-text("inner"))')).toBeVisible();
+      await expect(page.locator('.tree-item:has-text("toBe"):not(:has-text("inner"))')).toBeVisible();
 
       await page.click('text=outer step');
       await expect(page.locator('.tree-item:has-text("outer step") svg.color-text-danger')).toHaveCount(2);
@@ -750,7 +771,7 @@ for (const useIntermediateMergeReport of [true, false] as const) {
       await showReport();
       await page.getByRole('link', { name: 'example' }).click();
       await page.click('text=step title');
-      await page.click('text=expect.toBe');
+      await page.click('text=Expect "toBe"');
       await expect(page.getByTestId('test-snippet')).toContainText([
         `await test.step('step title', async () => {`,
         'expect(1).toBe(1);',
@@ -784,7 +805,7 @@ for (const useIntermediateMergeReport of [true, false] as const) {
       await expect(page.getByTestId('test-snippet')).toContainText(`await test.step.skip('skipped step title', async () => {`);
     });
 
-    test('step title should inlclude skipped step description', async ({ runInlineTest, page, showReport }) => {
+    test('step title should include skipped step description', async ({ runInlineTest, page, showReport }) => {
       const result = await runInlineTest({
         'playwright.config.js': `
           export default { testDir: './tests' };
@@ -1194,8 +1215,8 @@ for (const useIntermediateMergeReport of [true, false] as const) {
 
       await page.locator('text=sample').first().click();
       await expect(page.locator('.tree-item-title')).toContainText([
-        /expect\.toBe.*10/,
-        /expect\.toEqual.*20/,
+        /Expect "toBe".*10/,
+        /Expect "toEqual".*20/,
       ]);
     });
 
@@ -1222,11 +1243,11 @@ for (const useIntermediateMergeReport of [true, false] as const) {
       await showReport();
       await page.getByRole('link', { name: 'sample' }).click();
       await page.getByText('Before Hooks').click();
-      await expect(page.getByText('fixture: custom fixture name')).toBeVisible();
+      await expect(page.getByText('Fixture "custom fixture name"')).toBeVisible();
       await expect(page.locator('.tree-item-title')).toHaveText([
         /Before Hooks/,
-        /fixture: custom fixture/,
-        /fixture: fixture2/,
+        /Fixture "custom fixture name"/,
+        /Fixture "fixture2"/,
         /After Hooks/,
       ]);
     });
@@ -1245,7 +1266,7 @@ for (const useIntermediateMergeReport of [true, false] as const) {
       await expect(page.locator('text=a.spec.js')).toBeVisible();
       await page.locator('text=sample').first().click();
       await expect(page.locator('.tree-item-title')).toContainText([
-        /expect\.toBe/,
+        /Expect "toBe"/,
       ]);
     });
 
@@ -1819,7 +1840,7 @@ for (const useIntermediateMergeReport of [true, false] as const) {
 
           const testTitle = page.locator('.test-file-test .test-file-title', { hasText: `${tag} passes` });
           await testTitle.click();
-          await expect(page.locator('.test-case-title', { hasText: `${tag} passes` })).toBeVisible();
+          await expect(page.locator('.header-title', { hasText: `${tag} passes` })).toBeVisible();
           await expect(page.locator('.label', { hasText: tag })).toBeVisible();
 
           await page.goBack();
@@ -2341,7 +2362,7 @@ for (const useIntermediateMergeReport of [true, false] as const) {
         await notificationsChromiumTestCase.locator('.test-file-title').click();
         await expect(page).toHaveURL(/testId/);
         await expect(page.locator('.test-case-path')).toHaveText('Root describe › @Notifications');
-        await expect(page.locator('.test-case-title')).toHaveText('Test failed -- @call @call-details @e2e @regression #VQ458');
+        await expect(page.locator('.header-title')).toHaveText('Test failed -- @call @call-details @e2e @regression #VQ458');
         await expect(page.locator('.label')).toHaveText(['chromium', 'Notifications', 'call', 'call-details', 'e2e', 'regression']);
 
         await page.goBack();
@@ -2353,7 +2374,7 @@ for (const useIntermediateMergeReport of [true, false] as const) {
         await monitoringFirefoxTestCase.locator('.test-file-title').click();
         await expect(page).toHaveURL(/testId/);
         await expect(page.locator('.test-case-path')).toHaveText('Root describe › @Monitoring');
-        await expect(page.locator('.test-case-title')).toHaveText('Test passed -- @call @call-details @e2e @regression #VQ457');
+        await expect(page.locator('.header-title')).toHaveText('Test passed -- @call @call-details @e2e @regression #VQ457');
         await expect(page.locator('.label')).toHaveText(['firefox', 'Monitoring', 'call', 'call-details', 'e2e', 'regression']);
       });
     });
@@ -2890,27 +2911,12 @@ for (const useIntermediateMergeReport of [true, false] as const) {
 
       await page.getByRole('link', { name: 'sample' }).click();
       await page.getByRole('button', { name: 'Copy prompt' }).click();
+      await page.waitForFunction(() => navigator.clipboard.readText());
       const prompt = await page.evaluate(() => navigator.clipboard.readText());
       expect(prompt, 'first line').toContain(`Playwright test failed.`);
       expect(prompt, 'contains error').toContain('expect(received).toBe(expected)');
       expect(prompt, 'contains snapshot').toContain('- button "Click me"');
       expect(prompt, 'contains diff').toContain(`+            expect(2).toBe(3);`);
-    });
-
-    test('should not show prompt for empty timeout error', async ({ runInlineTest, showReport, page }) => {
-      const result = await runInlineTest({
-        'example.spec.ts': `
-          import { test, expect } from '@playwright/test';
-          test('sample', async ({ page }) => {
-            test.setTimeout(2000);
-            await page.setChecked('input', true);
-          });
-        `,
-      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
-      expect(result.exitCode).toBe(1);
-      await showReport();
-      await page.getByRole('link', { name: 'sample' }).click();
-      await expect(page.getByRole('button', { name: 'Copy prompt' })).toHaveCount(1);
     });
 
     test('should include snapshot when page wasnt closed', async ({ runInlineTest, showReport, page }) => {
@@ -2930,8 +2936,28 @@ for (const useIntermediateMergeReport of [true, false] as const) {
       await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
       await page.getByRole('link', { name: 'sample' }).click();
       await page.getByRole('button', { name: 'Copy prompt' }).click();
+      await page.waitForFunction(() => navigator.clipboard.readText());
       const prompt = await page.evaluate(() => navigator.clipboard.readText());
       expect(prompt, 'contains snapshot').toContain('- button "Click me"');
+    });
+
+    test('should render locator description', async ({ runInlineTest, showReport, page }) => {
+      const result = await runInlineTest({
+        'example.spec.ts': `
+          import { test, expect } from '@playwright/test';
+          test('sample', async ({ browser }) => {
+            const page = await browser.newPage();
+            await page.setContent('<button>Click me</button>');
+            await page.locator('button').describe('Click me').click();
+          });
+        `,
+      }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
+      expect(result.exitCode).toBe(0);
+      await showReport();
+      await page.getByRole('link', { name: 'sample' }).click();
+      await expect(page.locator('body')).toMatchAriaSnapshot(`
+        - treeitem "Click Click me"
+      `);
     });
   });
 }

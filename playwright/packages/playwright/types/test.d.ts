@@ -18,15 +18,21 @@
 import type { APIRequestContext, Browser, BrowserContext, BrowserContextOptions, Page, LaunchOptions, ViewportSize, Geolocation, HTTPCredentials, Locator, APIResponse, PageScreenshotOptions } from 'playwright-core';
 export * from 'playwright-core';
 
+export type BlobReporterOptions = { outputDir?: string, fileName?: string };
+export type ListReporterOptions = { printSteps?: boolean };
+export type JUnitReporterOptions = { outputFile?: string, stripANSIControlSequences?: boolean, includeProjectInTestName?: boolean };
+export type JsonReporterOptions = { outputFile?: string };
+export type HtmlReporterOptions = { outputFolder?: string, open?: 'always' | 'never' | 'on-failure', host?: string, port?: number, attachmentsBaseURL?: string, title?: string };
+
 export type ReporterDescription = Readonly<
-  ['blob'] | ['blob', { outputDir?: string, fileName?: string }] |
+  ['blob'] | ['blob', BlobReporterOptions] |
   ['dot'] |
   ['line'] |
-  ['list'] | ['list', { printSteps?: boolean }] |
+  ['list'] | ['list', ListReporterOptions] |
   ['github'] |
-  ['junit'] | ['junit', { outputFile?: string, stripANSIControlSequences?: boolean, includeProjectInTestName?: boolean }] |
-  ['json'] | ['json', { outputFile?: string }] |
-  ['html'] | ['html', { outputFolder?: string, open?: 'always' | 'never' | 'on-failure', host?: string, port?: number, attachmentsBaseURL?: string }] |
+  ['junit'] | ['junit', JUnitReporterOptions] |
+  ['json'] | ['json', JsonReporterOptions] |
+  ['html'] | ['html', HtmlReporterOptions] |
   ['null'] |
   [string] | [string, any]
 >;
@@ -419,7 +425,7 @@ interface TestProject<TestArgs = {}, WorkerArgs = {}> {
    *
    * The directory for each test can be accessed by
    * [testInfo.snapshotDir](https://playwright.dev/docs/api/class-testinfo#test-info-snapshot-dir) and
-   * [testInfo.snapshotPath(...pathSegments)](https://playwright.dev/docs/api/class-testinfo#test-info-snapshot-path).
+   * [testInfo.snapshotPath(...name[, options])](https://playwright.dev/docs/api/class-testinfo#test-info-snapshot-path).
    *
    * This path will serve as the base directory for each test file snapshot directory. Setting `snapshotDir` to
    * `'snapshots'`, the [testInfo.snapshotDir](https://playwright.dev/docs/api/class-testinfo#test-info-snapshot-dir)
@@ -1621,7 +1627,7 @@ interface TestConfig<TestArgs = {}, WorkerArgs = {}> {
    *
    * The directory for each test can be accessed by
    * [testInfo.snapshotDir](https://playwright.dev/docs/api/class-testinfo#test-info-snapshot-dir) and
-   * [testInfo.snapshotPath(...pathSegments)](https://playwright.dev/docs/api/class-testinfo#test-info-snapshot-path).
+   * [testInfo.snapshotPath(...name[, options])](https://playwright.dev/docs/api/class-testinfo#test-info-snapshot-path).
    *
    * This path will serve as the base directory for each test file snapshot directory. Setting `snapshotDir` to
    * `'snapshots'`, the [testInfo.snapshotDir](https://playwright.dev/docs/api/class-testinfo#test-info-snapshot-dir)
@@ -2042,12 +2048,534 @@ export interface FullConfig<TestArgs = {}, WorkerArgs = {}> {
   workers: number;
 }
 
+/**
+ * `TestInfo` contains information about currently running test. It is available to test functions,
+ * [test.beforeEach([title, hookFunction])](https://playwright.dev/docs/api/class-test#test-before-each),
+ * [test.afterEach([title, hookFunction])](https://playwright.dev/docs/api/class-test#test-after-each),
+ * [test.beforeAll([title, hookFunction])](https://playwright.dev/docs/api/class-test#test-before-all) and
+ * [test.afterAll([title, hookFunction])](https://playwright.dev/docs/api/class-test#test-after-all) hooks, and
+ * test-scoped fixtures. `TestInfo` provides utilities to control test execution: attach files, update test timeout,
+ * determine which test is currently running and whether it was retried, etc.
+ *
+ * ```js
+ * import { test, expect } from '@playwright/test';
+ *
+ * test('basic test', async ({ page }, testInfo) => {
+ *   expect(testInfo.title).toBe('basic test');
+ *   await page.screenshot(testInfo.outputPath('screenshot.png'));
+ * });
+ * ```
+ *
+ */
+export interface TestInfo {
+  /**
+   * Returns a path to a snapshot file with the given `name`. Pass
+   * [`kind`](https://playwright.dev/docs/api/class-testinfo#test-info-snapshot-path-option-kind) to obtain a specific
+   * path:
+   * - `kind: 'screenshot'` for
+   *   [expect(page).toHaveScreenshot(name[, options])](https://playwright.dev/docs/api/class-pageassertions#page-assertions-to-have-screenshot-1);
+   * - `kind: 'aria'` for
+   *   [expect(locator).toMatchAriaSnapshot(expected[, options])](https://playwright.dev/docs/api/class-locatorassertions#locator-assertions-to-match-aria-snapshot);
+   * - `kind: 'snapshot'` for
+   *   [expect(value).toMatchSnapshot(name[, options])](https://playwright.dev/docs/api/class-snapshotassertions#snapshot-assertions-to-match-snapshot-1).
+   *
+   * **Usage**
+   *
+   * ```js
+   * await expect(page).toHaveScreenshot('header.png');
+   * // Screenshot assertion above expects screenshot at this path:
+   * const screenshotPath = test.info().snapshotPath('header.png', { kind: 'screenshot' });
+   *
+   * await expect(page.getByRole('main')).toMatchAriaSnapshot({ name: 'main.aria.yml' });
+   * // Aria snapshot assertion above expects snapshot at this path:
+   * const ariaSnapshotPath = test.info().snapshotPath('main.aria.yml', { kind: 'aria' });
+   *
+   * expect('some text').toMatchSnapshot('snapshot.txt');
+   * // Snapshot assertion above expects snapshot at this path:
+   * const snapshotPath = test.info().snapshotPath('snapshot.txt');
+   *
+   * expect('some text').toMatchSnapshot(['dir', 'subdir', 'snapshot.txt']);
+   * // Snapshot assertion above expects snapshot at this path:
+   * const nestedPath = test.info().snapshotPath('dir', 'subdir', 'snapshot.txt');
+   * ```
+   *
+   * @param name The name of the snapshot or the path segments to define the snapshot file path. Snapshots with the same name in the
+   * same test file are expected to be the same.
+   *
+   * When passing [`kind`](https://playwright.dev/docs/api/class-testinfo#test-info-snapshot-path-option-kind), multiple
+   * name segments are not supported.
+   * @param options
+   */
+  snapshotPath(...name: ReadonlyArray<string>): string;
+  /**
+   * Returns a path to a snapshot file with the given `name`. Pass
+   * [`kind`](https://playwright.dev/docs/api/class-testinfo#test-info-snapshot-path-option-kind) to obtain a specific
+   * path:
+   * - `kind: 'screenshot'` for
+   *   [expect(page).toHaveScreenshot(name[, options])](https://playwright.dev/docs/api/class-pageassertions#page-assertions-to-have-screenshot-1);
+   * - `kind: 'aria'` for
+   *   [expect(locator).toMatchAriaSnapshot(expected[, options])](https://playwright.dev/docs/api/class-locatorassertions#locator-assertions-to-match-aria-snapshot);
+   * - `kind: 'snapshot'` for
+   *   [expect(value).toMatchSnapshot(name[, options])](https://playwright.dev/docs/api/class-snapshotassertions#snapshot-assertions-to-match-snapshot-1).
+   *
+   * **Usage**
+   *
+   * ```js
+   * await expect(page).toHaveScreenshot('header.png');
+   * // Screenshot assertion above expects screenshot at this path:
+   * const screenshotPath = test.info().snapshotPath('header.png', { kind: 'screenshot' });
+   *
+   * await expect(page.getByRole('main')).toMatchAriaSnapshot({ name: 'main.aria.yml' });
+   * // Aria snapshot assertion above expects snapshot at this path:
+   * const ariaSnapshotPath = test.info().snapshotPath('main.aria.yml', { kind: 'aria' });
+   *
+   * expect('some text').toMatchSnapshot('snapshot.txt');
+   * // Snapshot assertion above expects snapshot at this path:
+   * const snapshotPath = test.info().snapshotPath('snapshot.txt');
+   *
+   * expect('some text').toMatchSnapshot(['dir', 'subdir', 'snapshot.txt']);
+   * // Snapshot assertion above expects snapshot at this path:
+   * const nestedPath = test.info().snapshotPath('dir', 'subdir', 'snapshot.txt');
+   * ```
+   *
+   * @param name The name of the snapshot or the path segments to define the snapshot file path. Snapshots with the same name in the
+   * same test file are expected to be the same.
+   *
+   * When passing [`kind`](https://playwright.dev/docs/api/class-testinfo#test-info-snapshot-path-option-kind), multiple
+   * name segments are not supported.
+   * @param options
+   */
+  snapshotPath(name: string, options: { kind: 'snapshot' | 'screenshot' | 'aria' }): string;
+  /**
+   * Attach a value or a file from disk to the current test. Some reporters show test attachments. Either
+   * [`path`](https://playwright.dev/docs/api/class-testinfo#test-info-attach-option-path) or
+   * [`body`](https://playwright.dev/docs/api/class-testinfo#test-info-attach-option-body) must be specified, but not
+   * both.
+   *
+   * For example, you can attach a screenshot to the test:
+   *
+   * ```js
+   * import { test, expect } from '@playwright/test';
+   *
+   * test('basic test', async ({ page }, testInfo) => {
+   *   await page.goto('https://playwright.dev');
+   *   const screenshot = await page.screenshot();
+   *   await testInfo.attach('screenshot', { body: screenshot, contentType: 'image/png' });
+   * });
+   * ```
+   *
+   * Or you can attach files returned by your APIs:
+   *
+   * ```js
+   * import { test, expect } from '@playwright/test';
+   * import { download } from './my-custom-helpers';
+   *
+   * test('basic test', async ({}, testInfo) => {
+   *   const tmpPath = await download('a');
+   *   await testInfo.attach('downloaded', { path: tmpPath });
+   * });
+   * ```
+   *
+   * **NOTE** [testInfo.attach(name[, options])](https://playwright.dev/docs/api/class-testinfo#test-info-attach)
+   * automatically takes care of copying attached files to a location that is accessible to reporters. You can safely
+   * remove the attachment after awaiting the attach call.
+   *
+   * @param name Attachment name. The name will also be sanitized and used as the prefix of file name when saving to disk.
+   * @param options
+   */
+  attach(name: string, options?: {
+    /**
+     * Attachment body. Mutually exclusive with
+     * [`path`](https://playwright.dev/docs/api/class-testinfo#test-info-attach-option-path).
+     */
+    body?: string|Buffer;
+
+    /**
+     * Content type of this attachment to properly present in the report, for example `'application/json'` or
+     * `'image/png'`. If omitted, content type is inferred based on the
+     * [`path`](https://playwright.dev/docs/api/class-testinfo#test-info-attach-option-path), or defaults to `text/plain`
+     * for [string] attachments and `application/octet-stream` for [Buffer] attachments.
+     */
+    contentType?: string;
+
+    /**
+     * Path on the filesystem to the attached file. Mutually exclusive with
+     * [`body`](https://playwright.dev/docs/api/class-testinfo#test-info-attach-option-body).
+     */
+    path?: string;
+  }): Promise<void>;
+
+  /**
+   * Marks the currently running test as "should fail". Playwright Test runs this test and ensures that it is actually
+   * failing. This is useful for documentation purposes to acknowledge that some functionality is broken until it is
+   * fixed. This is similar to
+   * [test.fail([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-fail).
+   */
+  fail(): void;
+
+  /**
+   * Conditionally mark the currently running test as "should fail" with an optional description. This is similar to
+   * [test.fail([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-fail).
+   * @param condition Test is marked as "should fail" when the condition is `true`.
+   * @param description Optional description that will be reflected in a test report.
+   */
+  fail(condition: boolean, description?: string): void;
+
+  /**
+   * Mark a test as "fixme", with the intention to fix it. Test is immediately aborted. This is similar to
+   * [test.fixme([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-fixme).
+   */
+  fixme(): void;
+
+  /**
+   * Conditionally mark the currently running test as "fixme" with an optional description. This is similar to
+   * [test.fixme([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-fixme).
+   * @param condition Test is marked as "fixme" when the condition is `true`.
+   * @param description Optional description that will be reflected in a test report.
+   */
+  fixme(condition: boolean, description?: string): void;
+
+  /**
+   * Returns a path inside the [testInfo.outputDir](https://playwright.dev/docs/api/class-testinfo#test-info-output-dir)
+   * where the test can safely put a temporary file. Guarantees that tests running in parallel will not interfere with
+   * each other.
+   *
+   * ```js
+   * import { test, expect } from '@playwright/test';
+   * import fs from 'fs';
+   *
+   * test('example test', async ({}, testInfo) => {
+   *   const file = testInfo.outputPath('dir', 'temporary-file.txt');
+   *   await fs.promises.writeFile(file, 'Put some data to the dir/temporary-file.txt', 'utf8');
+   * });
+   * ```
+   *
+   * > Note that `pathSegments` accepts path segments to the test output directory such as
+   * `testInfo.outputPath('relative', 'path', 'to', 'output')`.
+   * > However, this path must stay within the
+   * [testInfo.outputDir](https://playwright.dev/docs/api/class-testinfo#test-info-output-dir) directory for each test
+   * (i.e. `test-results/a-test-title`), otherwise it will throw.
+   * @param pathSegments Path segments to append at the end of the resulting path.
+   */
+  outputPath(...pathSegments: ReadonlyArray<string>): string;
+
+  /**
+   * Changes the timeout for the currently running test. Zero means no timeout. Learn more about
+   * [various timeouts](https://playwright.dev/docs/test-timeouts).
+   *
+   * Timeout is usually specified in the [configuration file](https://playwright.dev/docs/test-configuration), but it could be useful to
+   * change the timeout in certain scenarios:
+   *
+   * ```js
+   * import { test, expect } from '@playwright/test';
+   *
+   * test.beforeEach(async ({ page }, testInfo) => {
+   *   // Extend timeout for all tests running this hook by 30 seconds.
+   *   testInfo.setTimeout(testInfo.timeout + 30000);
+   * });
+   * ```
+   *
+   * @param timeout Timeout in milliseconds.
+   */
+  setTimeout(timeout: number): void;
+
+  /**
+   * Unconditionally skip the currently running test. Test is immediately aborted. This is similar to
+   * [test.skip([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-skip).
+   */
+  skip(): void;
+
+  /**
+   * Conditionally skips the currently running test with an optional description. This is similar to
+   * [test.skip([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-skip).
+   * @param condition A skip condition. Test is skipped when the condition is `true`.
+   * @param description Optional description that will be reflected in a test report.
+   */
+  skip(condition: boolean, description?: string): void;
+
+  /**
+   * Marks the currently running test as "slow", giving it triple the default timeout. This is similar to
+   * [test.slow([condition, callback, description])](https://playwright.dev/docs/api/class-test#test-slow).
+   */
+  slow(): void;
+
+  /**
+   * Conditionally mark the currently running test as "slow" with an optional description, giving it triple the default
+   * timeout. This is similar to
+   * [test.slow([condition, callback, description])](https://playwright.dev/docs/api/class-test#test-slow).
+   * @param condition Test is marked as "slow" when the condition is `true`.
+   * @param description Optional description that will be reflected in a test report.
+   */
+  slow(condition: boolean, description?: string): void;
+
+  /**
+   * The list of annotations applicable to the current test. Includes annotations from the test, annotations from all
+   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) groups the
+   * test belongs to and file-level annotations for the test file.
+   *
+   * Learn more about [test annotations](https://playwright.dev/docs/test-annotations).
+   */
+  annotations: Array<{
+    /**
+     * Annotation type, for example `'skip'` or `'fail'`.
+     */
+    type: string;
+
+    /**
+     * Optional description.
+     */
+    description?: string;
+  }>;
+
+  /**
+   * The list of files or buffers attached to the current test. Some reporters show test attachments.
+   *
+   * To add an attachment, use
+   * [testInfo.attach(name[, options])](https://playwright.dev/docs/api/class-testinfo#test-info-attach) instead of
+   * directly pushing onto this array.
+   */
+  attachments: Array<{
+    /**
+     * Attachment name.
+     */
+    name: string;
+
+    /**
+     * Content type of this attachment to properly present in the report, for example `'application/json'` or
+     * `'image/png'`.
+     */
+    contentType: string;
+
+    /**
+     * Optional path on the filesystem to the attached file.
+     */
+    path?: string;
+
+    /**
+     * Optional attachment body used instead of a file.
+     */
+    body?: Buffer;
+  }>;
+
+  /**
+   * Column number where the currently running test is declared.
+   */
+  column: number;
+
+  /**
+   * Processed configuration from the [configuration file](https://playwright.dev/docs/test-configuration).
+   */
+  config: FullConfig;
+
+  /**
+   * The number of milliseconds the test took to finish. Always zero before the test finishes, either successfully or
+   * not. Can be used in
+   * [test.afterEach([title, hookFunction])](https://playwright.dev/docs/api/class-test#test-after-each) hook.
+   */
+  duration: number;
+
+  /**
+   * First error thrown during test execution, if any. This is equal to the first element in
+   * [testInfo.errors](https://playwright.dev/docs/api/class-testinfo#test-info-errors).
+   */
+  error?: TestInfoError;
+
+  /**
+   * Errors thrown during test execution, if any.
+   */
+  errors: Array<TestInfoError>;
+
+  /**
+   * Expected status for the currently running test. This is usually `'passed'`, except for a few cases:
+   * - `'skipped'` for skipped tests, e.g. with
+   *   [test.skip([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-skip);
+   * - `'failed'` for tests marked as failed with
+   *   [test.fail([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-fail).
+   *
+   * Expected status is usually compared with the actual
+   * [testInfo.status](https://playwright.dev/docs/api/class-testinfo#test-info-status):
+   *
+   * ```js
+   * import { test, expect } from '@playwright/test';
+   *
+   * test.afterEach(async ({}, testInfo) => {
+   *   if (testInfo.status !== testInfo.expectedStatus)
+   *     console.log(`${testInfo.title} did not run as expected!`);
+   * });
+   * ```
+   *
+   */
+  expectedStatus: "passed"|"failed"|"timedOut"|"skipped"|"interrupted";
+
+  /**
+   * Absolute path to a file where the currently running test is declared.
+   */
+  file: string;
+
+  /**
+   * Test function as passed to `test(title, testFunction)`.
+   */
+  fn: Function;
+
+  /**
+   * Line number where the currently running test is declared.
+   */
+  line: number;
+
+  /**
+   * Absolute path to the output directory for this specific test run. Each test run gets its own directory so they
+   * cannot conflict.
+   */
+  outputDir: string;
+
+  /**
+   * The index of the worker between `0` and `workers - 1`. It is guaranteed that workers running at the same time have
+   * a different `parallelIndex`. When a worker is restarted, for example after a failure, the new worker process has
+   * the same `parallelIndex`.
+   *
+   * Also available as `process.env.TEST_PARALLEL_INDEX`. Learn more about
+   * [parallelism and sharding](https://playwright.dev/docs/test-parallel) with Playwright Test.
+   */
+  parallelIndex: number;
+
+  /**
+   * Processed project configuration from the [configuration file](https://playwright.dev/docs/test-configuration).
+   */
+  project: FullProject;
+
+  /**
+   * Specifies a unique repeat index when running in "repeat each" mode. This mode is enabled by passing `--repeat-each`
+   * to the [command line](https://playwright.dev/docs/test-cli).
+   */
+  repeatEachIndex: number;
+
+  /**
+   * Specifies the retry number when the test is retried after a failure. The first test run has
+   * [testInfo.retry](https://playwright.dev/docs/api/class-testinfo#test-info-retry) equal to zero, the first retry has
+   * it equal to one, and so on. Learn more about [retries](https://playwright.dev/docs/test-retries#retries).
+   *
+   * ```js
+   * import { test, expect } from '@playwright/test';
+   *
+   * test.beforeEach(async ({}, testInfo) => {
+   *   // You can access testInfo.retry in any hook or fixture.
+   *   if (testInfo.retry > 0)
+   *     console.log(`Retrying!`);
+   * });
+   *
+   * test('my test', async ({ page }, testInfo) => {
+   *   // Here we clear some server-side state when retrying.
+   *   if (testInfo.retry)
+   *     await cleanSomeCachesOnTheServer();
+   *   // ...
+   * });
+   * ```
+   *
+   */
+  retry: number;
+
+  /**
+   * Absolute path to the snapshot output directory for this specific test. Each test suite gets its own directory so
+   * they cannot conflict.
+   *
+   * This property does not account for the
+   * [testProject.snapshotPathTemplate](https://playwright.dev/docs/api/class-testproject#test-project-snapshot-path-template)
+   * configuration.
+   */
+  snapshotDir: string;
+
+  /**
+   * **NOTE** Use of [testInfo.snapshotSuffix](https://playwright.dev/docs/api/class-testinfo#test-info-snapshot-suffix)
+   * is discouraged. Please use
+   * [testConfig.snapshotPathTemplate](https://playwright.dev/docs/api/class-testconfig#test-config-snapshot-path-template)
+   * to configure snapshot paths.
+   *
+   * Suffix used to differentiate snapshots between multiple test configurations. For example, if snapshots depend on
+   * the platform, you can set `testInfo.snapshotSuffix` equal to `process.platform`. In this case
+   * `expect(value).toMatchSnapshot(snapshotName)` will use different snapshots depending on the platform. Learn more
+   * about [snapshots](https://playwright.dev/docs/test-snapshots).
+   */
+  snapshotSuffix: string;
+
+  /**
+   * Actual status for the currently running test. Available after the test has finished in
+   * [test.afterEach([title, hookFunction])](https://playwright.dev/docs/api/class-test#test-after-each) hook and
+   * fixtures.
+   *
+   * Status is usually compared with the
+   * [testInfo.expectedStatus](https://playwright.dev/docs/api/class-testinfo#test-info-expected-status):
+   *
+   * ```js
+   * import { test, expect } from '@playwright/test';
+   *
+   * test.afterEach(async ({}, testInfo) => {
+   *   if (testInfo.status !== testInfo.expectedStatus)
+   *     console.log(`${testInfo.title} did not run as expected!`);
+   * });
+   * ```
+   *
+   */
+  status?: "passed"|"failed"|"timedOut"|"skipped"|"interrupted";
+
+  /**
+   * Tags that apply to the test. Learn more about [tags](https://playwright.dev/docs/test-annotations#tag-tests).
+   *
+   * **NOTE** Any changes made to this list while the test is running will not be visible to test reporters.
+   *
+   */
+  tags: Array<string>;
+
+  /**
+   * Test id matching the test case id in the reporter API.
+   */
+  testId: string;
+
+  /**
+   * Timeout in milliseconds for the currently running test. Zero means no timeout. Learn more about
+   * [various timeouts](https://playwright.dev/docs/test-timeouts).
+   *
+   * Timeout is usually specified in the [configuration file](https://playwright.dev/docs/test-configuration)
+   *
+   * ```js
+   * import { test, expect } from '@playwright/test';
+   *
+   * test.beforeEach(async ({ page }, testInfo) => {
+   *   // Extend timeout for all tests running this hook by 30 seconds.
+   *   testInfo.setTimeout(testInfo.timeout + 30000);
+   * });
+   * ```
+   *
+   */
+  timeout: number;
+
+  /**
+   * The title of the currently running test as passed to `test(title, testFunction)`.
+   */
+  title: string;
+
+  /**
+   * The full title path starting with the test file name.
+   */
+  titlePath: Array<string>;
+
+  /**
+   * The unique index of the worker process that is running the test. When a worker is restarted, for example after a
+   * failure, the new worker process gets a new unique `workerIndex`.
+   *
+   * Also available as `process.env.TEST_WORKER_INDEX`. Learn more about [parallelism and sharding](https://playwright.dev/docs/test-parallel)
+   * with Playwright Test.
+   */
+  workerIndex: number;
+}
+
 export type TestStatus = 'passed' | 'failed' | 'timedOut' | 'skipped' | 'interrupted';
 
 export type TestDetailsAnnotation = {
   type: string;
   description?: string;
 };
+
+export type TestAnnotation = TestDetailsAnnotation;
 
 export type TestDetails = {
   tag?: string | string[];
@@ -2112,7 +2640,7 @@ export interface TestType<TestArgs extends {}, WorkerArgs extends {}> {
    * Test tags are displayed in the test report, and are available to a custom reporter via `TestCase.tags` property.
    *
    * You can also filter tests by their tags during test execution:
-   * - in the [command line](https://playwright.dev/docs/test-cli#reference);
+   * - in the [command line](https://playwright.dev/docs/test-cli#all-options);
    * - in the config with [testConfig.grep](https://playwright.dev/docs/api/class-testconfig#test-config-grep) and
    *   [testProject.grep](https://playwright.dev/docs/api/class-testproject#test-project-grep);
    *
@@ -2189,7 +2717,7 @@ export interface TestType<TestArgs extends {}, WorkerArgs extends {}> {
    * Test tags are displayed in the test report, and are available to a custom reporter via `TestCase.tags` property.
    *
    * You can also filter tests by their tags during test execution:
-   * - in the [command line](https://playwright.dev/docs/test-cli#reference);
+   * - in the [command line](https://playwright.dev/docs/test-cli#all-options);
    * - in the config with [testConfig.grep](https://playwright.dev/docs/api/class-testconfig#test-config-grep) and
    *   [testProject.grep](https://playwright.dev/docs/api/class-testproject#test-project-grep);
    *
@@ -2364,1233 +2892,1233 @@ export interface TestType<TestArgs extends {}, WorkerArgs extends {}> {
    */
   describe: {
     /**
-   * Declares a group of tests.
-   * - `test.describe(title, callback)`
-   * - `test.describe(callback)`
-   * - `test.describe(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * You can declare a group of tests with a title. The title will be visible in the test report as a part of each
-   * test's title.
-   *
-   * ```js
-   * test.describe('two tests', () => {
-   *   test('one', async ({ page }) => {
-   *     // ...
-   *   });
-   *
-   *   test('two', async ({ page }) => {
-   *     // ...
-   *   });
-   * });
-   * ```
-   *
-   * **Anonymous group**
-   *
-   * You can also declare a test group without a title. This is convenient to give a group of tests a common option with
-   * [test.use(options)](https://playwright.dev/docs/api/class-test#test-use).
-   *
-   * ```js
-   * test.describe(() => {
-   *   test.use({ colorScheme: 'dark' });
-   *
-   *   test('one', async ({ page }) => {
-   *     // ...
-   *   });
-   *
-   *   test('two', async ({ page }) => {
-   *     // ...
-   *   });
-   * });
-   * ```
-   *
-   * **Tags**
-   *
-   * You can tag all tests in a group by providing additional details. Note that each tag must start with `@` symbol.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.describe('two tagged tests', {
-   *   tag: '@smoke',
-   * }, () => {
-   *   test('one', async ({ page }) => {
-   *     // ...
-   *   });
-   *
-   *   test('two', async ({ page }) => {
-   *     // ...
-   *   });
-   * });
-   * ```
-   *
-   * Learn more about [tagging](https://playwright.dev/docs/test-annotations#tag-tests).
-   *
-   * **Annotations**
-   *
-   * You can annotate all tests in a group by providing additional details.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.describe('two annotated tests', {
-   *   annotation: {
-   *     type: 'issue',
-   *     description: 'https://github.com/microsoft/playwright/issues/23180',
-   *   },
-   * }, () => {
-   *   test('one', async ({ page }) => {
-   *     // ...
-   *   });
-   *
-   *   test('two', async ({ page }) => {
-   *     // ...
-   *   });
-   * });
-   * ```
-   *
-   * Learn more about [test annotations](https://playwright.dev/docs/test-annotations).
-   * @param title Group title.
-   * @param details Additional details for all tests in the group.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Any tests
-   * declared in this callback will belong to the group.
-   */
-  (title: string, callback: () => void): void;
+     * Declares a group of tests.
+     * - `test.describe(title, callback)`
+     * - `test.describe(callback)`
+     * - `test.describe(title, details, callback)`
+     *
+     * **Usage**
+     *
+     * You can declare a group of tests with a title. The title will be visible in the test report as a part of each
+     * test's title.
+     *
+     * ```js
+     * test.describe('two tests', () => {
+     *   test('one', async ({ page }) => {
+     *     // ...
+     *   });
+     *
+     *   test('two', async ({ page }) => {
+     *     // ...
+     *   });
+     * });
+     * ```
+     *
+     * **Anonymous group**
+     *
+     * You can also declare a test group without a title. This is convenient to give a group of tests a common option with
+     * [test.use(options)](https://playwright.dev/docs/api/class-test#test-use).
+     *
+     * ```js
+     * test.describe(() => {
+     *   test.use({ colorScheme: 'dark' });
+     *
+     *   test('one', async ({ page }) => {
+     *     // ...
+     *   });
+     *
+     *   test('two', async ({ page }) => {
+     *     // ...
+     *   });
+     * });
+     * ```
+     *
+     * **Tags**
+     *
+     * You can tag all tests in a group by providing additional details. Note that each tag must start with `@` symbol.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.describe('two tagged tests', {
+     *   tag: '@smoke',
+     * }, () => {
+     *   test('one', async ({ page }) => {
+     *     // ...
+     *   });
+     *
+     *   test('two', async ({ page }) => {
+     *     // ...
+     *   });
+     * });
+     * ```
+     *
+     * Learn more about [tagging](https://playwright.dev/docs/test-annotations#tag-tests).
+     *
+     * **Annotations**
+     *
+     * You can annotate all tests in a group by providing additional details.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.describe('two annotated tests', {
+     *   annotation: {
+     *     type: 'issue',
+     *     description: 'https://github.com/microsoft/playwright/issues/23180',
+     *   },
+     * }, () => {
+     *   test('one', async ({ page }) => {
+     *     // ...
+     *   });
+     *
+     *   test('two', async ({ page }) => {
+     *     // ...
+     *   });
+     * });
+     * ```
+     *
+     * Learn more about [test annotations](https://playwright.dev/docs/test-annotations).
+     * @param title Group title.
+     * @param details Additional details for all tests in the group.
+     * @param callback A callback that is run immediately when calling
+     * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Any tests
+     * declared in this callback will belong to the group.
+     */
+    (title: string, callback: () => void): void;
     /**
-   * Declares a group of tests.
-   * - `test.describe(title, callback)`
-   * - `test.describe(callback)`
-   * - `test.describe(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * You can declare a group of tests with a title. The title will be visible in the test report as a part of each
-   * test's title.
-   *
-   * ```js
-   * test.describe('two tests', () => {
-   *   test('one', async ({ page }) => {
-   *     // ...
-   *   });
-   *
-   *   test('two', async ({ page }) => {
-   *     // ...
-   *   });
-   * });
-   * ```
-   *
-   * **Anonymous group**
-   *
-   * You can also declare a test group without a title. This is convenient to give a group of tests a common option with
-   * [test.use(options)](https://playwright.dev/docs/api/class-test#test-use).
-   *
-   * ```js
-   * test.describe(() => {
-   *   test.use({ colorScheme: 'dark' });
-   *
-   *   test('one', async ({ page }) => {
-   *     // ...
-   *   });
-   *
-   *   test('two', async ({ page }) => {
-   *     // ...
-   *   });
-   * });
-   * ```
-   *
-   * **Tags**
-   *
-   * You can tag all tests in a group by providing additional details. Note that each tag must start with `@` symbol.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.describe('two tagged tests', {
-   *   tag: '@smoke',
-   * }, () => {
-   *   test('one', async ({ page }) => {
-   *     // ...
-   *   });
-   *
-   *   test('two', async ({ page }) => {
-   *     // ...
-   *   });
-   * });
-   * ```
-   *
-   * Learn more about [tagging](https://playwright.dev/docs/test-annotations#tag-tests).
-   *
-   * **Annotations**
-   *
-   * You can annotate all tests in a group by providing additional details.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.describe('two annotated tests', {
-   *   annotation: {
-   *     type: 'issue',
-   *     description: 'https://github.com/microsoft/playwright/issues/23180',
-   *   },
-   * }, () => {
-   *   test('one', async ({ page }) => {
-   *     // ...
-   *   });
-   *
-   *   test('two', async ({ page }) => {
-   *     // ...
-   *   });
-   * });
-   * ```
-   *
-   * Learn more about [test annotations](https://playwright.dev/docs/test-annotations).
-   * @param title Group title.
-   * @param details Additional details for all tests in the group.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Any tests
-   * declared in this callback will belong to the group.
-   */
-  (callback: () => void): void;
+     * Declares a group of tests.
+     * - `test.describe(title, callback)`
+     * - `test.describe(callback)`
+     * - `test.describe(title, details, callback)`
+     *
+     * **Usage**
+     *
+     * You can declare a group of tests with a title. The title will be visible in the test report as a part of each
+     * test's title.
+     *
+     * ```js
+     * test.describe('two tests', () => {
+     *   test('one', async ({ page }) => {
+     *     // ...
+     *   });
+     *
+     *   test('two', async ({ page }) => {
+     *     // ...
+     *   });
+     * });
+     * ```
+     *
+     * **Anonymous group**
+     *
+     * You can also declare a test group without a title. This is convenient to give a group of tests a common option with
+     * [test.use(options)](https://playwright.dev/docs/api/class-test#test-use).
+     *
+     * ```js
+     * test.describe(() => {
+     *   test.use({ colorScheme: 'dark' });
+     *
+     *   test('one', async ({ page }) => {
+     *     // ...
+     *   });
+     *
+     *   test('two', async ({ page }) => {
+     *     // ...
+     *   });
+     * });
+     * ```
+     *
+     * **Tags**
+     *
+     * You can tag all tests in a group by providing additional details. Note that each tag must start with `@` symbol.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.describe('two tagged tests', {
+     *   tag: '@smoke',
+     * }, () => {
+     *   test('one', async ({ page }) => {
+     *     // ...
+     *   });
+     *
+     *   test('two', async ({ page }) => {
+     *     // ...
+     *   });
+     * });
+     * ```
+     *
+     * Learn more about [tagging](https://playwright.dev/docs/test-annotations#tag-tests).
+     *
+     * **Annotations**
+     *
+     * You can annotate all tests in a group by providing additional details.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.describe('two annotated tests', {
+     *   annotation: {
+     *     type: 'issue',
+     *     description: 'https://github.com/microsoft/playwright/issues/23180',
+     *   },
+     * }, () => {
+     *   test('one', async ({ page }) => {
+     *     // ...
+     *   });
+     *
+     *   test('two', async ({ page }) => {
+     *     // ...
+     *   });
+     * });
+     * ```
+     *
+     * Learn more about [test annotations](https://playwright.dev/docs/test-annotations).
+     * @param title Group title.
+     * @param details Additional details for all tests in the group.
+     * @param callback A callback that is run immediately when calling
+     * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Any tests
+     * declared in this callback will belong to the group.
+     */
+    (callback: () => void): void;
     /**
-   * Declares a group of tests.
-   * - `test.describe(title, callback)`
-   * - `test.describe(callback)`
-   * - `test.describe(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * You can declare a group of tests with a title. The title will be visible in the test report as a part of each
-   * test's title.
-   *
-   * ```js
-   * test.describe('two tests', () => {
-   *   test('one', async ({ page }) => {
-   *     // ...
-   *   });
-   *
-   *   test('two', async ({ page }) => {
-   *     // ...
-   *   });
-   * });
-   * ```
-   *
-   * **Anonymous group**
-   *
-   * You can also declare a test group without a title. This is convenient to give a group of tests a common option with
-   * [test.use(options)](https://playwright.dev/docs/api/class-test#test-use).
-   *
-   * ```js
-   * test.describe(() => {
-   *   test.use({ colorScheme: 'dark' });
-   *
-   *   test('one', async ({ page }) => {
-   *     // ...
-   *   });
-   *
-   *   test('two', async ({ page }) => {
-   *     // ...
-   *   });
-   * });
-   * ```
-   *
-   * **Tags**
-   *
-   * You can tag all tests in a group by providing additional details. Note that each tag must start with `@` symbol.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.describe('two tagged tests', {
-   *   tag: '@smoke',
-   * }, () => {
-   *   test('one', async ({ page }) => {
-   *     // ...
-   *   });
-   *
-   *   test('two', async ({ page }) => {
-   *     // ...
-   *   });
-   * });
-   * ```
-   *
-   * Learn more about [tagging](https://playwright.dev/docs/test-annotations#tag-tests).
-   *
-   * **Annotations**
-   *
-   * You can annotate all tests in a group by providing additional details.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.describe('two annotated tests', {
-   *   annotation: {
-   *     type: 'issue',
-   *     description: 'https://github.com/microsoft/playwright/issues/23180',
-   *   },
-   * }, () => {
-   *   test('one', async ({ page }) => {
-   *     // ...
-   *   });
-   *
-   *   test('two', async ({ page }) => {
-   *     // ...
-   *   });
-   * });
-   * ```
-   *
-   * Learn more about [test annotations](https://playwright.dev/docs/test-annotations).
-   * @param title Group title.
-   * @param details Additional details for all tests in the group.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Any tests
-   * declared in this callback will belong to the group.
-   */
-  (title: string, details: TestDetails, callback: () => void): void;
+     * Declares a group of tests.
+     * - `test.describe(title, callback)`
+     * - `test.describe(callback)`
+     * - `test.describe(title, details, callback)`
+     *
+     * **Usage**
+     *
+     * You can declare a group of tests with a title. The title will be visible in the test report as a part of each
+     * test's title.
+     *
+     * ```js
+     * test.describe('two tests', () => {
+     *   test('one', async ({ page }) => {
+     *     // ...
+     *   });
+     *
+     *   test('two', async ({ page }) => {
+     *     // ...
+     *   });
+     * });
+     * ```
+     *
+     * **Anonymous group**
+     *
+     * You can also declare a test group without a title. This is convenient to give a group of tests a common option with
+     * [test.use(options)](https://playwright.dev/docs/api/class-test#test-use).
+     *
+     * ```js
+     * test.describe(() => {
+     *   test.use({ colorScheme: 'dark' });
+     *
+     *   test('one', async ({ page }) => {
+     *     // ...
+     *   });
+     *
+     *   test('two', async ({ page }) => {
+     *     // ...
+     *   });
+     * });
+     * ```
+     *
+     * **Tags**
+     *
+     * You can tag all tests in a group by providing additional details. Note that each tag must start with `@` symbol.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.describe('two tagged tests', {
+     *   tag: '@smoke',
+     * }, () => {
+     *   test('one', async ({ page }) => {
+     *     // ...
+     *   });
+     *
+     *   test('two', async ({ page }) => {
+     *     // ...
+     *   });
+     * });
+     * ```
+     *
+     * Learn more about [tagging](https://playwright.dev/docs/test-annotations#tag-tests).
+     *
+     * **Annotations**
+     *
+     * You can annotate all tests in a group by providing additional details.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.describe('two annotated tests', {
+     *   annotation: {
+     *     type: 'issue',
+     *     description: 'https://github.com/microsoft/playwright/issues/23180',
+     *   },
+     * }, () => {
+     *   test('one', async ({ page }) => {
+     *     // ...
+     *   });
+     *
+     *   test('two', async ({ page }) => {
+     *     // ...
+     *   });
+     * });
+     * ```
+     *
+     * Learn more about [test annotations](https://playwright.dev/docs/test-annotations).
+     * @param title Group title.
+     * @param details Additional details for all tests in the group.
+     * @param callback A callback that is run immediately when calling
+     * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Any tests
+     * declared in this callback will belong to the group.
+     */
+    (title: string, details: TestDetails, callback: () => void): void;
 
     /**
-   * Declares a focused group of tests. If there are some focused tests or suites, all of them will be run but nothing
-   * else.
-   * - `test.describe.only(title, callback)`
-   * - `test.describe.only(callback)`
-   * - `test.describe.only(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.only('focused group', () => {
-   *   test('in the focused group', async ({ page }) => {
-   *     // This test will run
-   *   });
-   * });
-   * test('not in the focused group', async ({ page }) => {
-   *   // This test will not run
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.only(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.only([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-only).
-   * Any tests added in this callback will belong to the group.
-   */
-  only(title: string, callback: () => void): void;
+     * Declares a focused group of tests. If there are some focused tests or suites, all of them will be run but nothing
+     * else.
+     * - `test.describe.only(title, callback)`
+     * - `test.describe.only(callback)`
+     * - `test.describe.only(title, details, callback)`
+     *
+     * **Usage**
+     *
+     * ```js
+     * test.describe.only('focused group', () => {
+     *   test('in the focused group', async ({ page }) => {
+     *     // This test will run
+     *   });
+     * });
+     * test('not in the focused group', async ({ page }) => {
+     *   // This test will not run
+     * });
+     * ```
+     *
+     * You can also omit the title.
+     *
+     * ```js
+     * test.describe.only(() => {
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Group title.
+     * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+     * details description.
+     * @param callback A callback that is run immediately when calling
+     * [test.describe.only([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-only).
+     * Any tests added in this callback will belong to the group.
+     */
+    only(title: string, callback: () => void): void;
     /**
-   * Declares a focused group of tests. If there are some focused tests or suites, all of them will be run but nothing
-   * else.
-   * - `test.describe.only(title, callback)`
-   * - `test.describe.only(callback)`
-   * - `test.describe.only(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.only('focused group', () => {
-   *   test('in the focused group', async ({ page }) => {
-   *     // This test will run
-   *   });
-   * });
-   * test('not in the focused group', async ({ page }) => {
-   *   // This test will not run
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.only(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.only([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-only).
-   * Any tests added in this callback will belong to the group.
-   */
-  only(callback: () => void): void;
+     * Declares a focused group of tests. If there are some focused tests or suites, all of them will be run but nothing
+     * else.
+     * - `test.describe.only(title, callback)`
+     * - `test.describe.only(callback)`
+     * - `test.describe.only(title, details, callback)`
+     *
+     * **Usage**
+     *
+     * ```js
+     * test.describe.only('focused group', () => {
+     *   test('in the focused group', async ({ page }) => {
+     *     // This test will run
+     *   });
+     * });
+     * test('not in the focused group', async ({ page }) => {
+     *   // This test will not run
+     * });
+     * ```
+     *
+     * You can also omit the title.
+     *
+     * ```js
+     * test.describe.only(() => {
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Group title.
+     * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+     * details description.
+     * @param callback A callback that is run immediately when calling
+     * [test.describe.only([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-only).
+     * Any tests added in this callback will belong to the group.
+     */
+    only(callback: () => void): void;
     /**
-   * Declares a focused group of tests. If there are some focused tests or suites, all of them will be run but nothing
-   * else.
-   * - `test.describe.only(title, callback)`
-   * - `test.describe.only(callback)`
-   * - `test.describe.only(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.only('focused group', () => {
-   *   test('in the focused group', async ({ page }) => {
-   *     // This test will run
-   *   });
-   * });
-   * test('not in the focused group', async ({ page }) => {
-   *   // This test will not run
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.only(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.only([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-only).
-   * Any tests added in this callback will belong to the group.
-   */
-  only(title: string, details: TestDetails, callback: () => void): void;
+     * Declares a focused group of tests. If there are some focused tests or suites, all of them will be run but nothing
+     * else.
+     * - `test.describe.only(title, callback)`
+     * - `test.describe.only(callback)`
+     * - `test.describe.only(title, details, callback)`
+     *
+     * **Usage**
+     *
+     * ```js
+     * test.describe.only('focused group', () => {
+     *   test('in the focused group', async ({ page }) => {
+     *     // This test will run
+     *   });
+     * });
+     * test('not in the focused group', async ({ page }) => {
+     *   // This test will not run
+     * });
+     * ```
+     *
+     * You can also omit the title.
+     *
+     * ```js
+     * test.describe.only(() => {
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Group title.
+     * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+     * details description.
+     * @param callback A callback that is run immediately when calling
+     * [test.describe.only([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-only).
+     * Any tests added in this callback will belong to the group.
+     */
+    only(title: string, details: TestDetails, callback: () => void): void;
 
     /**
-   * Declares a skipped test group, similarly to
-   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Tests in the
-   * skipped group are never run.
-   * - `test.describe.skip(title, callback)`
-   * - `test.describe.skip(title)`
-   * - `test.describe.skip(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.skip('skipped group', () => {
-   *   test('example', async ({ page }) => {
-   *     // This test will not run
-   *   });
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.skip(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.skip(title[, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-skip).
-   * Any tests added in this callback will belong to the group, and will not be run.
-   */
-  skip(title: string, callback: () => void): void;
+     * Declares a skipped test group, similarly to
+     * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Tests in the
+     * skipped group are never run.
+     * - `test.describe.skip(title, callback)`
+     * - `test.describe.skip(title)`
+     * - `test.describe.skip(title, details, callback)`
+     *
+     * **Usage**
+     *
+     * ```js
+     * test.describe.skip('skipped group', () => {
+     *   test('example', async ({ page }) => {
+     *     // This test will not run
+     *   });
+     * });
+     * ```
+     *
+     * You can also omit the title.
+     *
+     * ```js
+     * test.describe.skip(() => {
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Group title.
+     * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+     * details description.
+     * @param callback A callback that is run immediately when calling
+     * [test.describe.skip(title[, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-skip).
+     * Any tests added in this callback will belong to the group, and will not be run.
+     */
+    skip(title: string, callback: () => void): void;
     /**
-   * Declares a skipped test group, similarly to
-   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Tests in the
-   * skipped group are never run.
-   * - `test.describe.skip(title, callback)`
-   * - `test.describe.skip(title)`
-   * - `test.describe.skip(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.skip('skipped group', () => {
-   *   test('example', async ({ page }) => {
-   *     // This test will not run
-   *   });
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.skip(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.skip(title[, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-skip).
-   * Any tests added in this callback will belong to the group, and will not be run.
-   */
-  skip(callback: () => void): void;
+     * Declares a skipped test group, similarly to
+     * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Tests in the
+     * skipped group are never run.
+     * - `test.describe.skip(title, callback)`
+     * - `test.describe.skip(title)`
+     * - `test.describe.skip(title, details, callback)`
+     *
+     * **Usage**
+     *
+     * ```js
+     * test.describe.skip('skipped group', () => {
+     *   test('example', async ({ page }) => {
+     *     // This test will not run
+     *   });
+     * });
+     * ```
+     *
+     * You can also omit the title.
+     *
+     * ```js
+     * test.describe.skip(() => {
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Group title.
+     * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+     * details description.
+     * @param callback A callback that is run immediately when calling
+     * [test.describe.skip(title[, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-skip).
+     * Any tests added in this callback will belong to the group, and will not be run.
+     */
+    skip(callback: () => void): void;
     /**
-   * Declares a skipped test group, similarly to
-   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Tests in the
-   * skipped group are never run.
-   * - `test.describe.skip(title, callback)`
-   * - `test.describe.skip(title)`
-   * - `test.describe.skip(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.skip('skipped group', () => {
-   *   test('example', async ({ page }) => {
-   *     // This test will not run
-   *   });
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.skip(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.skip(title[, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-skip).
-   * Any tests added in this callback will belong to the group, and will not be run.
-   */
-  skip(title: string, details: TestDetails, callback: () => void): void;
+     * Declares a skipped test group, similarly to
+     * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Tests in the
+     * skipped group are never run.
+     * - `test.describe.skip(title, callback)`
+     * - `test.describe.skip(title)`
+     * - `test.describe.skip(title, details, callback)`
+     *
+     * **Usage**
+     *
+     * ```js
+     * test.describe.skip('skipped group', () => {
+     *   test('example', async ({ page }) => {
+     *     // This test will not run
+     *   });
+     * });
+     * ```
+     *
+     * You can also omit the title.
+     *
+     * ```js
+     * test.describe.skip(() => {
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Group title.
+     * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+     * details description.
+     * @param callback A callback that is run immediately when calling
+     * [test.describe.skip(title[, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-skip).
+     * Any tests added in this callback will belong to the group, and will not be run.
+     */
+    skip(title: string, details: TestDetails, callback: () => void): void;
 
     /**
-   * Declares a test group similarly to
-   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Tests in
-   * this group are marked as "fixme" and will not be executed.
-   * - `test.describe.fixme(title, callback)`
-   * - `test.describe.fixme(callback)`
-   * - `test.describe.fixme(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.fixme('broken tests that should be fixed', () => {
-   *   test('example', async ({ page }) => {
-   *     // This test will not run
-   *   });
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.fixme(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.fixme([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-fixme).
-   * Any tests added in this callback will belong to the group, and will not be run.
-   */
-  fixme(title: string, callback: () => void): void;
+     * Declares a test group similarly to
+     * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Tests in
+     * this group are marked as "fixme" and will not be executed.
+     * - `test.describe.fixme(title, callback)`
+     * - `test.describe.fixme(callback)`
+     * - `test.describe.fixme(title, details, callback)`
+     *
+     * **Usage**
+     *
+     * ```js
+     * test.describe.fixme('broken tests that should be fixed', () => {
+     *   test('example', async ({ page }) => {
+     *     // This test will not run
+     *   });
+     * });
+     * ```
+     *
+     * You can also omit the title.
+     *
+     * ```js
+     * test.describe.fixme(() => {
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Group title.
+     * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+     * details description.
+     * @param callback A callback that is run immediately when calling
+     * [test.describe.fixme([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-fixme).
+     * Any tests added in this callback will belong to the group, and will not be run.
+     */
+    fixme(title: string, callback: () => void): void;
     /**
-   * Declares a test group similarly to
-   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Tests in
-   * this group are marked as "fixme" and will not be executed.
-   * - `test.describe.fixme(title, callback)`
-   * - `test.describe.fixme(callback)`
-   * - `test.describe.fixme(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.fixme('broken tests that should be fixed', () => {
-   *   test('example', async ({ page }) => {
-   *     // This test will not run
-   *   });
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.fixme(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.fixme([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-fixme).
-   * Any tests added in this callback will belong to the group, and will not be run.
-   */
-  fixme(callback: () => void): void;
+     * Declares a test group similarly to
+     * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Tests in
+     * this group are marked as "fixme" and will not be executed.
+     * - `test.describe.fixme(title, callback)`
+     * - `test.describe.fixme(callback)`
+     * - `test.describe.fixme(title, details, callback)`
+     *
+     * **Usage**
+     *
+     * ```js
+     * test.describe.fixme('broken tests that should be fixed', () => {
+     *   test('example', async ({ page }) => {
+     *     // This test will not run
+     *   });
+     * });
+     * ```
+     *
+     * You can also omit the title.
+     *
+     * ```js
+     * test.describe.fixme(() => {
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Group title.
+     * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+     * details description.
+     * @param callback A callback that is run immediately when calling
+     * [test.describe.fixme([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-fixme).
+     * Any tests added in this callback will belong to the group, and will not be run.
+     */
+    fixme(callback: () => void): void;
     /**
-   * Declares a test group similarly to
-   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Tests in
-   * this group are marked as "fixme" and will not be executed.
-   * - `test.describe.fixme(title, callback)`
-   * - `test.describe.fixme(callback)`
-   * - `test.describe.fixme(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.fixme('broken tests that should be fixed', () => {
-   *   test('example', async ({ page }) => {
-   *     // This test will not run
-   *   });
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.fixme(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.fixme([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-fixme).
-   * Any tests added in this callback will belong to the group, and will not be run.
-   */
-  fixme(title: string, details: TestDetails, callback: () => void): void;
+     * Declares a test group similarly to
+     * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe). Tests in
+     * this group are marked as "fixme" and will not be executed.
+     * - `test.describe.fixme(title, callback)`
+     * - `test.describe.fixme(callback)`
+     * - `test.describe.fixme(title, details, callback)`
+     *
+     * **Usage**
+     *
+     * ```js
+     * test.describe.fixme('broken tests that should be fixed', () => {
+     *   test('example', async ({ page }) => {
+     *     // This test will not run
+     *   });
+     * });
+     * ```
+     *
+     * You can also omit the title.
+     *
+     * ```js
+     * test.describe.fixme(() => {
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Group title.
+     * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+     * details description.
+     * @param callback A callback that is run immediately when calling
+     * [test.describe.fixme([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-fixme).
+     * Any tests added in this callback will belong to the group, and will not be run.
+     */
+    fixme(title: string, details: TestDetails, callback: () => void): void;
 
     /**
-   * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
-   * the preferred way of configuring the execution mode.
-   *
-   * Declares a group of tests that should always be run serially. If one of the tests fails, all subsequent tests are
-   * skipped. All tests in a group are retried together.
-   *
-   * **NOTE** Using serial is not recommended. It is usually better to make your tests isolated, so they can be run
-   * independently.
-   *
-   * - `test.describe.serial(title, callback)`
-   * - `test.describe.serial(title)`
-   * - `test.describe.serial(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.serial('group', () => {
-   *   test('runs first', async ({ page }) => {});
-   *   test('runs second', async ({ page }) => {});
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.serial(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.serial([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-serial).
-   * Any tests added in this callback will belong to the group.
-   */
-  serial: {
+     * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+     * the preferred way of configuring the execution mode.
+     *
+     * Declares a group of tests that should always be run serially. If one of the tests fails, all subsequent tests are
+     * skipped. All tests in a group are retried together.
+     *
+     * **NOTE** Using serial is not recommended. It is usually better to make your tests isolated, so they can be run
+     * independently.
+     *
+     * - `test.describe.serial(title, callback)`
+     * - `test.describe.serial(title)`
+     * - `test.describe.serial(title, details, callback)`
+     *
+     * **Usage**
+     *
+     * ```js
+     * test.describe.serial('group', () => {
+     *   test('runs first', async ({ page }) => {});
+     *   test('runs second', async ({ page }) => {});
+     * });
+     * ```
+     *
+     * You can also omit the title.
+     *
+     * ```js
+     * test.describe.serial(() => {
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Group title.
+     * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+     * details description.
+     * @param callback A callback that is run immediately when calling
+     * [test.describe.serial([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-serial).
+     * Any tests added in this callback will belong to the group.
+     */
+    serial: {
       /**
-   * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
-   * the preferred way of configuring the execution mode.
-   *
-   * Declares a group of tests that should always be run serially. If one of the tests fails, all subsequent tests are
-   * skipped. All tests in a group are retried together.
-   *
-   * **NOTE** Using serial is not recommended. It is usually better to make your tests isolated, so they can be run
-   * independently.
-   *
-   * - `test.describe.serial(title, callback)`
-   * - `test.describe.serial(title)`
-   * - `test.describe.serial(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.serial('group', () => {
-   *   test('runs first', async ({ page }) => {});
-   *   test('runs second', async ({ page }) => {});
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.serial(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.serial([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-serial).
-   * Any tests added in this callback will belong to the group.
-   */
-  (title: string, callback: () => void): void;
+       * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+       * the preferred way of configuring the execution mode.
+       *
+       * Declares a group of tests that should always be run serially. If one of the tests fails, all subsequent tests are
+       * skipped. All tests in a group are retried together.
+       *
+       * **NOTE** Using serial is not recommended. It is usually better to make your tests isolated, so they can be run
+       * independently.
+       *
+       * - `test.describe.serial(title, callback)`
+       * - `test.describe.serial(title)`
+       * - `test.describe.serial(title, details, callback)`
+       *
+       * **Usage**
+       *
+       * ```js
+       * test.describe.serial('group', () => {
+       *   test('runs first', async ({ page }) => {});
+       *   test('runs second', async ({ page }) => {});
+       * });
+       * ```
+       *
+       * You can also omit the title.
+       *
+       * ```js
+       * test.describe.serial(() => {
+       *   // ...
+       * });
+       * ```
+       *
+       * @param title Group title.
+       * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+       * details description.
+       * @param callback A callback that is run immediately when calling
+       * [test.describe.serial([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-serial).
+       * Any tests added in this callback will belong to the group.
+       */
+      (title: string, callback: () => void): void;
       /**
-   * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
-   * the preferred way of configuring the execution mode.
-   *
-   * Declares a group of tests that should always be run serially. If one of the tests fails, all subsequent tests are
-   * skipped. All tests in a group are retried together.
-   *
-   * **NOTE** Using serial is not recommended. It is usually better to make your tests isolated, so they can be run
-   * independently.
-   *
-   * - `test.describe.serial(title, callback)`
-   * - `test.describe.serial(title)`
-   * - `test.describe.serial(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.serial('group', () => {
-   *   test('runs first', async ({ page }) => {});
-   *   test('runs second', async ({ page }) => {});
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.serial(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.serial([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-serial).
-   * Any tests added in this callback will belong to the group.
-   */
-  (callback: () => void): void;
+       * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+       * the preferred way of configuring the execution mode.
+       *
+       * Declares a group of tests that should always be run serially. If one of the tests fails, all subsequent tests are
+       * skipped. All tests in a group are retried together.
+       *
+       * **NOTE** Using serial is not recommended. It is usually better to make your tests isolated, so they can be run
+       * independently.
+       *
+       * - `test.describe.serial(title, callback)`
+       * - `test.describe.serial(title)`
+       * - `test.describe.serial(title, details, callback)`
+       *
+       * **Usage**
+       *
+       * ```js
+       * test.describe.serial('group', () => {
+       *   test('runs first', async ({ page }) => {});
+       *   test('runs second', async ({ page }) => {});
+       * });
+       * ```
+       *
+       * You can also omit the title.
+       *
+       * ```js
+       * test.describe.serial(() => {
+       *   // ...
+       * });
+       * ```
+       *
+       * @param title Group title.
+       * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+       * details description.
+       * @param callback A callback that is run immediately when calling
+       * [test.describe.serial([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-serial).
+       * Any tests added in this callback will belong to the group.
+       */
+      (callback: () => void): void;
       /**
-   * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
-   * the preferred way of configuring the execution mode.
-   *
-   * Declares a group of tests that should always be run serially. If one of the tests fails, all subsequent tests are
-   * skipped. All tests in a group are retried together.
-   *
-   * **NOTE** Using serial is not recommended. It is usually better to make your tests isolated, so they can be run
-   * independently.
-   *
-   * - `test.describe.serial(title, callback)`
-   * - `test.describe.serial(title)`
-   * - `test.describe.serial(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.serial('group', () => {
-   *   test('runs first', async ({ page }) => {});
-   *   test('runs second', async ({ page }) => {});
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.serial(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.serial([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-serial).
-   * Any tests added in this callback will belong to the group.
-   */
-  (title: string, details: TestDetails, callback: () => void): void;
+       * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+       * the preferred way of configuring the execution mode.
+       *
+       * Declares a group of tests that should always be run serially. If one of the tests fails, all subsequent tests are
+       * skipped. All tests in a group are retried together.
+       *
+       * **NOTE** Using serial is not recommended. It is usually better to make your tests isolated, so they can be run
+       * independently.
+       *
+       * - `test.describe.serial(title, callback)`
+       * - `test.describe.serial(title)`
+       * - `test.describe.serial(title, details, callback)`
+       *
+       * **Usage**
+       *
+       * ```js
+       * test.describe.serial('group', () => {
+       *   test('runs first', async ({ page }) => {});
+       *   test('runs second', async ({ page }) => {});
+       * });
+       * ```
+       *
+       * You can also omit the title.
+       *
+       * ```js
+       * test.describe.serial(() => {
+       *   // ...
+       * });
+       * ```
+       *
+       * @param title Group title.
+       * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+       * details description.
+       * @param callback A callback that is run immediately when calling
+       * [test.describe.serial([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-serial).
+       * Any tests added in this callback will belong to the group.
+       */
+      (title: string, details: TestDetails, callback: () => void): void;
 
       /**
-   * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
-   * the preferred way of configuring the execution mode.
-   *
-   * Declares a focused group of tests that should always be run serially. If one of the tests fails, all subsequent
-   * tests are skipped. All tests in a group are retried together. If there are some focused tests or suites, all of
-   * them will be run but nothing else.
-   *
-   * **NOTE** Using serial is not recommended. It is usually better to make your tests isolated, so they can be run
-   * independently.
-   *
-   * - `test.describe.serial.only(title, callback)`
-   * - `test.describe.serial.only(title)`
-   * - `test.describe.serial.only(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.serial.only('group', () => {
-   *   test('runs first', async ({ page }) => {
-   *   });
-   *   test('runs second', async ({ page }) => {
-   *   });
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.serial.only(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.serial.only(title[, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-serial-only).
-   * Any tests added in this callback will belong to the group.
-   */
-  only(title: string, callback: () => void): void;
+       * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+       * the preferred way of configuring the execution mode.
+       *
+       * Declares a focused group of tests that should always be run serially. If one of the tests fails, all subsequent
+       * tests are skipped. All tests in a group are retried together. If there are some focused tests or suites, all of
+       * them will be run but nothing else.
+       *
+       * **NOTE** Using serial is not recommended. It is usually better to make your tests isolated, so they can be run
+       * independently.
+       *
+       * - `test.describe.serial.only(title, callback)`
+       * - `test.describe.serial.only(title)`
+       * - `test.describe.serial.only(title, details, callback)`
+       *
+       * **Usage**
+       *
+       * ```js
+       * test.describe.serial.only('group', () => {
+       *   test('runs first', async ({ page }) => {
+       *   });
+       *   test('runs second', async ({ page }) => {
+       *   });
+       * });
+       * ```
+       *
+       * You can also omit the title.
+       *
+       * ```js
+       * test.describe.serial.only(() => {
+       *   // ...
+       * });
+       * ```
+       *
+       * @param title Group title.
+       * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+       * details description.
+       * @param callback A callback that is run immediately when calling
+       * [test.describe.serial.only(title[, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-serial-only).
+       * Any tests added in this callback will belong to the group.
+       */
+      only(title: string, callback: () => void): void;
       /**
-   * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
-   * the preferred way of configuring the execution mode.
-   *
-   * Declares a focused group of tests that should always be run serially. If one of the tests fails, all subsequent
-   * tests are skipped. All tests in a group are retried together. If there are some focused tests or suites, all of
-   * them will be run but nothing else.
-   *
-   * **NOTE** Using serial is not recommended. It is usually better to make your tests isolated, so they can be run
-   * independently.
-   *
-   * - `test.describe.serial.only(title, callback)`
-   * - `test.describe.serial.only(title)`
-   * - `test.describe.serial.only(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.serial.only('group', () => {
-   *   test('runs first', async ({ page }) => {
-   *   });
-   *   test('runs second', async ({ page }) => {
-   *   });
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.serial.only(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.serial.only(title[, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-serial-only).
-   * Any tests added in this callback will belong to the group.
-   */
-  only(callback: () => void): void;
+       * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+       * the preferred way of configuring the execution mode.
+       *
+       * Declares a focused group of tests that should always be run serially. If one of the tests fails, all subsequent
+       * tests are skipped. All tests in a group are retried together. If there are some focused tests or suites, all of
+       * them will be run but nothing else.
+       *
+       * **NOTE** Using serial is not recommended. It is usually better to make your tests isolated, so they can be run
+       * independently.
+       *
+       * - `test.describe.serial.only(title, callback)`
+       * - `test.describe.serial.only(title)`
+       * - `test.describe.serial.only(title, details, callback)`
+       *
+       * **Usage**
+       *
+       * ```js
+       * test.describe.serial.only('group', () => {
+       *   test('runs first', async ({ page }) => {
+       *   });
+       *   test('runs second', async ({ page }) => {
+       *   });
+       * });
+       * ```
+       *
+       * You can also omit the title.
+       *
+       * ```js
+       * test.describe.serial.only(() => {
+       *   // ...
+       * });
+       * ```
+       *
+       * @param title Group title.
+       * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+       * details description.
+       * @param callback A callback that is run immediately when calling
+       * [test.describe.serial.only(title[, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-serial-only).
+       * Any tests added in this callback will belong to the group.
+       */
+      only(callback: () => void): void;
       /**
-   * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
-   * the preferred way of configuring the execution mode.
-   *
-   * Declares a focused group of tests that should always be run serially. If one of the tests fails, all subsequent
-   * tests are skipped. All tests in a group are retried together. If there are some focused tests or suites, all of
-   * them will be run but nothing else.
-   *
-   * **NOTE** Using serial is not recommended. It is usually better to make your tests isolated, so they can be run
-   * independently.
-   *
-   * - `test.describe.serial.only(title, callback)`
-   * - `test.describe.serial.only(title)`
-   * - `test.describe.serial.only(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.serial.only('group', () => {
-   *   test('runs first', async ({ page }) => {
-   *   });
-   *   test('runs second', async ({ page }) => {
-   *   });
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.serial.only(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.serial.only(title[, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-serial-only).
-   * Any tests added in this callback will belong to the group.
-   */
-  only(title: string, details: TestDetails, callback: () => void): void;
+       * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+       * the preferred way of configuring the execution mode.
+       *
+       * Declares a focused group of tests that should always be run serially. If one of the tests fails, all subsequent
+       * tests are skipped. All tests in a group are retried together. If there are some focused tests or suites, all of
+       * them will be run but nothing else.
+       *
+       * **NOTE** Using serial is not recommended. It is usually better to make your tests isolated, so they can be run
+       * independently.
+       *
+       * - `test.describe.serial.only(title, callback)`
+       * - `test.describe.serial.only(title)`
+       * - `test.describe.serial.only(title, details, callback)`
+       *
+       * **Usage**
+       *
+       * ```js
+       * test.describe.serial.only('group', () => {
+       *   test('runs first', async ({ page }) => {
+       *   });
+       *   test('runs second', async ({ page }) => {
+       *   });
+       * });
+       * ```
+       *
+       * You can also omit the title.
+       *
+       * ```js
+       * test.describe.serial.only(() => {
+       *   // ...
+       * });
+       * ```
+       *
+       * @param title Group title.
+       * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+       * details description.
+       * @param callback A callback that is run immediately when calling
+       * [test.describe.serial.only(title[, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-serial-only).
+       * Any tests added in this callback will belong to the group.
+       */
+      only(title: string, details: TestDetails, callback: () => void): void;
     };
 
     /**
-   * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
-   * the preferred way of configuring the execution mode.
-   *
-   * Declares a group of tests that could be run in parallel. By default, tests in a single test file run one after
-   * another, but using
-   * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel)
-   * allows them to run in parallel.
-   * - `test.describe.parallel(title, callback)`
-   * - `test.describe.parallel(callback)`
-   * - `test.describe.parallel(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.parallel('group', () => {
-   *   test('runs in parallel 1', async ({ page }) => {});
-   *   test('runs in parallel 2', async ({ page }) => {});
-   * });
-   * ```
-   *
-   * Note that parallel tests are executed in separate processes and cannot share any state or global variables. Each of
-   * the parallel tests executes all relevant hooks.
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.parallel(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel).
-   * Any tests added in this callback will belong to the group.
-   */
-  parallel: {
+     * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+     * the preferred way of configuring the execution mode.
+     *
+     * Declares a group of tests that could be run in parallel. By default, tests in a single test file run one after
+     * another, but using
+     * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel)
+     * allows them to run in parallel.
+     * - `test.describe.parallel(title, callback)`
+     * - `test.describe.parallel(callback)`
+     * - `test.describe.parallel(title, details, callback)`
+     *
+     * **Usage**
+     *
+     * ```js
+     * test.describe.parallel('group', () => {
+     *   test('runs in parallel 1', async ({ page }) => {});
+     *   test('runs in parallel 2', async ({ page }) => {});
+     * });
+     * ```
+     *
+     * Note that parallel tests are executed in separate processes and cannot share any state or global variables. Each of
+     * the parallel tests executes all relevant hooks.
+     *
+     * You can also omit the title.
+     *
+     * ```js
+     * test.describe.parallel(() => {
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Group title.
+     * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+     * details description.
+     * @param callback A callback that is run immediately when calling
+     * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel).
+     * Any tests added in this callback will belong to the group.
+     */
+    parallel: {
       /**
-   * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
-   * the preferred way of configuring the execution mode.
-   *
-   * Declares a group of tests that could be run in parallel. By default, tests in a single test file run one after
-   * another, but using
-   * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel)
-   * allows them to run in parallel.
-   * - `test.describe.parallel(title, callback)`
-   * - `test.describe.parallel(callback)`
-   * - `test.describe.parallel(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.parallel('group', () => {
-   *   test('runs in parallel 1', async ({ page }) => {});
-   *   test('runs in parallel 2', async ({ page }) => {});
-   * });
-   * ```
-   *
-   * Note that parallel tests are executed in separate processes and cannot share any state or global variables. Each of
-   * the parallel tests executes all relevant hooks.
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.parallel(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel).
-   * Any tests added in this callback will belong to the group.
-   */
-  (title: string, callback: () => void): void;
+       * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+       * the preferred way of configuring the execution mode.
+       *
+       * Declares a group of tests that could be run in parallel. By default, tests in a single test file run one after
+       * another, but using
+       * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel)
+       * allows them to run in parallel.
+       * - `test.describe.parallel(title, callback)`
+       * - `test.describe.parallel(callback)`
+       * - `test.describe.parallel(title, details, callback)`
+       *
+       * **Usage**
+       *
+       * ```js
+       * test.describe.parallel('group', () => {
+       *   test('runs in parallel 1', async ({ page }) => {});
+       *   test('runs in parallel 2', async ({ page }) => {});
+       * });
+       * ```
+       *
+       * Note that parallel tests are executed in separate processes and cannot share any state or global variables. Each of
+       * the parallel tests executes all relevant hooks.
+       *
+       * You can also omit the title.
+       *
+       * ```js
+       * test.describe.parallel(() => {
+       *   // ...
+       * });
+       * ```
+       *
+       * @param title Group title.
+       * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+       * details description.
+       * @param callback A callback that is run immediately when calling
+       * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel).
+       * Any tests added in this callback will belong to the group.
+       */
+      (title: string, callback: () => void): void;
       /**
-   * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
-   * the preferred way of configuring the execution mode.
-   *
-   * Declares a group of tests that could be run in parallel. By default, tests in a single test file run one after
-   * another, but using
-   * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel)
-   * allows them to run in parallel.
-   * - `test.describe.parallel(title, callback)`
-   * - `test.describe.parallel(callback)`
-   * - `test.describe.parallel(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.parallel('group', () => {
-   *   test('runs in parallel 1', async ({ page }) => {});
-   *   test('runs in parallel 2', async ({ page }) => {});
-   * });
-   * ```
-   *
-   * Note that parallel tests are executed in separate processes and cannot share any state or global variables. Each of
-   * the parallel tests executes all relevant hooks.
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.parallel(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel).
-   * Any tests added in this callback will belong to the group.
-   */
-  (callback: () => void): void;
+       * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+       * the preferred way of configuring the execution mode.
+       *
+       * Declares a group of tests that could be run in parallel. By default, tests in a single test file run one after
+       * another, but using
+       * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel)
+       * allows them to run in parallel.
+       * - `test.describe.parallel(title, callback)`
+       * - `test.describe.parallel(callback)`
+       * - `test.describe.parallel(title, details, callback)`
+       *
+       * **Usage**
+       *
+       * ```js
+       * test.describe.parallel('group', () => {
+       *   test('runs in parallel 1', async ({ page }) => {});
+       *   test('runs in parallel 2', async ({ page }) => {});
+       * });
+       * ```
+       *
+       * Note that parallel tests are executed in separate processes and cannot share any state or global variables. Each of
+       * the parallel tests executes all relevant hooks.
+       *
+       * You can also omit the title.
+       *
+       * ```js
+       * test.describe.parallel(() => {
+       *   // ...
+       * });
+       * ```
+       *
+       * @param title Group title.
+       * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+       * details description.
+       * @param callback A callback that is run immediately when calling
+       * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel).
+       * Any tests added in this callback will belong to the group.
+       */
+      (callback: () => void): void;
       /**
-   * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
-   * the preferred way of configuring the execution mode.
-   *
-   * Declares a group of tests that could be run in parallel. By default, tests in a single test file run one after
-   * another, but using
-   * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel)
-   * allows them to run in parallel.
-   * - `test.describe.parallel(title, callback)`
-   * - `test.describe.parallel(callback)`
-   * - `test.describe.parallel(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.parallel('group', () => {
-   *   test('runs in parallel 1', async ({ page }) => {});
-   *   test('runs in parallel 2', async ({ page }) => {});
-   * });
-   * ```
-   *
-   * Note that parallel tests are executed in separate processes and cannot share any state or global variables. Each of
-   * the parallel tests executes all relevant hooks.
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.parallel(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel).
-   * Any tests added in this callback will belong to the group.
-   */
-  (title: string, details: TestDetails, callback: () => void): void;
+       * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+       * the preferred way of configuring the execution mode.
+       *
+       * Declares a group of tests that could be run in parallel. By default, tests in a single test file run one after
+       * another, but using
+       * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel)
+       * allows them to run in parallel.
+       * - `test.describe.parallel(title, callback)`
+       * - `test.describe.parallel(callback)`
+       * - `test.describe.parallel(title, details, callback)`
+       *
+       * **Usage**
+       *
+       * ```js
+       * test.describe.parallel('group', () => {
+       *   test('runs in parallel 1', async ({ page }) => {});
+       *   test('runs in parallel 2', async ({ page }) => {});
+       * });
+       * ```
+       *
+       * Note that parallel tests are executed in separate processes and cannot share any state or global variables. Each of
+       * the parallel tests executes all relevant hooks.
+       *
+       * You can also omit the title.
+       *
+       * ```js
+       * test.describe.parallel(() => {
+       *   // ...
+       * });
+       * ```
+       *
+       * @param title Group title.
+       * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+       * details description.
+       * @param callback A callback that is run immediately when calling
+       * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel).
+       * Any tests added in this callback will belong to the group.
+       */
+      (title: string, details: TestDetails, callback: () => void): void;
 
       /**
-   * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
-   * the preferred way of configuring the execution mode.
-   *
-   * Declares a focused group of tests that could be run in parallel. This is similar to
-   * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel),
-   * but focuses the group. If there are some focused tests or suites, all of them will be run but nothing else.
-   * - `test.describe.parallel.only(title, callback)`
-   * - `test.describe.parallel.only(callback)`
-   * - `test.describe.parallel.only(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.parallel.only('group', () => {
-   *   test('runs in parallel 1', async ({ page }) => {});
-   *   test('runs in parallel 2', async ({ page }) => {});
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.parallel.only(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.parallel.only([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel-only).
-   * Any tests added in this callback will belong to the group.
-   */
-  only(title: string, callback: () => void): void;
+       * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+       * the preferred way of configuring the execution mode.
+       *
+       * Declares a focused group of tests that could be run in parallel. This is similar to
+       * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel),
+       * but focuses the group. If there are some focused tests or suites, all of them will be run but nothing else.
+       * - `test.describe.parallel.only(title, callback)`
+       * - `test.describe.parallel.only(callback)`
+       * - `test.describe.parallel.only(title, details, callback)`
+       *
+       * **Usage**
+       *
+       * ```js
+       * test.describe.parallel.only('group', () => {
+       *   test('runs in parallel 1', async ({ page }) => {});
+       *   test('runs in parallel 2', async ({ page }) => {});
+       * });
+       * ```
+       *
+       * You can also omit the title.
+       *
+       * ```js
+       * test.describe.parallel.only(() => {
+       *   // ...
+       * });
+       * ```
+       *
+       * @param title Group title.
+       * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+       * details description.
+       * @param callback A callback that is run immediately when calling
+       * [test.describe.parallel.only([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel-only).
+       * Any tests added in this callback will belong to the group.
+       */
+      only(title: string, callback: () => void): void;
       /**
-   * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
-   * the preferred way of configuring the execution mode.
-   *
-   * Declares a focused group of tests that could be run in parallel. This is similar to
-   * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel),
-   * but focuses the group. If there are some focused tests or suites, all of them will be run but nothing else.
-   * - `test.describe.parallel.only(title, callback)`
-   * - `test.describe.parallel.only(callback)`
-   * - `test.describe.parallel.only(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.parallel.only('group', () => {
-   *   test('runs in parallel 1', async ({ page }) => {});
-   *   test('runs in parallel 2', async ({ page }) => {});
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.parallel.only(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.parallel.only([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel-only).
-   * Any tests added in this callback will belong to the group.
-   */
-  only(callback: () => void): void;
+       * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+       * the preferred way of configuring the execution mode.
+       *
+       * Declares a focused group of tests that could be run in parallel. This is similar to
+       * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel),
+       * but focuses the group. If there are some focused tests or suites, all of them will be run but nothing else.
+       * - `test.describe.parallel.only(title, callback)`
+       * - `test.describe.parallel.only(callback)`
+       * - `test.describe.parallel.only(title, details, callback)`
+       *
+       * **Usage**
+       *
+       * ```js
+       * test.describe.parallel.only('group', () => {
+       *   test('runs in parallel 1', async ({ page }) => {});
+       *   test('runs in parallel 2', async ({ page }) => {});
+       * });
+       * ```
+       *
+       * You can also omit the title.
+       *
+       * ```js
+       * test.describe.parallel.only(() => {
+       *   // ...
+       * });
+       * ```
+       *
+       * @param title Group title.
+       * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+       * details description.
+       * @param callback A callback that is run immediately when calling
+       * [test.describe.parallel.only([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel-only).
+       * Any tests added in this callback will belong to the group.
+       */
+      only(callback: () => void): void;
       /**
-   * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
-   * the preferred way of configuring the execution mode.
-   *
-   * Declares a focused group of tests that could be run in parallel. This is similar to
-   * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel),
-   * but focuses the group. If there are some focused tests or suites, all of them will be run but nothing else.
-   * - `test.describe.parallel.only(title, callback)`
-   * - `test.describe.parallel.only(callback)`
-   * - `test.describe.parallel.only(title, details, callback)`
-   *
-   * **Usage**
-   *
-   * ```js
-   * test.describe.parallel.only('group', () => {
-   *   test('runs in parallel 1', async ({ page }) => {});
-   *   test('runs in parallel 2', async ({ page }) => {});
-   * });
-   * ```
-   *
-   * You can also omit the title.
-   *
-   * ```js
-   * test.describe.parallel.only(() => {
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Group title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
-   * details description.
-   * @param callback A callback that is run immediately when calling
-   * [test.describe.parallel.only([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel-only).
-   * Any tests added in this callback will belong to the group.
-   */
-  only(title: string, details: TestDetails, callback: () => void): void;
+       * **NOTE** See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+       * the preferred way of configuring the execution mode.
+       *
+       * Declares a focused group of tests that could be run in parallel. This is similar to
+       * [test.describe.parallel([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel),
+       * but focuses the group. If there are some focused tests or suites, all of them will be run but nothing else.
+       * - `test.describe.parallel.only(title, callback)`
+       * - `test.describe.parallel.only(callback)`
+       * - `test.describe.parallel.only(title, details, callback)`
+       *
+       * **Usage**
+       *
+       * ```js
+       * test.describe.parallel.only('group', () => {
+       *   test('runs in parallel 1', async ({ page }) => {});
+       *   test('runs in parallel 2', async ({ page }) => {});
+       * });
+       * ```
+       *
+       * You can also omit the title.
+       *
+       * ```js
+       * test.describe.parallel.only(() => {
+       *   // ...
+       * });
+       * ```
+       *
+       * @param title Group title.
+       * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for
+       * details description.
+       * @param callback A callback that is run immediately when calling
+       * [test.describe.parallel.only([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe-parallel-only).
+       * Any tests added in this callback will belong to the group.
+       */
+      only(title: string, details: TestDetails, callback: () => void): void;
     };
 
     /**
-   * Configures the enclosing scope. Can be executed either on the top level or inside a describe. Configuration applies
-   * to the entire scope, regardless of whether it run before or after the test declaration.
-   *
-   * Learn more about the execution modes [here](https://playwright.dev/docs/test-parallel).
-   *
-   * **Usage**
-   * - Running tests in parallel.
-   *
-   *   ```js
-   *   // Run all the tests in the file concurrently using parallel workers.
-   *   test.describe.configure({ mode: 'parallel' });
-   *   test('runs in parallel 1', async ({ page }) => {});
-   *   test('runs in parallel 2', async ({ page }) => {});
-   *   ```
-   *
-   * - Running tests in order, retrying each failed test independetly.
-   *
-   *   This is the default mode. It can be useful to set it explicitly to override project configuration that uses
-   *   `fullyParallel`.
-   *
-   *   ```js
-   *   // Tests in this file run in order. Retries, if any, run independently.
-   *   test.describe.configure({ mode: 'default' });
-   *   test('runs first', async ({ page }) => {});
-   *   test('runs second', async ({ page }) => {});
-   *   ```
-   *
-   * - Running tests serially, retrying from the start. If one of the serial tests fails, all subsequent tests are
-   *   skipped.
-   *
-   *   **NOTE** Running serially is not recommended. It is usually better to make your tests isolated, so they can be
-   *   run independently.
-   *
-   *   ```js
-   *   // Annotate tests as inter-dependent.
-   *   test.describe.configure({ mode: 'serial' });
-   *   test('runs first', async ({ page }) => {});
-   *   test('runs second', async ({ page }) => {});
-   *   ```
-   *
-   * - Configuring retries and timeout for each test.
-   *
-   *   ```js
-   *   // Each test in the file will be retried twice and have a timeout of 20 seconds.
-   *   test.describe.configure({ retries: 2, timeout: 20_000 });
-   *   test('runs first', async ({ page }) => {});
-   *   test('runs second', async ({ page }) => {});
-   *   ```
-   *
-   * - Run multiple describes in parallel, but tests inside each describe in order.
-   *
-   *   ```js
-   *   test.describe.configure({ mode: 'parallel' });
-   *
-   *   test.describe('A, runs in parallel with B', () => {
-   *     test.describe.configure({ mode: 'default' });
-   *     test('in order A1', async ({ page }) => {});
-   *     test('in order A2', async ({ page }) => {});
-   *   });
-   *
-   *   test.describe('B, runs in parallel with A', () => {
-   *     test.describe.configure({ mode: 'default' });
-   *     test('in order B1', async ({ page }) => {});
-   *     test('in order B2', async ({ page }) => {});
-   *   });
-   *   ```
-   *
-   * @param options
-   */
-  configure: (options: { mode?: 'default' | 'parallel' | 'serial', retries?: number, timeout?: number }) => void;
+     * Configures the enclosing scope. Can be executed either on the top level or inside a describe. Configuration applies
+     * to the entire scope, regardless of whether it run before or after the test declaration.
+     *
+     * Learn more about the execution modes [here](https://playwright.dev/docs/test-parallel).
+     *
+     * **Usage**
+     * - Running tests in parallel.
+     *
+     *   ```js
+     *   // Run all the tests in the file concurrently using parallel workers.
+     *   test.describe.configure({ mode: 'parallel' });
+     *   test('runs in parallel 1', async ({ page }) => {});
+     *   test('runs in parallel 2', async ({ page }) => {});
+     *   ```
+     *
+     * - Running tests in order, retrying each failed test independently.
+     *
+     *   This is the default mode. It can be useful to set it explicitly to override project configuration that uses
+     *   `fullyParallel`.
+     *
+     *   ```js
+     *   // Tests in this file run in order. Retries, if any, run independently.
+     *   test.describe.configure({ mode: 'default' });
+     *   test('runs first', async ({ page }) => {});
+     *   test('runs second', async ({ page }) => {});
+     *   ```
+     *
+     * - Running tests serially, retrying from the start. If one of the serial tests fails, all subsequent tests are
+     *   skipped.
+     *
+     *   **NOTE** Running serially is not recommended. It is usually better to make your tests isolated, so they can be
+     *   run independently.
+     *
+     *   ```js
+     *   // Annotate tests as inter-dependent.
+     *   test.describe.configure({ mode: 'serial' });
+     *   test('runs first', async ({ page }) => {});
+     *   test('runs second', async ({ page }) => {});
+     *   ```
+     *
+     * - Configuring retries and timeout for each test.
+     *
+     *   ```js
+     *   // Each test in the file will be retried twice and have a timeout of 20 seconds.
+     *   test.describe.configure({ retries: 2, timeout: 20_000 });
+     *   test('runs first', async ({ page }) => {});
+     *   test('runs second', async ({ page }) => {});
+     *   ```
+     *
+     * - Run multiple describes in parallel, but tests inside each describe in order.
+     *
+     *   ```js
+     *   test.describe.configure({ mode: 'parallel' });
+     *
+     *   test.describe('A, runs in parallel with B', () => {
+     *     test.describe.configure({ mode: 'default' });
+     *     test('in order A1', async ({ page }) => {});
+     *     test('in order A2', async ({ page }) => {});
+     *   });
+     *
+     *   test.describe('B, runs in parallel with A', () => {
+     *     test.describe.configure({ mode: 'default' });
+     *     test('in order B1', async ({ page }) => {});
+     *     test('in order B2', async ({ page }) => {});
+     *   });
+     *   ```
+     *
+     * @param options
+     */
+    configure: (options: { mode?: 'default' | 'parallel' | 'serial', retries?: number, timeout?: number }) => void;
   };
 
   /**
@@ -4468,451 +4996,451 @@ export interface TestType<TestArgs extends {}, WorkerArgs extends {}> {
    */
   fail: {
     /**
-   * Marks a test as "should fail". Playwright runs this test and ensures that it is actually failing. This is useful
-   * for documentation purposes to acknowledge that some functionality is broken until it is fixed.
-   *
-   * To declare a "failing" test:
-   * - `test.fail(title, body)`
-   * - `test.fail(title, details, body)`
-   *
-   * To annotate test as "failing" at runtime:
-   * - `test.fail(condition, description)`
-   * - `test.fail(callback, description)`
-   * - `test.fail()`
-   *
-   * **Usage**
-   *
-   * You can declare a test as failing, so that Playwright ensures it actually fails.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.fail('not yet ready', async ({ page }) => {
-   *   // ...
-   * });
-   * ```
-   *
-   * If your test fails in some configurations, but not all, you can mark the test as failing inside the test body based
-   * on some condition. We recommend passing a `description` argument in this case.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test('fail in WebKit', async ({ page, browserName }) => {
-   *   test.fail(browserName === 'webkit', 'This feature is not implemented for Mac yet');
-   *   // ...
-   * });
-   * ```
-   *
-   * You can mark all tests in a file or
-   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) group as
-   * "should fail" based on some condition with a single `test.fail(callback, description)` call.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.fail(({ browserName }) => browserName === 'webkit', 'not implemented yet');
-   *
-   * test('fail in WebKit 1', async ({ page }) => {
-   *   // ...
-   * });
-   * test('fail in WebKit 2', async ({ page }) => {
-   *   // ...
-   * });
-   * ```
-   *
-   * You can also call `test.fail()` without arguments inside the test body to always mark the test as failed. We
-   * recommend declaring a failing test with `test.fail(title, body)` instead.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test('less readable', async ({ page }) => {
-   *   test.fail();
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Test title.
-   * @param details See [test.(call)(title[, details, body])](https://playwright.dev/docs/api/class-test#test-call) for test details
-   * description.
-   * @param body Test body that takes one or two arguments: an object with fixtures and optional
-   * [TestInfo](https://playwright.dev/docs/api/class-testinfo).
-   * @param condition Test is marked as "should fail" when the condition is `true`.
-   * @param callback A function that returns whether to mark as "should fail", based on test fixtures. Test or tests are marked as
-   * "should fail" when the return value is `true`.
-   * @param description Optional description that will be reflected in a test report.
-   */
-  (title: string, body: TestBody<TestArgs & WorkerArgs>): void;
+     * Marks a test as "should fail". Playwright runs this test and ensures that it is actually failing. This is useful
+     * for documentation purposes to acknowledge that some functionality is broken until it is fixed.
+     *
+     * To declare a "failing" test:
+     * - `test.fail(title, body)`
+     * - `test.fail(title, details, body)`
+     *
+     * To annotate test as "failing" at runtime:
+     * - `test.fail(condition, description)`
+     * - `test.fail(callback, description)`
+     * - `test.fail()`
+     *
+     * **Usage**
+     *
+     * You can declare a test as failing, so that Playwright ensures it actually fails.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.fail('not yet ready', async ({ page }) => {
+     *   // ...
+     * });
+     * ```
+     *
+     * If your test fails in some configurations, but not all, you can mark the test as failing inside the test body based
+     * on some condition. We recommend passing a `description` argument in this case.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test('fail in WebKit', async ({ page, browserName }) => {
+     *   test.fail(browserName === 'webkit', 'This feature is not implemented for Mac yet');
+     *   // ...
+     * });
+     * ```
+     *
+     * You can mark all tests in a file or
+     * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) group as
+     * "should fail" based on some condition with a single `test.fail(callback, description)` call.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.fail(({ browserName }) => browserName === 'webkit', 'not implemented yet');
+     *
+     * test('fail in WebKit 1', async ({ page }) => {
+     *   // ...
+     * });
+     * test('fail in WebKit 2', async ({ page }) => {
+     *   // ...
+     * });
+     * ```
+     *
+     * You can also call `test.fail()` without arguments inside the test body to always mark the test as failed. We
+     * recommend declaring a failing test with `test.fail(title, body)` instead.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test('less readable', async ({ page }) => {
+     *   test.fail();
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Test title.
+     * @param details See [test.(call)(title[, details, body])](https://playwright.dev/docs/api/class-test#test-call) for test details
+     * description.
+     * @param body Test body that takes one or two arguments: an object with fixtures and optional
+     * [TestInfo](https://playwright.dev/docs/api/class-testinfo).
+     * @param condition Test is marked as "should fail" when the condition is `true`.
+     * @param callback A function that returns whether to mark as "should fail", based on test fixtures. Test or tests are marked as
+     * "should fail" when the return value is `true`.
+     * @param description Optional description that will be reflected in a test report.
+     */
+    (title: string, body: TestBody<TestArgs & WorkerArgs>): void;
     /**
-   * Marks a test as "should fail". Playwright runs this test and ensures that it is actually failing. This is useful
-   * for documentation purposes to acknowledge that some functionality is broken until it is fixed.
-   *
-   * To declare a "failing" test:
-   * - `test.fail(title, body)`
-   * - `test.fail(title, details, body)`
-   *
-   * To annotate test as "failing" at runtime:
-   * - `test.fail(condition, description)`
-   * - `test.fail(callback, description)`
-   * - `test.fail()`
-   *
-   * **Usage**
-   *
-   * You can declare a test as failing, so that Playwright ensures it actually fails.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.fail('not yet ready', async ({ page }) => {
-   *   // ...
-   * });
-   * ```
-   *
-   * If your test fails in some configurations, but not all, you can mark the test as failing inside the test body based
-   * on some condition. We recommend passing a `description` argument in this case.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test('fail in WebKit', async ({ page, browserName }) => {
-   *   test.fail(browserName === 'webkit', 'This feature is not implemented for Mac yet');
-   *   // ...
-   * });
-   * ```
-   *
-   * You can mark all tests in a file or
-   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) group as
-   * "should fail" based on some condition with a single `test.fail(callback, description)` call.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.fail(({ browserName }) => browserName === 'webkit', 'not implemented yet');
-   *
-   * test('fail in WebKit 1', async ({ page }) => {
-   *   // ...
-   * });
-   * test('fail in WebKit 2', async ({ page }) => {
-   *   // ...
-   * });
-   * ```
-   *
-   * You can also call `test.fail()` without arguments inside the test body to always mark the test as failed. We
-   * recommend declaring a failing test with `test.fail(title, body)` instead.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test('less readable', async ({ page }) => {
-   *   test.fail();
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Test title.
-   * @param details See [test.(call)(title[, details, body])](https://playwright.dev/docs/api/class-test#test-call) for test details
-   * description.
-   * @param body Test body that takes one or two arguments: an object with fixtures and optional
-   * [TestInfo](https://playwright.dev/docs/api/class-testinfo).
-   * @param condition Test is marked as "should fail" when the condition is `true`.
-   * @param callback A function that returns whether to mark as "should fail", based on test fixtures. Test or tests are marked as
-   * "should fail" when the return value is `true`.
-   * @param description Optional description that will be reflected in a test report.
-   */
-  (title: string, details: TestDetails, body: TestBody<TestArgs & WorkerArgs>): void;
+     * Marks a test as "should fail". Playwright runs this test and ensures that it is actually failing. This is useful
+     * for documentation purposes to acknowledge that some functionality is broken until it is fixed.
+     *
+     * To declare a "failing" test:
+     * - `test.fail(title, body)`
+     * - `test.fail(title, details, body)`
+     *
+     * To annotate test as "failing" at runtime:
+     * - `test.fail(condition, description)`
+     * - `test.fail(callback, description)`
+     * - `test.fail()`
+     *
+     * **Usage**
+     *
+     * You can declare a test as failing, so that Playwright ensures it actually fails.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.fail('not yet ready', async ({ page }) => {
+     *   // ...
+     * });
+     * ```
+     *
+     * If your test fails in some configurations, but not all, you can mark the test as failing inside the test body based
+     * on some condition. We recommend passing a `description` argument in this case.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test('fail in WebKit', async ({ page, browserName }) => {
+     *   test.fail(browserName === 'webkit', 'This feature is not implemented for Mac yet');
+     *   // ...
+     * });
+     * ```
+     *
+     * You can mark all tests in a file or
+     * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) group as
+     * "should fail" based on some condition with a single `test.fail(callback, description)` call.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.fail(({ browserName }) => browserName === 'webkit', 'not implemented yet');
+     *
+     * test('fail in WebKit 1', async ({ page }) => {
+     *   // ...
+     * });
+     * test('fail in WebKit 2', async ({ page }) => {
+     *   // ...
+     * });
+     * ```
+     *
+     * You can also call `test.fail()` without arguments inside the test body to always mark the test as failed. We
+     * recommend declaring a failing test with `test.fail(title, body)` instead.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test('less readable', async ({ page }) => {
+     *   test.fail();
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Test title.
+     * @param details See [test.(call)(title[, details, body])](https://playwright.dev/docs/api/class-test#test-call) for test details
+     * description.
+     * @param body Test body that takes one or two arguments: an object with fixtures and optional
+     * [TestInfo](https://playwright.dev/docs/api/class-testinfo).
+     * @param condition Test is marked as "should fail" when the condition is `true`.
+     * @param callback A function that returns whether to mark as "should fail", based on test fixtures. Test or tests are marked as
+     * "should fail" when the return value is `true`.
+     * @param description Optional description that will be reflected in a test report.
+     */
+    (title: string, details: TestDetails, body: TestBody<TestArgs & WorkerArgs>): void;
     /**
-   * Marks a test as "should fail". Playwright runs this test and ensures that it is actually failing. This is useful
-   * for documentation purposes to acknowledge that some functionality is broken until it is fixed.
-   *
-   * To declare a "failing" test:
-   * - `test.fail(title, body)`
-   * - `test.fail(title, details, body)`
-   *
-   * To annotate test as "failing" at runtime:
-   * - `test.fail(condition, description)`
-   * - `test.fail(callback, description)`
-   * - `test.fail()`
-   *
-   * **Usage**
-   *
-   * You can declare a test as failing, so that Playwright ensures it actually fails.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.fail('not yet ready', async ({ page }) => {
-   *   // ...
-   * });
-   * ```
-   *
-   * If your test fails in some configurations, but not all, you can mark the test as failing inside the test body based
-   * on some condition. We recommend passing a `description` argument in this case.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test('fail in WebKit', async ({ page, browserName }) => {
-   *   test.fail(browserName === 'webkit', 'This feature is not implemented for Mac yet');
-   *   // ...
-   * });
-   * ```
-   *
-   * You can mark all tests in a file or
-   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) group as
-   * "should fail" based on some condition with a single `test.fail(callback, description)` call.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.fail(({ browserName }) => browserName === 'webkit', 'not implemented yet');
-   *
-   * test('fail in WebKit 1', async ({ page }) => {
-   *   // ...
-   * });
-   * test('fail in WebKit 2', async ({ page }) => {
-   *   // ...
-   * });
-   * ```
-   *
-   * You can also call `test.fail()` without arguments inside the test body to always mark the test as failed. We
-   * recommend declaring a failing test with `test.fail(title, body)` instead.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test('less readable', async ({ page }) => {
-   *   test.fail();
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Test title.
-   * @param details See [test.(call)(title[, details, body])](https://playwright.dev/docs/api/class-test#test-call) for test details
-   * description.
-   * @param body Test body that takes one or two arguments: an object with fixtures and optional
-   * [TestInfo](https://playwright.dev/docs/api/class-testinfo).
-   * @param condition Test is marked as "should fail" when the condition is `true`.
-   * @param callback A function that returns whether to mark as "should fail", based on test fixtures. Test or tests are marked as
-   * "should fail" when the return value is `true`.
-   * @param description Optional description that will be reflected in a test report.
-   */
-  (condition: boolean, description?: string): void;
+     * Marks a test as "should fail". Playwright runs this test and ensures that it is actually failing. This is useful
+     * for documentation purposes to acknowledge that some functionality is broken until it is fixed.
+     *
+     * To declare a "failing" test:
+     * - `test.fail(title, body)`
+     * - `test.fail(title, details, body)`
+     *
+     * To annotate test as "failing" at runtime:
+     * - `test.fail(condition, description)`
+     * - `test.fail(callback, description)`
+     * - `test.fail()`
+     *
+     * **Usage**
+     *
+     * You can declare a test as failing, so that Playwright ensures it actually fails.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.fail('not yet ready', async ({ page }) => {
+     *   // ...
+     * });
+     * ```
+     *
+     * If your test fails in some configurations, but not all, you can mark the test as failing inside the test body based
+     * on some condition. We recommend passing a `description` argument in this case.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test('fail in WebKit', async ({ page, browserName }) => {
+     *   test.fail(browserName === 'webkit', 'This feature is not implemented for Mac yet');
+     *   // ...
+     * });
+     * ```
+     *
+     * You can mark all tests in a file or
+     * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) group as
+     * "should fail" based on some condition with a single `test.fail(callback, description)` call.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.fail(({ browserName }) => browserName === 'webkit', 'not implemented yet');
+     *
+     * test('fail in WebKit 1', async ({ page }) => {
+     *   // ...
+     * });
+     * test('fail in WebKit 2', async ({ page }) => {
+     *   // ...
+     * });
+     * ```
+     *
+     * You can also call `test.fail()` without arguments inside the test body to always mark the test as failed. We
+     * recommend declaring a failing test with `test.fail(title, body)` instead.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test('less readable', async ({ page }) => {
+     *   test.fail();
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Test title.
+     * @param details See [test.(call)(title[, details, body])](https://playwright.dev/docs/api/class-test#test-call) for test details
+     * description.
+     * @param body Test body that takes one or two arguments: an object with fixtures and optional
+     * [TestInfo](https://playwright.dev/docs/api/class-testinfo).
+     * @param condition Test is marked as "should fail" when the condition is `true`.
+     * @param callback A function that returns whether to mark as "should fail", based on test fixtures. Test or tests are marked as
+     * "should fail" when the return value is `true`.
+     * @param description Optional description that will be reflected in a test report.
+     */
+    (condition: boolean, description?: string): void;
     /**
-   * Marks a test as "should fail". Playwright runs this test and ensures that it is actually failing. This is useful
-   * for documentation purposes to acknowledge that some functionality is broken until it is fixed.
-   *
-   * To declare a "failing" test:
-   * - `test.fail(title, body)`
-   * - `test.fail(title, details, body)`
-   *
-   * To annotate test as "failing" at runtime:
-   * - `test.fail(condition, description)`
-   * - `test.fail(callback, description)`
-   * - `test.fail()`
-   *
-   * **Usage**
-   *
-   * You can declare a test as failing, so that Playwright ensures it actually fails.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.fail('not yet ready', async ({ page }) => {
-   *   // ...
-   * });
-   * ```
-   *
-   * If your test fails in some configurations, but not all, you can mark the test as failing inside the test body based
-   * on some condition. We recommend passing a `description` argument in this case.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test('fail in WebKit', async ({ page, browserName }) => {
-   *   test.fail(browserName === 'webkit', 'This feature is not implemented for Mac yet');
-   *   // ...
-   * });
-   * ```
-   *
-   * You can mark all tests in a file or
-   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) group as
-   * "should fail" based on some condition with a single `test.fail(callback, description)` call.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.fail(({ browserName }) => browserName === 'webkit', 'not implemented yet');
-   *
-   * test('fail in WebKit 1', async ({ page }) => {
-   *   // ...
-   * });
-   * test('fail in WebKit 2', async ({ page }) => {
-   *   // ...
-   * });
-   * ```
-   *
-   * You can also call `test.fail()` without arguments inside the test body to always mark the test as failed. We
-   * recommend declaring a failing test with `test.fail(title, body)` instead.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test('less readable', async ({ page }) => {
-   *   test.fail();
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Test title.
-   * @param details See [test.(call)(title[, details, body])](https://playwright.dev/docs/api/class-test#test-call) for test details
-   * description.
-   * @param body Test body that takes one or two arguments: an object with fixtures and optional
-   * [TestInfo](https://playwright.dev/docs/api/class-testinfo).
-   * @param condition Test is marked as "should fail" when the condition is `true`.
-   * @param callback A function that returns whether to mark as "should fail", based on test fixtures. Test or tests are marked as
-   * "should fail" when the return value is `true`.
-   * @param description Optional description that will be reflected in a test report.
-   */
-  (callback: ConditionBody<TestArgs & WorkerArgs>, description?: string): void;
+     * Marks a test as "should fail". Playwright runs this test and ensures that it is actually failing. This is useful
+     * for documentation purposes to acknowledge that some functionality is broken until it is fixed.
+     *
+     * To declare a "failing" test:
+     * - `test.fail(title, body)`
+     * - `test.fail(title, details, body)`
+     *
+     * To annotate test as "failing" at runtime:
+     * - `test.fail(condition, description)`
+     * - `test.fail(callback, description)`
+     * - `test.fail()`
+     *
+     * **Usage**
+     *
+     * You can declare a test as failing, so that Playwright ensures it actually fails.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.fail('not yet ready', async ({ page }) => {
+     *   // ...
+     * });
+     * ```
+     *
+     * If your test fails in some configurations, but not all, you can mark the test as failing inside the test body based
+     * on some condition. We recommend passing a `description` argument in this case.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test('fail in WebKit', async ({ page, browserName }) => {
+     *   test.fail(browserName === 'webkit', 'This feature is not implemented for Mac yet');
+     *   // ...
+     * });
+     * ```
+     *
+     * You can mark all tests in a file or
+     * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) group as
+     * "should fail" based on some condition with a single `test.fail(callback, description)` call.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.fail(({ browserName }) => browserName === 'webkit', 'not implemented yet');
+     *
+     * test('fail in WebKit 1', async ({ page }) => {
+     *   // ...
+     * });
+     * test('fail in WebKit 2', async ({ page }) => {
+     *   // ...
+     * });
+     * ```
+     *
+     * You can also call `test.fail()` without arguments inside the test body to always mark the test as failed. We
+     * recommend declaring a failing test with `test.fail(title, body)` instead.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test('less readable', async ({ page }) => {
+     *   test.fail();
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Test title.
+     * @param details See [test.(call)(title[, details, body])](https://playwright.dev/docs/api/class-test#test-call) for test details
+     * description.
+     * @param body Test body that takes one or two arguments: an object with fixtures and optional
+     * [TestInfo](https://playwright.dev/docs/api/class-testinfo).
+     * @param condition Test is marked as "should fail" when the condition is `true`.
+     * @param callback A function that returns whether to mark as "should fail", based on test fixtures. Test or tests are marked as
+     * "should fail" when the return value is `true`.
+     * @param description Optional description that will be reflected in a test report.
+     */
+    (callback: ConditionBody<TestArgs & WorkerArgs>, description?: string): void;
     /**
-   * Marks a test as "should fail". Playwright runs this test and ensures that it is actually failing. This is useful
-   * for documentation purposes to acknowledge that some functionality is broken until it is fixed.
-   *
-   * To declare a "failing" test:
-   * - `test.fail(title, body)`
-   * - `test.fail(title, details, body)`
-   *
-   * To annotate test as "failing" at runtime:
-   * - `test.fail(condition, description)`
-   * - `test.fail(callback, description)`
-   * - `test.fail()`
-   *
-   * **Usage**
-   *
-   * You can declare a test as failing, so that Playwright ensures it actually fails.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.fail('not yet ready', async ({ page }) => {
-   *   // ...
-   * });
-   * ```
-   *
-   * If your test fails in some configurations, but not all, you can mark the test as failing inside the test body based
-   * on some condition. We recommend passing a `description` argument in this case.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test('fail in WebKit', async ({ page, browserName }) => {
-   *   test.fail(browserName === 'webkit', 'This feature is not implemented for Mac yet');
-   *   // ...
-   * });
-   * ```
-   *
-   * You can mark all tests in a file or
-   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) group as
-   * "should fail" based on some condition with a single `test.fail(callback, description)` call.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.fail(({ browserName }) => browserName === 'webkit', 'not implemented yet');
-   *
-   * test('fail in WebKit 1', async ({ page }) => {
-   *   // ...
-   * });
-   * test('fail in WebKit 2', async ({ page }) => {
-   *   // ...
-   * });
-   * ```
-   *
-   * You can also call `test.fail()` without arguments inside the test body to always mark the test as failed. We
-   * recommend declaring a failing test with `test.fail(title, body)` instead.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test('less readable', async ({ page }) => {
-   *   test.fail();
-   *   // ...
-   * });
-   * ```
-   *
-   * @param title Test title.
-   * @param details See [test.(call)(title[, details, body])](https://playwright.dev/docs/api/class-test#test-call) for test details
-   * description.
-   * @param body Test body that takes one or two arguments: an object with fixtures and optional
-   * [TestInfo](https://playwright.dev/docs/api/class-testinfo).
-   * @param condition Test is marked as "should fail" when the condition is `true`.
-   * @param callback A function that returns whether to mark as "should fail", based on test fixtures. Test or tests are marked as
-   * "should fail" when the return value is `true`.
-   * @param description Optional description that will be reflected in a test report.
-   */
-  (): void;
+     * Marks a test as "should fail". Playwright runs this test and ensures that it is actually failing. This is useful
+     * for documentation purposes to acknowledge that some functionality is broken until it is fixed.
+     *
+     * To declare a "failing" test:
+     * - `test.fail(title, body)`
+     * - `test.fail(title, details, body)`
+     *
+     * To annotate test as "failing" at runtime:
+     * - `test.fail(condition, description)`
+     * - `test.fail(callback, description)`
+     * - `test.fail()`
+     *
+     * **Usage**
+     *
+     * You can declare a test as failing, so that Playwright ensures it actually fails.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.fail('not yet ready', async ({ page }) => {
+     *   // ...
+     * });
+     * ```
+     *
+     * If your test fails in some configurations, but not all, you can mark the test as failing inside the test body based
+     * on some condition. We recommend passing a `description` argument in this case.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test('fail in WebKit', async ({ page, browserName }) => {
+     *   test.fail(browserName === 'webkit', 'This feature is not implemented for Mac yet');
+     *   // ...
+     * });
+     * ```
+     *
+     * You can mark all tests in a file or
+     * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) group as
+     * "should fail" based on some condition with a single `test.fail(callback, description)` call.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.fail(({ browserName }) => browserName === 'webkit', 'not implemented yet');
+     *
+     * test('fail in WebKit 1', async ({ page }) => {
+     *   // ...
+     * });
+     * test('fail in WebKit 2', async ({ page }) => {
+     *   // ...
+     * });
+     * ```
+     *
+     * You can also call `test.fail()` without arguments inside the test body to always mark the test as failed. We
+     * recommend declaring a failing test with `test.fail(title, body)` instead.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test('less readable', async ({ page }) => {
+     *   test.fail();
+     *   // ...
+     * });
+     * ```
+     *
+     * @param title Test title.
+     * @param details See [test.(call)(title[, details, body])](https://playwright.dev/docs/api/class-test#test-call) for test details
+     * description.
+     * @param body Test body that takes one or two arguments: an object with fixtures and optional
+     * [TestInfo](https://playwright.dev/docs/api/class-testinfo).
+     * @param condition Test is marked as "should fail" when the condition is `true`.
+     * @param callback A function that returns whether to mark as "should fail", based on test fixtures. Test or tests are marked as
+     * "should fail" when the return value is `true`.
+     * @param description Optional description that will be reflected in a test report.
+     */
+    (): void;
 
     /**
-   * You can use `test.fail.only` to focus on a specific test that is expected to fail. This is particularly useful when
-   * debugging a failing test or working on a specific issue.
-   *
-   * To declare a focused "failing" test:
-   * - `test.fail.only(title, body)`
-   * - `test.fail.only(title, details, body)`
-   *
-   * **Usage**
-   *
-   * You can declare a focused failing test, so that Playwright runs only this test and ensures it actually fails.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.fail.only('focused failing test', async ({ page }) => {
-   *   // This test is expected to fail
-   * });
-   * test('not in the focused group', async ({ page }) => {
-   *   // This test will not run
-   * });
-   * ```
-   *
-   * @param title Test title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for test
-   * details description.
-   * @param body Test body that takes one or two arguments: an object with fixtures and optional
-   * [TestInfo](https://playwright.dev/docs/api/class-testinfo).
-   */
-  only(title: string, body: TestBody<TestArgs & WorkerArgs>): void;
+     * You can use `test.fail.only` to focus on a specific test that is expected to fail. This is particularly useful when
+     * debugging a failing test or working on a specific issue.
+     *
+     * To declare a focused "failing" test:
+     * - `test.fail.only(title, body)`
+     * - `test.fail.only(title, details, body)`
+     *
+     * **Usage**
+     *
+     * You can declare a focused failing test, so that Playwright runs only this test and ensures it actually fails.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.fail.only('focused failing test', async ({ page }) => {
+     *   // This test is expected to fail
+     * });
+     * test('not in the focused group', async ({ page }) => {
+     *   // This test will not run
+     * });
+     * ```
+     *
+     * @param title Test title.
+     * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for test
+     * details description.
+     * @param body Test body that takes one or two arguments: an object with fixtures and optional
+     * [TestInfo](https://playwright.dev/docs/api/class-testinfo).
+     */
+    only(title: string, body: TestBody<TestArgs & WorkerArgs>): void;
     /**
-   * You can use `test.fail.only` to focus on a specific test that is expected to fail. This is particularly useful when
-   * debugging a failing test or working on a specific issue.
-   *
-   * To declare a focused "failing" test:
-   * - `test.fail.only(title, body)`
-   * - `test.fail.only(title, details, body)`
-   *
-   * **Usage**
-   *
-   * You can declare a focused failing test, so that Playwright runs only this test and ensures it actually fails.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.fail.only('focused failing test', async ({ page }) => {
-   *   // This test is expected to fail
-   * });
-   * test('not in the focused group', async ({ page }) => {
-   *   // This test will not run
-   * });
-   * ```
-   *
-   * @param title Test title.
-   * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for test
-   * details description.
-   * @param body Test body that takes one or two arguments: an object with fixtures and optional
-   * [TestInfo](https://playwright.dev/docs/api/class-testinfo).
-   */
-  only(title: string, details: TestDetails, body: TestBody<TestArgs & WorkerArgs>): void;
+     * You can use `test.fail.only` to focus on a specific test that is expected to fail. This is particularly useful when
+     * debugging a failing test or working on a specific issue.
+     *
+     * To declare a focused "failing" test:
+     * - `test.fail.only(title, body)`
+     * - `test.fail.only(title, details, body)`
+     *
+     * **Usage**
+     *
+     * You can declare a focused failing test, so that Playwright runs only this test and ensures it actually fails.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test.fail.only('focused failing test', async ({ page }) => {
+     *   // This test is expected to fail
+     * });
+     * test('not in the focused group', async ({ page }) => {
+     *   // This test will not run
+     * });
+     * ```
+     *
+     * @param title Test title.
+     * @param details See [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) for test
+     * details description.
+     * @param body Test body that takes one or two arguments: an object with fixtures and optional
+     * [TestInfo](https://playwright.dev/docs/api/class-testinfo).
+     */
+    only(title: string, details: TestDetails, body: TestBody<TestArgs & WorkerArgs>): void;
   }
 
   /**
@@ -5746,192 +6274,192 @@ export interface TestType<TestArgs extends {}, WorkerArgs extends {}> {
    */
   step: {
     /**
-   * Declares a test step that is shown in the report.
-   *
-   * **Usage**
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test('test', async ({ page }) => {
-   *   await test.step('Log in', async () => {
-   *     // ...
-   *   });
-   *
-   *   await test.step('Outer step', async () => {
-   *     // ...
-   *     // You can nest steps inside each other.
-   *     await test.step('Inner step', async () => {
-   *       // ...
-   *     });
-   *   });
-   * });
-   * ```
-   *
-   * **Details**
-   *
-   * The method returns the value returned by the step callback.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test('test', async ({ page }) => {
-   *   const user = await test.step('Log in', async () => {
-   *     // ...
-   *     return 'john';
-   *   });
-   *   expect(user).toBe('john');
-   * });
-   * ```
-   *
-   * **Decorator**
-   *
-   * You can use TypeScript method decorators to turn a method into a step. Each call to the decorated method will show
-   * up as a step in the report.
-   *
-   * ```js
-   * function step(target: Function, context: ClassMethodDecoratorContext) {
-   *   return function replacementMethod(...args: any) {
-   *     const name = this.constructor.name + '.' + (context.name as string);
-   *     return test.step(name, async () => {
-   *       return await target.call(this, ...args);
-   *     });
-   *   };
-   * }
-   *
-   * class LoginPage {
-   *   constructor(readonly page: Page) {}
-   *
-   *   @step
-   *   async login() {
-   *     const account = { username: 'Alice', password: 's3cr3t' };
-   *     await this.page.getByLabel('Username or email address').fill(account.username);
-   *     await this.page.getByLabel('Password').fill(account.password);
-   *     await this.page.getByRole('button', { name: 'Sign in' }).click();
-   *     await expect(this.page.getByRole('button', { name: 'View profile and more' })).toBeVisible();
-   *   }
-   * }
-   *
-   * test('example', async ({ page }) => {
-   *   const loginPage = new LoginPage(page);
-   *   await loginPage.login();
-   * });
-   * ```
-   *
-   * **Boxing**
-   *
-   * When something inside a step fails, you would usually see the error pointing to the exact action that failed. For
-   * example, consider the following login step:
-   *
-   * ```js
-   * async function login(page) {
-   *   await test.step('login', async () => {
-   *     const account = { username: 'Alice', password: 's3cr3t' };
-   *     await page.getByLabel('Username or email address').fill(account.username);
-   *     await page.getByLabel('Password').fill(account.password);
-   *     await page.getByRole('button', { name: 'Sign in' }).click();
-   *     await expect(page.getByRole('button', { name: 'View profile and more' })).toBeVisible();
-   *   });
-   * }
-   *
-   * test('example', async ({ page }) => {
-   *   await page.goto('https://github.com/login');
-   *   await login(page);
-   * });
-   * ```
-   *
-   * ```txt
-   * Error: Timed out 5000ms waiting for expect(locator).toBeVisible()
-   *   ... error details omitted ...
-   *
-   *    8 |     await page.getByRole('button', { name: 'Sign in' }).click();
-   * >  9 |     await expect(page.getByRole('button', { name: 'View profile and more' })).toBeVisible();
-   *      |                                                                               ^
-   *   10 |   });
-   * ```
-   *
-   * As we see above, the test may fail with an error pointing inside the step. If you would like the error to highlight
-   * the "login" step instead of its internals, use the `box` option. An error inside a boxed step points to the step
-   * call site.
-   *
-   * ```js
-   * async function login(page) {
-   *   await test.step('login', async () => {
-   *     // ...
-   *   }, { box: true });  // Note the "box" option here.
-   * }
-   * ```
-   *
-   * ```txt
-   * Error: Timed out 5000ms waiting for expect(locator).toBeVisible()
-   *   ... error details omitted ...
-   *
-   *   14 |   await page.goto('https://github.com/login');
-   * > 15 |   await login(page);
-   *      |         ^
-   *   16 | });
-   * ```
-   *
-   * You can also create a TypeScript decorator for a boxed step, similar to a regular step decorator above:
-   *
-   * ```js
-   * function boxedStep(target: Function, context: ClassMethodDecoratorContext) {
-   *   return function replacementMethod(...args: any) {
-   *     const name = this.constructor.name + '.' + (context.name as string);
-   *     return test.step(name, async () => {
-   *       return await target.call(this, ...args);
-   *     }, { box: true });  // Note the "box" option here.
-   *   };
-   * }
-   *
-   * class LoginPage {
-   *   constructor(readonly page: Page) {}
-   *
-   *   @boxedStep
-   *   async login() {
-   *     // ....
-   *   }
-   * }
-   *
-   * test('example', async ({ page }) => {
-   *   const loginPage = new LoginPage(page);
-   *   await loginPage.login();  // <-- Error will be reported on this line.
-   * });
-   * ```
-   *
-   * @param title Step name.
-   * @param body Step body.
-   * @param options
-   */
-  <T>(title: string, body: (step: TestStepInfo) => T | Promise<T>, options?: { box?: boolean, location?: Location, timeout?: number }): Promise<T>;
+     * Declares a test step that is shown in the report.
+     *
+     * **Usage**
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test('test', async ({ page }) => {
+     *   await test.step('Log in', async () => {
+     *     // ...
+     *   });
+     *
+     *   await test.step('Outer step', async () => {
+     *     // ...
+     *     // You can nest steps inside each other.
+     *     await test.step('Inner step', async () => {
+     *       // ...
+     *     });
+     *   });
+     * });
+     * ```
+     *
+     * **Details**
+     *
+     * The method returns the value returned by the step callback.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test('test', async ({ page }) => {
+     *   const user = await test.step('Log in', async () => {
+     *     // ...
+     *     return 'john';
+     *   });
+     *   expect(user).toBe('john');
+     * });
+     * ```
+     *
+     * **Decorator**
+     *
+     * You can use TypeScript method decorators to turn a method into a step. Each call to the decorated method will show
+     * up as a step in the report.
+     *
+     * ```js
+     * function step(target: Function, context: ClassMethodDecoratorContext) {
+     *   return function replacementMethod(...args: any) {
+     *     const name = this.constructor.name + '.' + (context.name as string);
+     *     return test.step(name, async () => {
+     *       return await target.call(this, ...args);
+     *     });
+     *   };
+     * }
+     *
+     * class LoginPage {
+     *   constructor(readonly page: Page) {}
+     *
+     *   @step
+     *   async login() {
+     *     const account = { username: 'Alice', password: 's3cr3t' };
+     *     await this.page.getByLabel('Username or email address').fill(account.username);
+     *     await this.page.getByLabel('Password').fill(account.password);
+     *     await this.page.getByRole('button', { name: 'Sign in' }).click();
+     *     await expect(this.page.getByRole('button', { name: 'View profile and more' })).toBeVisible();
+     *   }
+     * }
+     *
+     * test('example', async ({ page }) => {
+     *   const loginPage = new LoginPage(page);
+     *   await loginPage.login();
+     * });
+     * ```
+     *
+     * **Boxing**
+     *
+     * When something inside a step fails, you would usually see the error pointing to the exact action that failed. For
+     * example, consider the following login step:
+     *
+     * ```js
+     * async function login(page) {
+     *   await test.step('login', async () => {
+     *     const account = { username: 'Alice', password: 's3cr3t' };
+     *     await page.getByLabel('Username or email address').fill(account.username);
+     *     await page.getByLabel('Password').fill(account.password);
+     *     await page.getByRole('button', { name: 'Sign in' }).click();
+     *     await expect(page.getByRole('button', { name: 'View profile and more' })).toBeVisible();
+     *   });
+     * }
+     *
+     * test('example', async ({ page }) => {
+     *   await page.goto('https://github.com/login');
+     *   await login(page);
+     * });
+     * ```
+     *
+     * ```txt
+     * Error: Timed out 5000ms waiting for expect(locator).toBeVisible()
+     *   ... error details omitted ...
+     *
+     *    8 |     await page.getByRole('button', { name: 'Sign in' }).click();
+     * >  9 |     await expect(page.getByRole('button', { name: 'View profile and more' })).toBeVisible();
+     *      |                                                                               ^
+     *   10 |   });
+     * ```
+     *
+     * As we see above, the test may fail with an error pointing inside the step. If you would like the error to highlight
+     * the "login" step instead of its internals, use the `box` option. An error inside a boxed step points to the step
+     * call site.
+     *
+     * ```js
+     * async function login(page) {
+     *   await test.step('login', async () => {
+     *     // ...
+     *   }, { box: true });  // Note the "box" option here.
+     * }
+     * ```
+     *
+     * ```txt
+     * Error: Timed out 5000ms waiting for expect(locator).toBeVisible()
+     *   ... error details omitted ...
+     *
+     *   14 |   await page.goto('https://github.com/login');
+     * > 15 |   await login(page);
+     *      |         ^
+     *   16 | });
+     * ```
+     *
+     * You can also create a TypeScript decorator for a boxed step, similar to a regular step decorator above:
+     *
+     * ```js
+     * function boxedStep(target: Function, context: ClassMethodDecoratorContext) {
+     *   return function replacementMethod(...args: any) {
+     *     const name = this.constructor.name + '.' + (context.name as string);
+     *     return test.step(name, async () => {
+     *       return await target.call(this, ...args);
+     *     }, { box: true });  // Note the "box" option here.
+     *   };
+     * }
+     *
+     * class LoginPage {
+     *   constructor(readonly page: Page) {}
+     *
+     *   @boxedStep
+     *   async login() {
+     *     // ....
+     *   }
+     * }
+     *
+     * test('example', async ({ page }) => {
+     *   const loginPage = new LoginPage(page);
+     *   await loginPage.login();  // <-- Error will be reported on this line.
+     * });
+     * ```
+     *
+     * @param title Step name.
+     * @param body Step body.
+     * @param options
+     */
+    <T>(title: string, body: (step: TestStepInfo) => T | Promise<T>, options?: { box?: boolean, location?: Location, timeout?: number }): Promise<T>;
     /**
-   * Mark a test step as "skip" to temporarily disable its execution, useful for steps that are currently failing and
-   * planned for a near-term fix. Playwright will not run the step. See also
-   * [testStepInfo.skip(condition[, description])](https://playwright.dev/docs/api/class-teststepinfo#test-step-info-skip-2).
-   *
-   * We recommend [testStepInfo.skip()](https://playwright.dev/docs/api/class-teststepinfo#test-step-info-skip-1)
-   * instead.
-   *
-   * **Usage**
-   *
-   * You can declare a skipped step, and Playwright will not run it.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test('my test', async ({ page }) => {
-   *   // ...
-   *   await test.step.skip('not yet ready', async () => {
-   *     // ...
-   *   });
-   * });
-   * ```
-   *
-   * @param title Step name.
-   * @param body Step body.
-   * @param options
-   */
-  skip(title: string, body: (step: TestStepInfo) => any | Promise<any>, options?: { box?: boolean, location?: Location, timeout?: number }): Promise<void>;
+     * Mark a test step as "skip" to temporarily disable its execution, useful for steps that are currently failing and
+     * planned for a near-term fix. Playwright will not run the step. See also
+     * [testStepInfo.skip(condition[, description])](https://playwright.dev/docs/api/class-teststepinfo#test-step-info-skip-2).
+     *
+     * We recommend [testStepInfo.skip()](https://playwright.dev/docs/api/class-teststepinfo#test-step-info-skip-1)
+     * instead.
+     *
+     * **Usage**
+     *
+     * You can declare a skipped step, and Playwright will not run it.
+     *
+     * ```js
+     * import { test, expect } from '@playwright/test';
+     *
+     * test('my test', async ({ page }) => {
+     *   // ...
+     *   await test.step.skip('not yet ready', async () => {
+     *     // ...
+     *   });
+     * });
+     * ```
+     *
+     * @param title Step name.
+     * @param body Step body.
+     * @param options
+     */
+    skip(title: string, body: (step: TestStepInfo) => any | Promise<any>, options?: { box?: boolean, location?: Location, timeout?: number }): Promise<void>;
   }
   /**
    * `expect` function can be used to create test assertions. Read more about [test assertions](https://playwright.dev/docs/test-assertions).
@@ -7747,9 +8275,9 @@ type AllMatchers<R, T> = PageAssertions & LocatorAssertions & APIResponseAsserti
 
 type IfAny<T, Y, N> = 0 extends (1 & T) ? Y : N;
 type Awaited<T> = T extends PromiseLike<infer U> ? U : T;
-type ToUserMatcher<F> = F extends (first: any, ...args: infer Rest) => infer R ? (...args: Rest) => (R extends PromiseLike<infer U> ? Promise<void> : void) : never;
-type ToUserMatcherObject<T, ArgType> = {
-  [K in keyof T as T[K] extends (arg: ArgType, ...rest: any[]) => any ? K : never]: ToUserMatcher<T[K]>;
+type ToUserMatcher<F, DefaultReturnType> = F extends (first: any, ...args: infer Rest) => infer R ? (...args: Rest) => (R extends PromiseLike<infer U> ? Promise<void> : DefaultReturnType) : never;
+type ToUserMatcherObject<T, DefaultReturnType, ArgType> = {
+  [K in keyof T as T[K] extends (arg: ArgType, ...rest: any[]) => any ? K : never]: ToUserMatcher<T[K], DefaultReturnType>;
 };
 
 type MatcherHintColor = (arg: string) => string;
@@ -7818,14 +8346,14 @@ type MakeMatchers<R, T, ExtendedMatchers> = {
    * If the promise is fulfilled the assertion fails.
    */
   rejects: MakeMatchers<Promise<R>, any, ExtendedMatchers>;
-} & IfAny<T, AllMatchers<R, T>, SpecificMatchers<R, T> & ToUserMatcherObject<ExtendedMatchers, T>>;
+} & IfAny<T, AllMatchers<R, T>, SpecificMatchers<R, T> & ToUserMatcherObject<ExtendedMatchers, R, T>>;
 
 type PollMatchers<R, T, ExtendedMatchers> = {
   /**
    * If you know how to test something, `.not` lets you test its opposite.
    */
   not: PollMatchers<R, T, ExtendedMatchers>;
-} & BaseMatchers<R, T> & ToUserMatcherObject<ExtendedMatchers, T>;
+} & BaseMatchers<R, T> & ToUserMatcherObject<ExtendedMatchers, R, T>;
 
 export type Expect<ExtendedMatchers = {}> = {
   <T = unknown>(actual: T, messageOrOptions?: string | { message?: string }): MakeMatchers<void, T, ExtendedMatchers>;
@@ -8218,7 +8746,7 @@ interface LocatorAssertions {
    * expected class lists. Each element's class attribute is matched against the corresponding class in the array:
    *
    * ```html
-   * <div class='list'></div>
+   * <div class='list'>
    *   <div class='component inactive'></div>
    *   <div class='component active'></div>
    *   <div class='component inactive'></div>
@@ -8226,7 +8754,7 @@ interface LocatorAssertions {
    * ```
    *
    * ```js
-   * const locator = page.locator('list > .component');
+   * const locator = page.locator('.list > .component');
    * await expect(locator).toContainClass(['inactive', 'active', 'inactive']);
    * ```
    *
@@ -8468,7 +8996,7 @@ interface LocatorAssertions {
    * expression in the array:
    *
    * ```js
-   * const locator = page.locator('list > .component');
+   * const locator = page.locator('.list > .component');
    * await expect(locator).toHaveClass(['component', 'component selected', 'component']);
    * ```
    *
@@ -9224,461 +9752,6 @@ export interface Location {
    * Line number in the source file.
    */
   line: number;
-}
-
-/**
- * `TestInfo` contains information about currently running test. It is available to test functions,
- * [test.beforeEach([title, hookFunction])](https://playwright.dev/docs/api/class-test#test-before-each),
- * [test.afterEach([title, hookFunction])](https://playwright.dev/docs/api/class-test#test-after-each),
- * [test.beforeAll([title, hookFunction])](https://playwright.dev/docs/api/class-test#test-before-all) and
- * [test.afterAll([title, hookFunction])](https://playwright.dev/docs/api/class-test#test-after-all) hooks, and
- * test-scoped fixtures. `TestInfo` provides utilities to control test execution: attach files, update test timeout,
- * determine which test is currently running and whether it was retried, etc.
- *
- * ```js
- * import { test, expect } from '@playwright/test';
- *
- * test('basic test', async ({ page }, testInfo) => {
- *   expect(testInfo.title).toBe('basic test');
- *   await page.screenshot(testInfo.outputPath('screenshot.png'));
- * });
- * ```
- *
- */
-export interface TestInfo {
-  /**
-   * Attach a value or a file from disk to the current test. Some reporters show test attachments. Either
-   * [`path`](https://playwright.dev/docs/api/class-testinfo#test-info-attach-option-path) or
-   * [`body`](https://playwright.dev/docs/api/class-testinfo#test-info-attach-option-body) must be specified, but not
-   * both.
-   *
-   * For example, you can attach a screenshot to the test:
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test('basic test', async ({ page }, testInfo) => {
-   *   await page.goto('https://playwright.dev');
-   *   const screenshot = await page.screenshot();
-   *   await testInfo.attach('screenshot', { body: screenshot, contentType: 'image/png' });
-   * });
-   * ```
-   *
-   * Or you can attach files returned by your APIs:
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   * import { download } from './my-custom-helpers';
-   *
-   * test('basic test', async ({}, testInfo) => {
-   *   const tmpPath = await download('a');
-   *   await testInfo.attach('downloaded', { path: tmpPath });
-   * });
-   * ```
-   *
-   * **NOTE** [testInfo.attach(name[, options])](https://playwright.dev/docs/api/class-testinfo#test-info-attach)
-   * automatically takes care of copying attached files to a location that is accessible to reporters. You can safely
-   * remove the attachment after awaiting the attach call.
-   *
-   * @param name Attachment name. The name will also be sanitized and used as the prefix of file name when saving to disk.
-   * @param options
-   */
-  attach(name: string, options?: {
-    /**
-     * Attachment body. Mutually exclusive with
-     * [`path`](https://playwright.dev/docs/api/class-testinfo#test-info-attach-option-path).
-     */
-    body?: string|Buffer;
-
-    /**
-     * Content type of this attachment to properly present in the report, for example `'application/json'` or
-     * `'image/png'`. If omitted, content type is inferred based on the
-     * [`path`](https://playwright.dev/docs/api/class-testinfo#test-info-attach-option-path), or defaults to `text/plain`
-     * for [string] attachments and `application/octet-stream` for [Buffer] attachments.
-     */
-    contentType?: string;
-
-    /**
-     * Path on the filesystem to the attached file. Mutually exclusive with
-     * [`body`](https://playwright.dev/docs/api/class-testinfo#test-info-attach-option-body).
-     */
-    path?: string;
-  }): Promise<void>;
-
-  /**
-   * Marks the currently running test as "should fail". Playwright Test runs this test and ensures that it is actually
-   * failing. This is useful for documentation purposes to acknowledge that some functionality is broken until it is
-   * fixed. This is similar to
-   * [test.fail([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-fail).
-   */
-  fail(): void;
-
-  /**
-   * Conditionally mark the currently running test as "should fail" with an optional description. This is similar to
-   * [test.fail([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-fail).
-   * @param condition Test is marked as "should fail" when the condition is `true`.
-   * @param description Optional description that will be reflected in a test report.
-   */
-  fail(condition: boolean, description?: string): void;
-
-  /**
-   * Mark a test as "fixme", with the intention to fix it. Test is immediately aborted. This is similar to
-   * [test.fixme([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-fixme).
-   */
-  fixme(): void;
-
-  /**
-   * Conditionally mark the currently running test as "fixme" with an optional description. This is similar to
-   * [test.fixme([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-fixme).
-   * @param condition Test is marked as "fixme" when the condition is `true`.
-   * @param description Optional description that will be reflected in a test report.
-   */
-  fixme(condition: boolean, description?: string): void;
-
-  /**
-   * Returns a path inside the [testInfo.outputDir](https://playwright.dev/docs/api/class-testinfo#test-info-output-dir)
-   * where the test can safely put a temporary file. Guarantees that tests running in parallel will not interfere with
-   * each other.
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   * import fs from 'fs';
-   *
-   * test('example test', async ({}, testInfo) => {
-   *   const file = testInfo.outputPath('dir', 'temporary-file.txt');
-   *   await fs.promises.writeFile(file, 'Put some data to the dir/temporary-file.txt', 'utf8');
-   * });
-   * ```
-   *
-   * > Note that `pathSegments` accepts path segments to the test output directory such as
-   * `testInfo.outputPath('relative', 'path', 'to', 'output')`.
-   * > However, this path must stay within the
-   * [testInfo.outputDir](https://playwright.dev/docs/api/class-testinfo#test-info-output-dir) directory for each test
-   * (i.e. `test-results/a-test-title`), otherwise it will throw.
-   * @param pathSegments Path segments to append at the end of the resulting path.
-   */
-  outputPath(...pathSegments: ReadonlyArray<string>): string;
-
-  /**
-   * Changes the timeout for the currently running test. Zero means no timeout. Learn more about
-   * [various timeouts](https://playwright.dev/docs/test-timeouts).
-   *
-   * Timeout is usually specified in the [configuration file](https://playwright.dev/docs/test-configuration), but it could be useful to
-   * change the timeout in certain scenarios:
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.beforeEach(async ({ page }, testInfo) => {
-   *   // Extend timeout for all tests running this hook by 30 seconds.
-   *   testInfo.setTimeout(testInfo.timeout + 30000);
-   * });
-   * ```
-   *
-   * @param timeout Timeout in milliseconds.
-   */
-  setTimeout(timeout: number): void;
-
-  /**
-   * Unconditionally skip the currently running test. Test is immediately aborted. This is similar to
-   * [test.skip([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-skip).
-   */
-  skip(): void;
-
-  /**
-   * Conditionally skips the currently running test with an optional description. This is similar to
-   * [test.skip([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-skip).
-   * @param condition A skip condition. Test is skipped when the condition is `true`.
-   * @param description Optional description that will be reflected in a test report.
-   */
-  skip(condition: boolean, description?: string): void;
-
-  /**
-   * Marks the currently running test as "slow", giving it triple the default timeout. This is similar to
-   * [test.slow([condition, callback, description])](https://playwright.dev/docs/api/class-test#test-slow).
-   */
-  slow(): void;
-
-  /**
-   * Conditionally mark the currently running test as "slow" with an optional description, giving it triple the default
-   * timeout. This is similar to
-   * [test.slow([condition, callback, description])](https://playwright.dev/docs/api/class-test#test-slow).
-   * @param condition Test is marked as "slow" when the condition is `true`.
-   * @param description Optional description that will be reflected in a test report.
-   */
-  slow(condition: boolean, description?: string): void;
-
-  /**
-   * Returns a path to a snapshot file with the given `pathSegments`. Learn more about
-   * [snapshots](https://playwright.dev/docs/test-snapshots).
-   *
-   * > Note that `pathSegments` accepts path segments to the snapshot file such as `testInfo.snapshotPath('relative',
-   * 'path', 'to', 'snapshot.png')`.
-   * > However, this path must stay within the snapshots directory for each test file (i.e. `a.spec.js-snapshots`),
-   * otherwise it will throw.
-   * @param pathSegments The name of the snapshot or the path segments to define the snapshot file path. Snapshots with the same name in the
-   * same test file are expected to be the same.
-   */
-  snapshotPath(...pathSegments: ReadonlyArray<string>): string;
-
-  /**
-   * The list of annotations applicable to the current test. Includes annotations from the test, annotations from all
-   * [test.describe([title, details, callback])](https://playwright.dev/docs/api/class-test#test-describe) groups the
-   * test belongs to and file-level annotations for the test file.
-   *
-   * Learn more about [test annotations](https://playwright.dev/docs/test-annotations).
-   */
-  annotations: Array<{
-    /**
-     * Annotation type, for example `'skip'` or `'fail'`.
-     */
-    type: string;
-
-    /**
-     * Optional description.
-     */
-    description?: string;
-  }>;
-
-  /**
-   * The list of files or buffers attached to the current test. Some reporters show test attachments.
-   *
-   * To add an attachment, use
-   * [testInfo.attach(name[, options])](https://playwright.dev/docs/api/class-testinfo#test-info-attach) instead of
-   * directly pushing onto this array.
-   */
-  attachments: Array<{
-    /**
-     * Attachment name.
-     */
-    name: string;
-
-    /**
-     * Content type of this attachment to properly present in the report, for example `'application/json'` or
-     * `'image/png'`.
-     */
-    contentType: string;
-
-    /**
-     * Optional path on the filesystem to the attached file.
-     */
-    path?: string;
-
-    /**
-     * Optional attachment body used instead of a file.
-     */
-    body?: Buffer;
-  }>;
-
-  /**
-   * Column number where the currently running test is declared.
-   */
-  column: number;
-
-  /**
-   * Processed configuration from the [configuration file](https://playwright.dev/docs/test-configuration).
-   */
-  config: FullConfig;
-
-  /**
-   * The number of milliseconds the test took to finish. Always zero before the test finishes, either successfully or
-   * not. Can be used in
-   * [test.afterEach([title, hookFunction])](https://playwright.dev/docs/api/class-test#test-after-each) hook.
-   */
-  duration: number;
-
-  /**
-   * First error thrown during test execution, if any. This is equal to the first element in
-   * [testInfo.errors](https://playwright.dev/docs/api/class-testinfo#test-info-errors).
-   */
-  error?: TestInfoError;
-
-  /**
-   * Errors thrown during test execution, if any.
-   */
-  errors: Array<TestInfoError>;
-
-  /**
-   * Expected status for the currently running test. This is usually `'passed'`, except for a few cases:
-   * - `'skipped'` for skipped tests, e.g. with
-   *   [test.skip([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-skip);
-   * - `'failed'` for tests marked as failed with
-   *   [test.fail([title, details, body, condition, callback, description])](https://playwright.dev/docs/api/class-test#test-fail).
-   *
-   * Expected status is usually compared with the actual
-   * [testInfo.status](https://playwright.dev/docs/api/class-testinfo#test-info-status):
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.afterEach(async ({}, testInfo) => {
-   *   if (testInfo.status !== testInfo.expectedStatus)
-   *     console.log(`${testInfo.title} did not run as expected!`);
-   * });
-   * ```
-   *
-   */
-  expectedStatus: "passed"|"failed"|"timedOut"|"skipped"|"interrupted";
-
-  /**
-   * Absolute path to a file where the currently running test is declared.
-   */
-  file: string;
-
-  /**
-   * Test function as passed to `test(title, testFunction)`.
-   */
-  fn: Function;
-
-  /**
-   * Line number where the currently running test is declared.
-   */
-  line: number;
-
-  /**
-   * Absolute path to the output directory for this specific test run. Each test run gets its own directory so they
-   * cannot conflict.
-   */
-  outputDir: string;
-
-  /**
-   * The index of the worker between `0` and `workers - 1`. It is guaranteed that workers running at the same time have
-   * a different `parallelIndex`. When a worker is restarted, for example after a failure, the new worker process has
-   * the same `parallelIndex`.
-   *
-   * Also available as `process.env.TEST_PARALLEL_INDEX`. Learn more about
-   * [parallelism and sharding](https://playwright.dev/docs/test-parallel) with Playwright Test.
-   */
-  parallelIndex: number;
-
-  /**
-   * Processed project configuration from the [configuration file](https://playwright.dev/docs/test-configuration).
-   */
-  project: FullProject;
-
-  /**
-   * Specifies a unique repeat index when running in "repeat each" mode. This mode is enabled by passing `--repeat-each`
-   * to the [command line](https://playwright.dev/docs/test-cli).
-   */
-  repeatEachIndex: number;
-
-  /**
-   * Specifies the retry number when the test is retried after a failure. The first test run has
-   * [testInfo.retry](https://playwright.dev/docs/api/class-testinfo#test-info-retry) equal to zero, the first retry has
-   * it equal to one, and so on. Learn more about [retries](https://playwright.dev/docs/test-retries#retries).
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.beforeEach(async ({}, testInfo) => {
-   *   // You can access testInfo.retry in any hook or fixture.
-   *   if (testInfo.retry > 0)
-   *     console.log(`Retrying!`);
-   * });
-   *
-   * test('my test', async ({ page }, testInfo) => {
-   *   // Here we clear some server-side state when retrying.
-   *   if (testInfo.retry)
-   *     await cleanSomeCachesOnTheServer();
-   *   // ...
-   * });
-   * ```
-   *
-   */
-  retry: number;
-
-  /**
-   * Absolute path to the snapshot output directory for this specific test. Each test suite gets its own directory so
-   * they cannot conflict.
-   *
-   * This property does not account for the
-   * [testProject.snapshotPathTemplate](https://playwright.dev/docs/api/class-testproject#test-project-snapshot-path-template)
-   * configuration.
-   */
-  snapshotDir: string;
-
-  /**
-   * **NOTE** Use of [testInfo.snapshotSuffix](https://playwright.dev/docs/api/class-testinfo#test-info-snapshot-suffix)
-   * is discouraged. Please use
-   * [testConfig.snapshotPathTemplate](https://playwright.dev/docs/api/class-testconfig#test-config-snapshot-path-template)
-   * to configure snapshot paths.
-   *
-   * Suffix used to differentiate snapshots between multiple test configurations. For example, if snapshots depend on
-   * the platform, you can set `testInfo.snapshotSuffix` equal to `process.platform`. In this case
-   * `expect(value).toMatchSnapshot(snapshotName)` will use different snapshots depending on the platform. Learn more
-   * about [snapshots](https://playwright.dev/docs/test-snapshots).
-   */
-  snapshotSuffix: string;
-
-  /**
-   * Actual status for the currently running test. Available after the test has finished in
-   * [test.afterEach([title, hookFunction])](https://playwright.dev/docs/api/class-test#test-after-each) hook and
-   * fixtures.
-   *
-   * Status is usually compared with the
-   * [testInfo.expectedStatus](https://playwright.dev/docs/api/class-testinfo#test-info-expected-status):
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.afterEach(async ({}, testInfo) => {
-   *   if (testInfo.status !== testInfo.expectedStatus)
-   *     console.log(`${testInfo.title} did not run as expected!`);
-   * });
-   * ```
-   *
-   */
-  status?: "passed"|"failed"|"timedOut"|"skipped"|"interrupted";
-
-  /**
-   * Tags that apply to the test. Learn more about [tags](https://playwright.dev/docs/test-annotations#tag-tests).
-   *
-   * **NOTE** Any changes made to this list while the test is running will not be visible to test reporters.
-   *
-   */
-  tags: Array<string>;
-
-  /**
-   * Test id matching the test case id in the reporter API.
-   */
-  testId: string;
-
-  /**
-   * Timeout in milliseconds for the currently running test. Zero means no timeout. Learn more about
-   * [various timeouts](https://playwright.dev/docs/test-timeouts).
-   *
-   * Timeout is usually specified in the [configuration file](https://playwright.dev/docs/test-configuration)
-   *
-   * ```js
-   * import { test, expect } from '@playwright/test';
-   *
-   * test.beforeEach(async ({ page }, testInfo) => {
-   *   // Extend timeout for all tests running this hook by 30 seconds.
-   *   testInfo.setTimeout(testInfo.timeout + 30000);
-   * });
-   * ```
-   *
-   */
-  timeout: number;
-
-  /**
-   * The title of the currently running test as passed to `test(title, testFunction)`.
-   */
-  title: string;
-
-  /**
-   * The full title path starting with the test file name.
-   */
-  titlePath: Array<string>;
-
-  /**
-   * The unique index of the worker process that is running the test. When a worker is restarted, for example after a
-   * failure, the new worker process gets a new unique `workerIndex`.
-   *
-   * Also available as `process.env.TEST_WORKER_INDEX`. Learn more about [parallelism and sharding](https://playwright.dev/docs/test-parallel)
-   * with Playwright Test.
-   */
-  workerIndex: number;
 }
 
 /**

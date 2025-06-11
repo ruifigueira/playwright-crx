@@ -15,7 +15,6 @@
  */
 
 import { parseAriaSnapshot } from '@isomorphic/ariaSnapshot';
-import { builtins, Set, Map, requestAnimationFrame, performance } from '@isomorphic/builtins';
 import { asLocator } from '@isomorphic/locatorGenerators';
 import { parseAttributeSelector, parseSelector, stringifySelector, visitAllSelectorParts } from '@isomorphic/selectorParser';
 import { cacheNormalizedWhitespaces, normalizeWhiteSpace, trimStringWithEllipsis } from '@isomorphic/stringUtils';
@@ -32,6 +31,8 @@ import { generateSelector } from './selectorGenerator';
 import { elementMatchesText, elementText, getElementLabels } from './selectorUtils';
 import { createVueEngine } from './vueSelectorEngine';
 import { XPathEngine } from './xpathSelectorEngine';
+import { ConsoleAPI } from './consoleApi';
+import { UtilityScript } from './utilityScript';
 
 import type { AriaTemplateNode } from '@isomorphic/ariaSnapshot';
 import type { CSSComplexSelectorList } from '@isomorphic/cssParser';
@@ -43,6 +44,7 @@ import type { LayoutSelectorName } from './layoutSelectorUtils';
 import type { SelectorEngine, SelectorRoot } from './selectorEngine';
 import type { GenerateSelectorOptions } from './selectorGenerator';
 import type { ElementText, TextMatcher } from './selectorUtils';
+import type { Builtins } from './utilityScript';
 
 
 export type FrameExpectParams = Omit<channels.FrameExpectParams, 'expectedValue'> & { expectedValue?: any };
@@ -51,8 +53,9 @@ export type ElementState = 'visible' | 'hidden' | 'enabled' | 'disabled' | 'edit
 export type ElementStateWithoutStable = Exclude<ElementState, 'stable'>;
 export type ElementStateQueryResult = { matches: boolean, received?: string | 'error:notconnected' };
 
+export type HitTargetError = { hitTargetDescription: string, hasPositionStickyOrFixed: boolean };
 export type HitTargetInterceptionResult = {
-  stop: () => 'done' | { hitTargetDescription: string };
+  stop: () => 'done' | HitTargetError;
 };
 
 interface WebKitLegacyDeviceOrientationEvent extends DeviceOrientationEvent {
@@ -62,6 +65,17 @@ interface WebKitLegacyDeviceOrientationEvent extends DeviceOrientationEvent {
 interface WebKitLegacyDeviceMotionEvent extends DeviceMotionEvent {
   readonly initDeviceMotionEvent: (type: string, bubbles: boolean, cancelable: boolean, acceleration: DeviceMotionEventAcceleration, accelerationIncludingGravity: DeviceMotionEventAcceleration, rotationRate: DeviceMotionEventRotationRate, interval: number) => void;
 }
+
+export type InjectedScriptOptions = {
+  isUnderTest: boolean;
+  sdkLanguage: Language;
+  // For strict error and codegen
+  testIdAttributeName: string;
+  stableRafCount: number;
+  browserName: string;
+  inputFileRoleTextbox: boolean;
+  customEngines: { name: string, source: string }[];
+};
 
 export class InjectedScript {
   private _engines: Map<string, SelectorEngine>;
@@ -78,6 +92,7 @@ export class InjectedScript {
   // eslint-disable-next-line no-restricted-globals
   readonly window: Window & typeof globalThis;
   readonly document: Document;
+  readonly consoleApi: ConsoleAPI;
   private _lastAriaSnapshot: AriaSnapshot | undefined;
 
   // Recorder must use any external dependencies through InjectedScript.
@@ -94,7 +109,8 @@ export class InjectedScript {
     isInsideScope,
     normalizeWhiteSpace,
     parseAriaSnapshot,
-    builtins: builtins(),
+    // Builtins protect injected code from clock emulation.
+    builtins: null as unknown as Builtins,
   };
 
   private _autoClosingTags: Set<string>;
@@ -106,16 +122,17 @@ export class InjectedScript {
   private _allHitTargetInterceptorEvents: Set<string>;
 
   // eslint-disable-next-line no-restricted-globals
-  constructor(window: Window & typeof globalThis, isUnderTest: boolean, sdkLanguage: Language, testIdAttributeNameForStrictErrorAndConsoleCodegen: string, stableRafCount: number, browserName: string, inputFileRoleTextbox: boolean, customEngines: { name: string, engine: SelectorEngine }[]) {
+  constructor(window: Window & typeof globalThis, options: InjectedScriptOptions) {
     this.window = window;
     this.document = window.document;
-    this.isUnderTest = isUnderTest;
+    this.isUnderTest = options.isUnderTest;
     // Make sure builtins are created from "window". This is important for InjectedScript instantiated
     // inside a trace viewer snapshot, where "window" differs from "globalThis".
-    this.utils.builtins = builtins(window);
-    this._sdkLanguage = sdkLanguage;
-    this._testIdAttributeNameForStrictErrorAndConsoleCodegen = testIdAttributeNameForStrictErrorAndConsoleCodegen;
+    this.utils.builtins = new UtilityScript(window, options.isUnderTest).builtins;
+    this._sdkLanguage = options.sdkLanguage;
+    this._testIdAttributeNameForStrictErrorAndConsoleCodegen = options.testIdAttributeName;
     this._evaluator = new SelectorEvaluatorImpl();
+    this.consoleApi = new ConsoleAPI(this);
 
     this.onGlobalListenersRemoved = new Set();
     this._autoClosingTags = new Set(['AREA', 'BASE', 'BR', 'COL', 'COMMAND', 'EMBED', 'HR', 'IMG', 'INPUT', 'KEYGEN', 'LINK', 'MENUITEM', 'META', 'PARAM', 'SOURCE', 'TRACK', 'WBR']);
@@ -211,19 +228,20 @@ export class InjectedScript {
     this._engines.set('internal:attr', this._createNamedAttributeEngine());
     this._engines.set('internal:testid', this._createNamedAttributeEngine());
     this._engines.set('internal:role', createRoleEngine(true));
-    this._engines.set('aria-ref', this._createAriaIdEngine());
+    this._engines.set('internal:describe', this._createDescribeEngine());
+    this._engines.set('aria-ref', this._createAriaRefEngine());
 
-    for (const { name, engine } of customEngines)
-      this._engines.set(name, engine);
+    for (const { name, source } of options.customEngines)
+      this._engines.set(name, this.eval(source));
 
-    this._stableRafCount = stableRafCount;
-    this._browserName = browserName;
-    setGlobalOptions({ browserNameForWorkarounds: browserName, inputFileRoleTextbox });
+    this._stableRafCount = options.stableRafCount;
+    this._browserName = options.browserName;
+    setGlobalOptions({ browserNameForWorkarounds: options.browserName, inputFileRoleTextbox: options.inputFileRoleTextbox });
 
     this._setupGlobalListenersRemovalDetection();
     this._setupHitTargetInterceptors();
 
-    if (isUnderTest)
+    if (this.isUnderTest)
       (this.window as any).__injectedScript = this;
   }
 
@@ -281,16 +299,11 @@ export class InjectedScript {
     return new Set<Element>(result.map(r => r.element));
   }
 
-  ariaSnapshot(node: Node, options?: { mode?: 'raw' | 'regex', ref?: boolean }): string {
+  ariaSnapshot(node: Node, options?: { mode?: 'raw' | 'regex', forAI?: boolean, refPrefix?: string }): string {
     if (node.nodeType !== Node.ELEMENT_NODE)
       throw this.createStacklessError('Can only capture aria snapshot of Element nodes.');
-    const generation = (this._lastAriaSnapshot?.generation || 0) + 1;
-    this._lastAriaSnapshot = generateAriaTree(node as Element, generation);
+    this._lastAriaSnapshot = generateAriaTree(node as Element, options);
     return renderAriaTree(this._lastAriaSnapshot, options);
-  }
-
-  ariaSnapshotElement(snapshot: AriaSnapshot, elementId: number): Element | null {
-    return snapshot.elements.get(elementId) || null;
   }
 
   getAllByAria(document: Document, template: AriaTemplateNode): Element[] {
@@ -468,6 +481,15 @@ export class InjectedScript {
     return { queryAll };
   }
 
+  private _createDescribeEngine(): SelectorEngine {
+    const queryAll = (root: SelectorRoot): Element[] => {
+      if (root.nodeType !== 1 /* Node.ELEMENT_NODE */)
+        return [];
+      return [root as Element];
+    };
+    return { queryAll };
+  }
+
   private _createControlEngine(): SelectorEngine {
     return {
       queryAll(root: SelectorRoot, body: any) {
@@ -543,7 +565,7 @@ export class InjectedScript {
       observer.observe(element);
       // Firefox doesn't call IntersectionObserver callback unless
       // there are rafs.
-      requestAnimationFrame(() => {});
+      this.utils.builtins.requestAnimationFrame(() => {});
     });
   }
 
@@ -624,7 +646,7 @@ export class InjectedScript {
         return 'error:notconnected';
 
       // Drop frames that are shorter than 16ms - WebKit Win bug.
-      const time = performance.now();
+      const time = this.utils.builtins.performance.now();
       if (this._stableRafCount > 1 && time - lastTime < 15)
         return continuePolling;
       lastTime = time;
@@ -652,25 +674,19 @@ export class InjectedScript {
         if (success !== continuePolling)
           fulfill(success);
         else
-          requestAnimationFrame(raf);
+          this.utils.builtins.requestAnimationFrame(raf);
       } catch (e) {
         reject(e);
       }
     };
-    requestAnimationFrame(raf);
+    this.utils.builtins.requestAnimationFrame(raf);
 
     return result;
   }
 
-  _createAriaIdEngine() {
+  _createAriaRefEngine() {
     const queryAll = (root: SelectorRoot, selector: string): Element[] => {
-      const match = selector.match(/^s(\d+)e(\d+)$/);
-      if (!match)
-        throw this.createStacklessError('Invalid aria-ref selector, should be of form s<number>e<number>');
-      const [, generation, elementId] = match;
-      if (this._lastAriaSnapshot?.generation !== +generation)
-        throw this.createStacklessError(`Stale aria-ref, expected s${this._lastAriaSnapshot?.generation}e{number}, got ${selector}`);
-      const result = this._lastAriaSnapshot?.elements?.get(+elementId);
+      const result = this._lastAriaSnapshot?.elements?.get(selector);
       return result && result.isConnected ? [result] : [];
     };
     return { queryAll };
@@ -908,7 +924,7 @@ export class InjectedScript {
     input.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  expectHitTarget(hitPoint: { x: number, y: number }, targetElement: Element) {
+  expectHitTarget(hitPoint: { x: number, y: number }, targetElement: Element): 'done' | HitTargetError {
     const roots: (Document | ShadowRoot)[] = [];
 
     // Get all component roots leading to the target element.
@@ -961,14 +977,21 @@ export class InjectedScript {
 
     // Check whether hit target is the target or its descendant.
     const hitParents: Element[] = [];
+    const isHitParentPositionStickyOrFixed: boolean[] = [];
     while (hitElement && hitElement !== targetElement) {
       hitParents.push(hitElement);
+      isHitParentPositionStickyOrFixed.push(['sticky', 'fixed'].includes(this.window.getComputedStyle(hitElement).position));
       hitElement = parentElementOrShadowHost(hitElement);
     }
     if (hitElement === targetElement)
       return 'done';
 
+    // The description of the element that was hit instead of the target element.
     const hitTargetDescription = this.previewNode(hitParents[0] || this.document.documentElement);
+    // Whether any ancestor of the hit target has position: static. In this case, it could be
+    // beneficial to scroll the target element into different positions to reveal it.
+    let hasPositionStickyOrFixed = isHitParentPositionStickyOrFixed.some(x => x);
+
     // Root is the topmost element in the hitTarget's chain that is not in the
     // element's chain. For example, it might be a dialog element that overlays
     // the target.
@@ -979,13 +1002,14 @@ export class InjectedScript {
       if (index !== -1) {
         if (index > 1)
           rootHitTargetDescription = this.previewNode(hitParents[index - 1]);
+        hasPositionStickyOrFixed = isHitParentPositionStickyOrFixed.slice(0, index).some(x => x);
         break;
       }
       element = parentElementOrShadowHost(element);
     }
     if (rootHitTargetDescription)
-      return { hitTargetDescription: `${hitTargetDescription} from ${rootHitTargetDescription} subtree` };
-    return { hitTargetDescription };
+      return { hitTargetDescription: `${hitTargetDescription} from ${rootHitTargetDescription} subtree`, hasPositionStickyOrFixed };
+    return { hitTargetDescription, hasPositionStickyOrFixed };
   }
 
   // Life of a pointer action, for example click.
@@ -1018,7 +1042,7 @@ export class InjectedScript {
   //     2k. (injected) Event interceptor is removed.
   //     2l. All navigations triggered between 2g-2k are awaited to be either committed or canceled.
   //     2m. If failed, wait for increasing amount of time before the next retry.
-  setupHitTargetInterceptor(node: Node, action: 'hover' | 'tap' | 'mouse' | 'drag', hitPoint: { x: number, y: number } | undefined, blockAllEvents: boolean): HitTargetInterceptionResult | 'error:notconnected' | string /* hitTargetDescription */ {
+  setupHitTargetInterceptor(node: Node, action: 'hover' | 'tap' | 'mouse' | 'drag', hitPoint: { x: number, y: number } | undefined, blockAllEvents: boolean): HitTargetInterceptionResult | 'error:notconnected' | string /* JSON.stringify(hitTargetDescription) */ {
     const element = this.retarget(node, 'button-link');
     if (!element || !element.isConnected)
       return 'error:notconnected';
@@ -1028,7 +1052,7 @@ export class InjectedScript {
       // intercepting the action.
       const preliminaryResult = this.expectHitTarget(hitPoint, element);
       if (preliminaryResult !== 'done')
-        return preliminaryResult.hitTargetDescription;
+        return JSON.stringify(preliminaryResult);
     }
 
     // When dropping, the "element that is being dragged" often stays under the cursor,
@@ -1043,7 +1067,7 @@ export class InjectedScript {
       'tap': this._tapHitTargetInterceptorEvents,
       'mouse': this._mouseHitTargetInterceptorEvents,
     }[action];
-    let result: 'done' | { hitTargetDescription: string } | undefined;
+    let result: 'done' | HitTargetError | undefined;
 
     const listener = (event: PointerEvent | MouseEvent | TouchEvent) => {
       // Ignore events that we do not expect to intercept.
