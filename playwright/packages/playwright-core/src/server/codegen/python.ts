@@ -85,8 +85,36 @@ export class PythonLanguageGenerator implements LanguageGenerator {
     return formatter.format();
   }
 
+  private _generateSelectorComments(action: actions.ActionWithSelector): string {
+    if (!action.selectors || action.selectors.length <= 1)
+      return '';
+
+    const comments: string[] = [];
+    comments.push('# Alternative selectors:');
+    for (let i = 1; i < action.selectors.length; i++) {
+      const altLocator = this._asLocator(action.selectors[i]);
+      comments.push(`#   ${altLocator}`);
+    }
+    return comments.join('\n') + '\n';
+  }
+
   private _generateActionCall(subject: string, actionInContext: actions.ActionInContext): string {
     const action = actionInContext.action;
+    let selectorComments = '';
+    if ('selector' in action) {
+      // Use selectors from ActionInContext if available, otherwise from action itself
+      const selectorsToUse = actionInContext.selectors || (action as actions.ActionWithSelector).selectors;
+      if (selectorsToUse && selectorsToUse.length > 1) {
+        const comments: string[] = [];
+        comments.push('# Alternative selectors:');
+        for (let i = 1; i < selectorsToUse.length; i++) {
+          const altLocator = this._asLocator(selectorsToUse[i]);
+          comments.push(`#   ${altLocator}`);
+        }
+        selectorComments = comments.join('\n') + '\n';
+      }
+    }
+
     switch (action.name) {
       case 'openPage':
         throw Error('Not reached');
@@ -98,37 +126,37 @@ export class PythonLanguageGenerator implements LanguageGenerator {
           method = 'dblclick';
         const options = toClickOptionsForSourceCode(action);
         const optionsString = formatOptions(options, false);
-        return `${subject}.${this._asLocator(action.selector)}.${method}(${optionsString})`;
+        return `${selectorComments}${subject}.${this._asLocator(action.selector)}.${method}(${optionsString})`;
       }
       case 'check':
-        return `${subject}.${this._asLocator(action.selector)}.check()`;
+        return `${selectorComments}${subject}.${this._asLocator(action.selector)}.check()`;
       case 'uncheck':
-        return `${subject}.${this._asLocator(action.selector)}.uncheck()`;
+        return `${selectorComments}${subject}.${this._asLocator(action.selector)}.uncheck()`;
       case 'fill':
-        return `${subject}.${this._asLocator(action.selector)}.fill(${quote(action.text)})`;
+        return `${selectorComments}${subject}.${this._asLocator(action.selector)}.fill(${quote(action.text)})`;
       case 'setInputFiles':
-        return `${subject}.${this._asLocator(action.selector)}.set_input_files(${formatValue(action.files.length === 1 ? action.files[0] : action.files)})`;
+        return `${selectorComments}${subject}.${this._asLocator(action.selector)}.set_input_files(${formatValue(action.files.length === 1 ? action.files[0] : action.files)})`;
       case 'press': {
         const modifiers = toKeyboardModifiers(action.modifiers);
         const shortcut = [...modifiers, action.key].join('+');
-        return `${subject}.${this._asLocator(action.selector)}.press(${quote(shortcut)})`;
+        return `${selectorComments}${subject}.${this._asLocator(action.selector)}.press(${quote(shortcut)})`;
       }
       case 'navigate':
         return `${subject}.goto(${quote(action.url)})`;
       case 'select':
-        return `${subject}.${this._asLocator(action.selector)}.select_option(${formatValue(action.options.length === 1 ? action.options[0] : action.options)})`;
+        return `${selectorComments}${subject}.${this._asLocator(action.selector)}.select_option(${formatValue(action.options.length === 1 ? action.options[0] : action.options)})`;
       case 'assertText':
-        return `expect(${subject}.${this._asLocator(action.selector)}).${action.substring ? 'to_contain_text' : 'to_have_text'}(${quote(action.text)})`;
+        return `${selectorComments}expect(${subject}.${this._asLocator(action.selector)}).${action.substring ? 'to_contain_text' : 'to_have_text'}(${quote(action.text)})`;
       case 'assertChecked':
-        return `expect(${subject}.${this._asLocator(action.selector)}).${action.checked ? 'to_be_checked()' : 'not_to_be_checked()'}`;
+        return `${selectorComments}expect(${subject}.${this._asLocator(action.selector)}).${action.checked ? 'to_be_checked()' : 'not_to_be_checked()'}`;
       case 'assertVisible':
-        return `expect(${subject}.${this._asLocator(action.selector)}).to_be_visible()`;
+        return `${selectorComments}expect(${subject}.${this._asLocator(action.selector)}).to_be_visible()`;
       case 'assertValue': {
         const assertion = action.value ? `to_have_value(${quote(action.value)})` : `to_be_empty()`;
-        return `expect(${subject}.${this._asLocator(action.selector)}).${assertion};`;
+        return `${selectorComments}expect(${subject}.${this._asLocator(action.selector)}).${assertion};`;
       }
       case 'assertSnapshot':
-        return `expect(${subject}.${this._asLocator(action.selector)}).to_match_aria_snapshot(${quote(action.snapshot)})`;
+        return `${selectorComments}expect(${subject}.${this._asLocator(action.selector)}).to_match_aria_snapshot(${quote(action.snapshot)})`;
     }
   }
 

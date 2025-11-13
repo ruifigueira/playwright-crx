@@ -250,10 +250,29 @@ export class ContextRecorder extends EventEmitter {
 
   private async _createActionInContext(frame: Frame, action: actions.Action): Promise<actions.ActionInContext> {
     const frameDescription = await this._describeFrame(frame);
+
+    // Extract selectors array and elementContext from ActionWithSelector types
+    let selectorsArray: string[] | undefined;
+    let elementContext: any = undefined;
+    if ('selector' in action) {
+      const actionWithSelector = action as actions.ActionWithSelector;
+      selectorsArray = actionWithSelector.selectors;
+      elementContext = actionWithSelector.elementContext;
+      console.log('[contextRecorder] Action received from browser:', {
+        name: action.name,
+        hasSelector: true,
+        selectorsCount: selectorsArray?.length,
+        selectors: selectorsArray,
+        hasElementContext: !!elementContext
+      });
+    }
+
     const actionInContext: actions.ActionInContext = {
       frame: frameDescription,
       action,
       description: undefined,
+      selectors: selectorsArray,
+      elementContext,
       startTime: monotonicTime()
     };
     await this._delegate.rewriteActionInContext?.(this._pageAliases, actionInContext);

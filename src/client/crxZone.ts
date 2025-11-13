@@ -389,7 +389,7 @@ const apis: { [ApiK in keyof ApiTypeMap]: [ApiTypeMap[ApiK], { [K in KeysOfAsync
   // from crx
   crx: [Crx.prototype, { start: true, get: true }],
   crxApplication: [CrxApplication.prototype, { attach: true, attachAll: true, close: true, detach: true, detachAll: true, newPage: true }],
-  crxRecorder: [CrxRecorder.prototype, { hide: true, list: true, load: true, run: true, setMode: true, show: true }],
+  crxRecorder: [CrxRecorder.prototype, { hide: true, setMode: true, show: true }],
 };
 
 const kCrxZoneWrapped = Symbol('crxZone');

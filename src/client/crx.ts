@@ -107,19 +107,6 @@ export class CrxRecorder extends EventEmitter implements api.CrxRecorder {
   async hide() {
     await this._channel.hideRecorder();
   }
-
-  async list(code: string) {
-    const { tests } = await this._channel.list({ code });
-    return tests;
-  }
-
-  async load(code: string) {
-    await this._channel.load({ code });
-  }
-
-  async run(code: string, page?: Page): Promise<void> {
-    await this._channel.run({ code, page: page?._channel });
-  }
 }
 
 export class CrxApplication extends ChannelOwner<channels.CrxApplicationChannel> implements api.CrxApplication {

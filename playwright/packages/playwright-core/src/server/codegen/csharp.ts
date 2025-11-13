@@ -103,8 +103,36 @@ export class CSharpLanguageGenerator implements LanguageGenerator {
     return formatter.format();
   }
 
+  private _generateSelectorComments(action: actions.ActionWithSelector): string {
+    if (!action.selectors || action.selectors.length <= 1)
+      return '';
+
+    const comments: string[] = [];
+    comments.push('// Alternative selectors:');
+    for (let i = 1; i < action.selectors.length; i++) {
+      const altLocator = this._asLocator(action.selectors[i]);
+      comments.push(`//   ${altLocator}`);
+    }
+    return comments.join('\n') + '\n';
+  }
+
   private _generateActionCall(subject: string, actionInContext: actions.ActionInContext): string {
     const action = actionInContext.action;
+    let selectorComments = '';
+    if ('selector' in action) {
+      // Use selectors from ActionInContext if available, otherwise from action itself
+      const selectorsToUse = actionInContext.selectors || (action as actions.ActionWithSelector).selectors;
+      if (selectorsToUse && selectorsToUse.length > 1) {
+        const comments: string[] = [];
+        comments.push('// Alternative selectors:');
+        for (let i = 1; i < selectorsToUse.length; i++) {
+          const altLocator = this._asLocator(selectorsToUse[i]);
+          comments.push(`//   ${altLocator}`);
+        }
+        selectorComments = comments.join('\n') + '\n';
+      }
+    }
+
     switch (action.name) {
       case 'openPage':
         throw Error('Not reached');
@@ -116,39 +144,39 @@ export class CSharpLanguageGenerator implements LanguageGenerator {
           method = 'DblClick';
         const options = toClickOptionsForSourceCode(action);
         if (!Object.entries(options).length)
-          return `await ${subject}.${this._asLocator(action.selector)}.${method}Async();`;
+          return `${selectorComments}await ${subject}.${this._asLocator(action.selector)}.${method}Async();`;
         const optionsString = formatObject(options, '    ', 'Locator' + method + 'Options');
-        return `await ${subject}.${this._asLocator(action.selector)}.${method}Async(${optionsString});`;
+        return `${selectorComments}await ${subject}.${this._asLocator(action.selector)}.${method}Async(${optionsString});`;
       }
       case 'check':
-        return `await ${subject}.${this._asLocator(action.selector)}.CheckAsync();`;
+        return `${selectorComments}await ${subject}.${this._asLocator(action.selector)}.CheckAsync();`;
       case 'uncheck':
-        return `await ${subject}.${this._asLocator(action.selector)}.UncheckAsync();`;
+        return `${selectorComments}await ${subject}.${this._asLocator(action.selector)}.UncheckAsync();`;
       case 'fill':
-        return `await ${subject}.${this._asLocator(action.selector)}.FillAsync(${quote(action.text)});`;
+        return `${selectorComments}await ${subject}.${this._asLocator(action.selector)}.FillAsync(${quote(action.text)});`;
       case 'setInputFiles':
-        return `await ${subject}.${this._asLocator(action.selector)}.SetInputFilesAsync(${formatObject(action.files)});`;
+        return `${selectorComments}await ${subject}.${this._asLocator(action.selector)}.SetInputFilesAsync(${formatObject(action.files)});`;
       case 'press': {
         const modifiers = toKeyboardModifiers(action.modifiers);
         const shortcut = [...modifiers, action.key].join('+');
-        return `await ${subject}.${this._asLocator(action.selector)}.PressAsync(${quote(shortcut)});`;
+        return `${selectorComments}await ${subject}.${this._asLocator(action.selector)}.PressAsync(${quote(shortcut)});`;
       }
       case 'navigate':
         return `await ${subject}.GotoAsync(${quote(action.url)});`;
       case 'select':
-        return `await ${subject}.${this._asLocator(action.selector)}.SelectOptionAsync(${formatObject(action.options)});`;
+        return `${selectorComments}await ${subject}.${this._asLocator(action.selector)}.SelectOptionAsync(${formatObject(action.options)});`;
       case 'assertText':
-        return `await Expect(${subject}.${this._asLocator(action.selector)}).${action.substring ? 'ToContainTextAsync' : 'ToHaveTextAsync'}(${quote(action.text)});`;
+        return `${selectorComments}await Expect(${subject}.${this._asLocator(action.selector)}).${action.substring ? 'ToContainTextAsync' : 'ToHaveTextAsync'}(${quote(action.text)});`;
       case 'assertChecked':
-        return `await Expect(${subject}.${this._asLocator(action.selector)})${action.checked ? '' : '.Not'}.ToBeCheckedAsync();`;
+        return `${selectorComments}await Expect(${subject}.${this._asLocator(action.selector)})${action.checked ? '' : '.Not'}.ToBeCheckedAsync();`;
       case 'assertVisible':
-        return `await Expect(${subject}.${this._asLocator(action.selector)}).ToBeVisibleAsync();`;
+        return `${selectorComments}await Expect(${subject}.${this._asLocator(action.selector)}).ToBeVisibleAsync();`;
       case 'assertValue': {
         const assertion = action.value ? `ToHaveValueAsync(${quote(action.value)})` : `ToBeEmptyAsync()`;
-        return `await Expect(${subject}.${this._asLocator(action.selector)}).${assertion};`;
+        return `${selectorComments}await Expect(${subject}.${this._asLocator(action.selector)}).${assertion};`;
       }
       case 'assertSnapshot':
-        return `await Expect(${subject}.${this._asLocator(action.selector)}).ToMatchAriaSnapshotAsync(${quote(action.snapshot)});`;
+        return `${selectorComments}await Expect(${subject}.${this._asLocator(action.selector)}).ToMatchAriaSnapshotAsync(${quote(action.snapshot)});`;
     }
   }
 

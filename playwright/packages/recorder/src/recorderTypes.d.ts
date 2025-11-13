@@ -32,6 +32,7 @@ export type Mode =
 
 export type ElementInfo = {
   selector: string;
+  selectors: string[];
   ariaSnapshot: string;
 };
 

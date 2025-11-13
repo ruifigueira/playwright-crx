@@ -27,7 +27,6 @@ declare function _setUnderTest(): void;
 type SettingOptions = {
   testIdAttributeName?: string,
   targetLanguage?: string,
-  playInIncognito?: boolean,
   experimental?: boolean
 };
 
@@ -167,7 +166,7 @@ export const test = crxTest.extend<{
         },
 
         configureRecorder: async ({ context, extensionId }, run) => {
-          await run(async ({ testIdAttributeName, targetLanguage, playInIncognito, experimental }: SettingOptions) => {
+          await run(async ({ testIdAttributeName, targetLanguage, experimental }: SettingOptions) => {
             const configPage = await context.newPage();
             try {
               await configPage.goto(`chrome-extension://${extensionId}/preferences.html`);
@@ -175,8 +174,6 @@ export const test = crxTest.extend<{
                 await configPage.locator('#target-language').selectOption(targetLanguage);
               if (testIdAttributeName)
                 await configPage.locator('#test-id').fill(testIdAttributeName);
-              if (playInIncognito !== undefined)
-                await configPage.locator('#playInIncognito').setChecked(playInIncognito);
               if (experimental !== undefined)
                 await configPage.locator('#experimental').setChecked(experimental);
               await configPage.locator('#submit').click();

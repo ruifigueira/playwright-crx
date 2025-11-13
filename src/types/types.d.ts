@@ -494,11 +494,9 @@ export interface CrxRecorder {
 
     testIdAttributeName?: null|string;
 
-    playInIncognito?: null|boolean;
-
     window?: {
       type?: null|"popup"|"sidepanel";
-      
+
       url?: null|string;
     };
   }): Promise<void>;
@@ -506,21 +504,4 @@ export interface CrxRecorder {
   mode(): "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"|"assertingSnapshot";
 
   setMode(mode: "none"|"recording"|"inspecting"|"assertingText"|"recording-inspecting"|"standby"|"assertingVisibility"|"assertingValue"|"assertingSnapshot"): Promise<void>;
-
-  list(code: string): Promise<{
-    title: string,
-    options?: {
-      deviceName?: string;
-      contextOptions?: CrxBrowserContextOptions;
-    };
-    location?: {
-      file: string,
-      line?: number,
-      column?: number,
-    },
-  }[]>;
-
-  load(code: string): Promise<void>;
-
-  run(code: string, page?: Page): Promise<void>;
 }

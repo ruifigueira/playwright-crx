@@ -31,15 +31,10 @@ import { CrxTransport } from './transport/crxTransport';
 import { BrowserContext } from 'playwright-core/lib/server/browserContext';
 import type { IRecorder, IRecorderAppFactory } from 'playwright-core/lib/server/recorder/recorderFrontend';
 import type { Mode } from '@recorder/recorderTypes';
-import CrxPlayer from './recorder/crxPlayer';
 import { createTab } from './utils';
-import { parse } from './recorder/parser';
-import { generateCode } from 'playwright-core/lib/server/codegen/language';
-import { languageSet } from 'playwright-core/lib/server/codegen/languages';
 import { deviceDescriptors } from 'playwright-core/lib/server/deviceDescriptors';
 import type { DeviceDescriptor } from 'playwright-core/lib/server/types';
 import { EmptyRecorderApp, RecorderApp } from 'playwright-core/lib/server/recorder/recorderApp';
-import type { LanguageGeneratorOptions } from 'playwright-core/lib/server/codegen/types';
 
 const kTabIdSymbol = Symbol('kTabIdSymbol');
 
@@ -53,11 +48,9 @@ export class Crx extends SdkObject {
   private _browserPromise?: Promise<CRBrowser>;
   private _crxApplicationPromise: Promise<CrxApplication> | undefined;
   private _incognitoCrxApplicationPromise: Promise<CrxApplication> | undefined;
-  readonly player: CrxPlayer;
 
   constructor(playwright: Playwright) {
     super(playwright, 'crx');
-    this.player = new CrxPlayer(this);
   }
 
   async start(options?: crxchannels.CrxStartParams): Promise<CrxApplication> {
@@ -323,27 +316,6 @@ export class CrxApplication extends SdkObject {
     }
 
     await this._context.close({});
-  }
-
-  list(code: string) {
-    const tests = parse(code);
-    return tests.map(({ title, options, location }) => ({ title, options, location }));
-  }
-
-  load(code: string) {
-    this._recorderApp?.load(code);
-  }
-
-  async run(code: string, page?: Page) {
-    const [{ actions }] = parse(code);
-    await this._crx.player.run(page ?? this._context, actions);
-  }
-
-  async parseForTest(originCode: string) {
-    const [{ actions, options }] = parse(originCode);
-    const jsLanguage = [...languageSet()].find(l => l.id === 'playwright-test');
-    const code = generateCode(actions, jsLanguage!, { browserName: '', launchOptions: {}, contextOptions: {}, ...options } as LanguageGeneratorOptions).text;
-    return { actions, options, code };
   }
 
   async _createRecorderApp(recorder: IRecorder) {

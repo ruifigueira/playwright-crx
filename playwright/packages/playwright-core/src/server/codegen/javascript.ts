@@ -76,8 +76,185 @@ export class JavaScriptLanguageGenerator implements LanguageGenerator {
     return formatter.format();
   }
 
+  private _generateSelectorComments(action: actions.ActionWithSelector): string {
+    if (!action.selectors || action.selectors.length <= 1)
+      return '';
+
+    const comments: string[] = [];
+    comments.push('// Alternative selectors:');
+    for (let i = 1; i < action.selectors.length; i++) {
+      const altLocator = this._asLocator(action.selectors[i]);
+      comments.push(`//   ${altLocator}`);
+    }
+    return comments.join('\n') + '\n';
+  }
+
   private _generateActionCall(subject: string, actionInContext: actions.ActionInContext): string {
     const action = actionInContext.action;
+    let selectorComments = '';
+    if ('selector' in action) {
+      // Use selectors from ActionInContext if available, otherwise from action itself
+      const selectorsToUse = actionInContext.selectors || (action as actions.ActionWithSelector).selectors;
+      const elementContext = actionInContext.elementContext || (action as actions.ActionWithSelector).elementContext;
+
+      console.log('[javascript generator] Generating code:', {
+        actionName: action.name,
+        contextSelectors: actionInContext.selectors,
+        contextSelectorsCount: actionInContext.selectors?.length,
+        actionSelectors: (action as actions.ActionWithSelector).selectors,
+        selectorsToUse,
+        selectorsToUseCount: selectorsToUse?.length,
+        hasElementContext: !!elementContext
+      });
+
+      const comments: string[] = [];
+
+      // Add tab context if available (for multi-tab recording)
+      if (actionInContext.tabContext) {
+        comments.push('// ════════════════════════════════════════════════════════════════');
+        comments.push('// 📑 TAB CONTEXT');
+        comments.push('// ════════════════════════════════════════════════════════════════');
+        comments.push('// Tab ID: ' + actionInContext.tabContext.tabId);
+        if (actionInContext.tabContext.title) {
+          const title = actionInContext.tabContext.title.substring(0, 60);
+          comments.push('// Tab Title: "' + title + (actionInContext.tabContext.title.length > 60 ? '..."' : '"'));
+        }
+        if (actionInContext.tabContext.url) {
+          const url = actionInContext.tabContext.url.substring(0, 80);
+          comments.push('// Tab URL: ' + url + (actionInContext.tabContext.url.length > 80 ? '...' : ''));
+        }
+        comments.push('// ════════════════════════════════════════════════════════════════');
+      }
+
+      // Add comprehensive element context comments if available
+      if (elementContext?.target) {
+        if (comments.length > 0) comments.push('//');
+        comments.push('// ════════════════════════════════════════════════════════════════');
+        comments.push('// 🎯 TARGET ELEMENT');
+        comments.push('// ════════════════════════════════════════════════════════════════');
+
+        // Element tag
+        const elementTag = '<' + elementContext.target.tagName +
+          (elementContext.target.id ? '#' + elementContext.target.id : '') +
+          (elementContext.target.classes?.length ? '.' + elementContext.target.classes.join('.') : '') + '>';
+        comments.push('// Element: ' + elementTag);
+
+        // Text content
+        if (elementContext.target.textContent && elementContext.target.textContent.length > 0) {
+          const text = elementContext.target.textContent.substring(0, 80);
+          comments.push('// Text: "' + text + (elementContext.target.textContent.length > 80 ? '..."' : '"'));
+        }
+
+        // Key attributes
+        const attrs: string[] = [];
+        if (elementContext.target.type) attrs.push('type="' + elementContext.target.type + '"');
+        if (elementContext.target.name) attrs.push('name="' + elementContext.target.name + '"');
+        if (elementContext.target.placeholder) attrs.push('placeholder="' + elementContext.target.placeholder + '"');
+        if (elementContext.target.value) attrs.push('value="' + elementContext.target.value.substring(0, 30) + (elementContext.target.value.length > 30 ? '..."' : '"'));
+        if (elementContext.target.href) attrs.push('href="' + elementContext.target.href.substring(0, 50) + (elementContext.target.href.length > 50 ? '..."' : '"'));
+        if (elementContext.target.alt) attrs.push('alt="' + elementContext.target.alt + '"');
+
+        if (attrs.length > 0) {
+          comments.push('// Attributes: ' + attrs.join(', '));
+        }
+
+        // Position info
+        if (elementContext.position) {
+          comments.push('// Position: index ' + elementContext.position.index +
+            ' of ' + elementContext.position.totalSiblings +
+            ' siblings (depth: ' + elementContext.position.depth + ')');
+        }
+
+        // Ancestors (parent hierarchy)
+        if (elementContext.ancestors?.length > 0) {
+          comments.push('//');
+          comments.push('// 📂 ANCESTORS (Parent Hierarchy):');
+          elementContext.ancestors.forEach((ancestor: any, idx: number) => {
+            const ancestorTag = '<' + ancestor.tagName +
+              (ancestor.id ? '#' + ancestor.id : '') +
+              (ancestor.classes?.length ? '.' + ancestor.classes.slice(0, 2).join('.') : '') + '>';
+            comments.push('//   ' + (idx + 1) + '. ' + ancestorTag);
+
+            // Show important data attributes on ancestors
+            const dataAttrs: string[] = [];
+            if (ancestor.attributes) {
+              for (const [key, val] of Object.entries(ancestor.attributes)) {
+                if (key.startsWith('data-') && typeof val === 'string' && val.length < 30) {
+                  dataAttrs.push(key + '="' + val + '"');
+                }
+              }
+            }
+            if (dataAttrs.length > 0 && idx < 2) {
+              comments.push('//      [' + dataAttrs.slice(0, 3).join(', ') + ']');
+            }
+          });
+        }
+
+        // Siblings
+        if (elementContext.siblings?.length > 0) {
+          const beforeSiblings = elementContext.siblings.filter((s: any) => s.position === 'before');
+          const afterSiblings = elementContext.siblings.filter((s: any) => s.position === 'after');
+
+          if (beforeSiblings.length > 0 || afterSiblings.length > 0) {
+            comments.push('//');
+            comments.push('// 👥 SIBLINGS:');
+
+            if (beforeSiblings.length > 0) {
+              comments.push('//   Before:');
+              beforeSiblings.slice(-2).forEach((sibling: any) => {
+                const sibTag = '<' + sibling.tagName + (sibling.id ? '#' + sibling.id : '') + '>';
+                const sibText = sibling.textContent ? ' "' + sibling.textContent.substring(0, 30) + '..."' : '';
+                comments.push('//     • ' + sibTag + sibText);
+              });
+            }
+
+            if (afterSiblings.length > 0) {
+              comments.push('//   After:');
+              afterSiblings.slice(0, 2).forEach((sibling: any) => {
+                const sibTag = '<' + sibling.tagName + (sibling.id ? '#' + sibling.id : '') + '>';
+                const sibText = sibling.textContent ? ' "' + sibling.textContent.substring(0, 30) + '..."' : '';
+                comments.push('//     • ' + sibTag + sibText);
+              });
+            }
+          }
+        }
+
+        // Children
+        if (elementContext.children?.length > 0) {
+          comments.push('//');
+          comments.push('// 👶 CHILDREN (' + elementContext.children.length + ' total):');
+          elementContext.children.slice(0, 3).forEach((child: any) => {
+            const childTag = '<' + child.tagName + (child.id ? '#' + child.id : '') + '>';
+            const childText = child.textContent ? ' "' + child.textContent.substring(0, 30) + '..."' : '';
+            comments.push('//   • ' + childTag + childText);
+          });
+          if (elementContext.children.length > 3) {
+            comments.push('//   ... and ' + (elementContext.children.length - 3) + ' more');
+          }
+        }
+
+        comments.push('// ════════════════════════════════════════════════════════════════');
+      }
+
+      // Add alternative selectors
+      if (selectorsToUse && selectorsToUse.length > 1) {
+        if (comments.length > 0) comments.push('//');
+        comments.push('// 🎨 ALTERNATIVE SELECTORS:');
+        for (let i = 1; i < Math.min(selectorsToUse.length, 11); i++) {
+          const altLocator = this._asLocator(selectorsToUse[i]);
+          comments.push('//   ' + i + '. ' + altLocator);
+        }
+        if (selectorsToUse.length > 11) {
+          comments.push('//   ... and ' + (selectorsToUse.length - 11) + ' more selectors');
+        }
+        comments.push('// ════════════════════════════════════════════════════════════════');
+      }
+
+      if (comments.length > 0) {
+        selectorComments = comments.join('\n') + '\n';
+      }
+    }
+
     switch (action.name) {
       case 'openPage':
         throw Error('Not reached');
@@ -89,37 +266,37 @@ export class JavaScriptLanguageGenerator implements LanguageGenerator {
           method = 'dblclick';
         const options = toClickOptionsForSourceCode(action);
         const optionsString = formatOptions(options, false);
-        return `await ${subject}.${this._asLocator(action.selector)}.${method}(${optionsString});`;
+        return `${selectorComments}await ${subject}.${this._asLocator(action.selector)}.${method}(${optionsString});`;
       }
       case 'check':
-        return `await ${subject}.${this._asLocator(action.selector)}.check();`;
+        return `${selectorComments}await ${subject}.${this._asLocator(action.selector)}.check();`;
       case 'uncheck':
-        return `await ${subject}.${this._asLocator(action.selector)}.uncheck();`;
+        return `${selectorComments}await ${subject}.${this._asLocator(action.selector)}.uncheck();`;
       case 'fill':
-        return `await ${subject}.${this._asLocator(action.selector)}.fill(${quote(action.text)});`;
+        return `${selectorComments}await ${subject}.${this._asLocator(action.selector)}.fill(${quote(action.text)});`;
       case 'setInputFiles':
-        return `await ${subject}.${this._asLocator(action.selector)}.setInputFiles(${formatObject(action.files.length === 1 ? action.files[0] : action.files)});`;
+        return `${selectorComments}await ${subject}.${this._asLocator(action.selector)}.setInputFiles(${formatObject(action.files.length === 1 ? action.files[0] : action.files)});`;
       case 'press': {
         const modifiers = toKeyboardModifiers(action.modifiers);
         const shortcut = [...modifiers, action.key].join('+');
-        return `await ${subject}.${this._asLocator(action.selector)}.press(${quote(shortcut)});`;
+        return `${selectorComments}await ${subject}.${this._asLocator(action.selector)}.press(${quote(shortcut)});`;
       }
       case 'navigate':
         return `await ${subject}.goto(${quote(action.url)});`;
       case 'select':
-        return `await ${subject}.${this._asLocator(action.selector)}.selectOption(${formatObject(action.options.length === 1 ? action.options[0] : action.options)});`;
+        return `${selectorComments}await ${subject}.${this._asLocator(action.selector)}.selectOption(${formatObject(action.options.length === 1 ? action.options[0] : action.options)});`;
       case 'assertText':
-        return `${this._isTest ? '' : '// '}await expect(${subject}.${this._asLocator(action.selector)}).${action.substring ? 'toContainText' : 'toHaveText'}(${quote(action.text)});`;
+        return `${selectorComments}${this._isTest ? '' : '// '}await expect(${subject}.${this._asLocator(action.selector)}).${action.substring ? 'toContainText' : 'toHaveText'}(${quote(action.text)});`;
       case 'assertChecked':
-        return `${this._isTest ? '' : '// '}await expect(${subject}.${this._asLocator(action.selector)})${action.checked ? '' : '.not'}.toBeChecked();`;
+        return `${selectorComments}${this._isTest ? '' : '// '}await expect(${subject}.${this._asLocator(action.selector)})${action.checked ? '' : '.not'}.toBeChecked();`;
       case 'assertVisible':
-        return `${this._isTest ? '' : '// '}await expect(${subject}.${this._asLocator(action.selector)}).toBeVisible();`;
+        return `${selectorComments}${this._isTest ? '' : '// '}await expect(${subject}.${this._asLocator(action.selector)}).toBeVisible();`;
       case 'assertValue': {
         const assertion = action.value ? `toHaveValue(${quote(action.value)})` : `toBeEmpty()`;
-        return `${this._isTest ? '' : '// '}await expect(${subject}.${this._asLocator(action.selector)}).${assertion};`;
+        return `${selectorComments}${this._isTest ? '' : '// '}await expect(${subject}.${this._asLocator(action.selector)}).${assertion};`;
       }
       case 'assertSnapshot':
-        return `${this._isTest ? '' : '// '}await expect(${subject}.${this._asLocator(action.selector)}).toMatchAriaSnapshot(${quoteMultiline(action.snapshot)});`;
+        return `${selectorComments}${this._isTest ? '' : '// '}await expect(${subject}.${this._asLocator(action.selector)}).toMatchAriaSnapshot(${quoteMultiline(action.snapshot)});`;
     }
   }
 

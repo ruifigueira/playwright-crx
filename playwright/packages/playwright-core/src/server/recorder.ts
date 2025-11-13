@@ -81,7 +81,7 @@ export class Recorder implements InstrumentationListener, IRecorder {
   constructor(context: BrowserContext, params: channels.BrowserContextEnableRecorderParams) {
     this._mode = params.mode || 'none';
     this.handleSIGINT = params.handleSIGINT;
-    this._contextRecorder = new ContextRecorder(context, params, {});
+    this._contextRecorder = new ContextRecorder(context, params, this);
     this._context = context;
     this._omitCallTracking = !!params.omitCallTracking;
     this._debugger = context.debugger();
@@ -221,6 +221,13 @@ export class Recorder implements InstrumentationListener, IRecorder {
     this._recorderApp?.setPaused(this._debugger.isPaused());
     this._updateSources();
     this.updateCallLog([...this._currentCallsMetadata.keys()]);
+  }
+
+  async rewriteActionInContext(pageAliases: Map<Page, string>, actionInContext: actions.ActionInContext): Promise<void> {
+    // Forward to recorder app if it has the method
+    if (this._recorderApp && typeof (this._recorderApp as any).rewriteActionInContext === 'function') {
+      await (this._recorderApp as any).rewriteActionInContext(pageAliases, actionInContext);
+    }
   }
 
   setMode(mode: Mode) {

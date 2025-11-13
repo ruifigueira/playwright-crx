@@ -123,9 +123,15 @@ class InspectTool implements RecorderTool {
 
     let model: HighlightModel | null = null;
     if (this._hoveredElement) {
-      const generated = this._recorder.injectedScript.generateSelector(this._hoveredElement, { testIdAttributeName: this._recorder.state.testIdAttributeName, multiple: false });
+      const generated = this._recorder.injectedScript.generateSelector(this._hoveredElement, { testIdAttributeName: this._recorder.state.testIdAttributeName, multiple: true });
+      this._recorder.injectedScript.window.console.log('[InspectTool] Generated selector result:', {
+        hasElementContext: !!generated.elementContext,
+        selectorsCount: generated.selectors?.length
+      });
       model = {
         selector: generated.selector,
+        selectors: generated.selectors,
+        elementContext: generated.elementContext,
         elements: generated.elements,
         tooltipText: this._recorder.injectedScript.utils.asLocator(this._recorder.state.language, generated.selector),
         color: this._assertVisibility ? HighlightColors.assert : HighlightColors.single,
@@ -171,6 +177,7 @@ class InspectTool implements RecorderTool {
       this._recorder.recordAction({
         name: 'assertVisible',
         selector,
+        selectors: model.selectors,
         signals: [],
       });
       this._recorder.setMode('recording');
@@ -233,6 +240,8 @@ class RecordActionTool implements RecorderTool {
       this._performAction({
         name: checkbox.checked ? 'check' : 'uncheck',
         selector: this._hoveredModel!.selector,
+        selectors: this._hoveredModel!.selectors,
+        elementContext: this._hoveredModel!.elementContext,
         signals: [],
       });
       return;
@@ -242,10 +251,17 @@ class RecordActionTool implements RecorderTool {
 
     // Stall click in case we are observing double-click.
     if (event.detail === 1) {
+      this._recorder.injectedScript.window.console.log('[RecordActionTool] Creating click action:', {
+        hasModel: !!this._hoveredModel,
+        hasElementContext: !!this._hoveredModel?.elementContext,
+        elementContextKeys: this._hoveredModel?.elementContext ? Object.keys(this._hoveredModel.elementContext) : []
+      });
       this._pendingClickAction = {
         action: {
           name: 'click',
           selector: this._hoveredModel!.selector,
+          selectors: this._hoveredModel!.selectors,
+          elementContext: this._hoveredModel!.elementContext,
           position: positionForEvent(event),
           signals: [],
           button: buttonForEvent(event),
@@ -273,6 +289,8 @@ class RecordActionTool implements RecorderTool {
     this._performAction({
       name: 'click',
       selector: this._hoveredModel!.selector,
+      selectors: this._hoveredModel!.selectors,
+      elementContext: this._hoveredModel!.elementContext,
       position: positionForEvent(event),
       signals: [],
       button: buttonForEvent(event),
@@ -307,6 +325,8 @@ class RecordActionTool implements RecorderTool {
     this._performAction({
       name: 'click',
       selector: this._hoveredModel!.selector,
+      selectors: this._hoveredModel!.selectors,
+      elementContext: this._hoveredModel!.elementContext,
       position: positionForEvent(event),
       signals: [],
       button: 'right',
@@ -372,6 +392,8 @@ class RecordActionTool implements RecorderTool {
       this._recorder.recordAction({
         name: 'setInputFiles',
         selector: this._activeModel!.selector,
+        selectors: this._activeModel!.selectors,
+        elementContext: this._activeModel!.elementContext,
         signals: [],
         files: [...((target as HTMLInputElement).files || [])].map(file => file.name),
       });
@@ -383,6 +405,8 @@ class RecordActionTool implements RecorderTool {
         name: 'fill',
         // must use hoveredModel instead of activeModel for it to work in webkit
         selector: this._hoveredModel!.selector,
+        selectors: this._hoveredModel!.selectors,
+        elementContext: this._hoveredModel!.elementContext,
         signals: [],
         text: target.value,
       });
@@ -401,6 +425,8 @@ class RecordActionTool implements RecorderTool {
       this._recorder.recordAction({
         name: 'fill',
         selector: this._activeModel!.selector,
+        selectors: this._activeModel!.selectors,
+        elementContext: this._activeModel!.elementContext,
         signals: [],
         text: target.isContentEditable ? target.innerText : (target as HTMLInputElement).value,
       });
@@ -413,6 +439,8 @@ class RecordActionTool implements RecorderTool {
       this._performAction({
         name: 'select',
         selector: this._activeModel!.selector,
+        selectors: this._activeModel!.selectors,
+        elementContext: this._activeModel!.elementContext,
         options: [...selectElement.selectedOptions].map(option => option.value),
         signals: []
       });
@@ -435,6 +463,8 @@ class RecordActionTool implements RecorderTool {
         this._performAction({
           name: checkbox.checked ? 'uncheck' : 'check',
           selector: this._activeModel!.selector,
+          selectors: this._activeModel!.selectors,
+          elementContext: this._activeModel!.elementContext,
           signals: [],
         });
         return;
@@ -444,6 +474,8 @@ class RecordActionTool implements RecorderTool {
     this._performAction({
       name: 'press',
       selector: this._activeModel!.selector,
+      selectors: this._activeModel!.selectors,
+      elementContext: this._activeModel!.elementContext,
       signals: [],
       key: event.key,
       modifiers: modifiersForEvent(event),
@@ -474,7 +506,7 @@ class RecordActionTool implements RecorderTool {
     // We'd like to ignore this stray event.
     if (userGesture && activeElement === this._recorder.document.body)
       return;
-    const result = activeElement ? this._recorder.injectedScript.generateSelector(activeElement, { testIdAttributeName: this._recorder.state.testIdAttributeName }) : null;
+    const result = activeElement ? this._recorder.injectedScript.generateSelector(activeElement, { testIdAttributeName: this._recorder.state.testIdAttributeName, multiple: true }) : null;
     this._activeModel = result && result.selector ? { ...result, color: HighlightColors.action } : null;
     if (userGesture) {
       this._hoveredElement = activeElement as HTMLElement | null;
@@ -586,10 +618,10 @@ class RecordActionTool implements RecorderTool {
       this._recorder.updateHighlight(null, true);
       return;
     }
-    const { selector, elements } = this._recorder.injectedScript.generateSelector(this._hoveredElement, { testIdAttributeName: this._recorder.state.testIdAttributeName });
+    const { selector, selectors, elements, elementContext } = this._recorder.injectedScript.generateSelector(this._hoveredElement, { testIdAttributeName: this._recorder.state.testIdAttributeName, multiple: true });
     if (this._hoveredModel && this._hoveredModel.selector === selector)
       return;
-    this._hoveredModel = selector ? { selector, elements, color: HighlightColors.action } : null;
+    this._hoveredModel = selector ? { selector, selectors, elementContext, elements, color: HighlightColors.action } : null;
     this._recorder.updateHighlight(this._hoveredModel, true);
   }
 }
@@ -652,8 +684,8 @@ class TextAssertionTool implements RecorderTool {
     if (this._kind === 'text' || this._kind === 'snapshot') {
       this._hoverHighlight = this._recorder.injectedScript.utils.elementText(this._textCache, target).full ? { elements: [target], selector: '', color: HighlightColors.assert } : null;
     } else if (this._elementHasValue(target)) {
-      const generated = this._recorder.injectedScript.generateSelector(target, { testIdAttributeName: this._recorder.state.testIdAttributeName });
-      this._hoverHighlight = { selector: generated.selector, elements: generated.elements, color: HighlightColors.assert };
+      const generated = this._recorder.injectedScript.generateSelector(target, { testIdAttributeName: this._recorder.state.testIdAttributeName, multiple: true });
+      this._hoverHighlight = { selector: generated.selector, selectors: generated.selectors, elementContext: generated.elementContext, elements: generated.elements, color: HighlightColors.assert };
     } else {
       this._hoverHighlight = null;
     }
@@ -682,11 +714,13 @@ class TextAssertionTool implements RecorderTool {
     if (this._kind === 'value') {
       if (!this._elementHasValue(target))
         return null;
-      const { selector } = this._recorder.injectedScript.generateSelector(target, { testIdAttributeName: this._recorder.state.testIdAttributeName });
+      const { selector, selectors, elementContext } = this._recorder.injectedScript.generateSelector(target, { testIdAttributeName: this._recorder.state.testIdAttributeName, multiple: true });
       if (target.nodeName === 'INPUT' && ['checkbox', 'radio'].includes((target as HTMLInputElement).type.toLowerCase())) {
         return {
           name: 'assertChecked',
           selector,
+          selectors,
+          elementContext,
           signals: [],
           // Interestingly, inputElement.checked is reversed inside this event handler.
           checked: !(target as HTMLInputElement).checked,
@@ -695,31 +729,37 @@ class TextAssertionTool implements RecorderTool {
         return {
           name: 'assertValue',
           selector,
+          selectors,
+          elementContext,
           signals: [],
           value: (target as (HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement)).value,
         };
       }
     } else if (this._kind === 'snapshot') {
-      const generated = this._recorder.injectedScript.generateSelector(target, { testIdAttributeName: this._recorder.state.testIdAttributeName, forTextExpect: true });
-      this._hoverHighlight = { selector: generated.selector, elements: generated.elements, color: HighlightColors.assert };
+      const generated = this._recorder.injectedScript.generateSelector(target, { testIdAttributeName: this._recorder.state.testIdAttributeName, forTextExpect: true, multiple: true });
+      this._hoverHighlight = { selector: generated.selector, selectors: generated.selectors, elementContext: generated.elementContext, elements: generated.elements, color: HighlightColors.assert };
       // forTextExpect can update the target, re-highlight it.
       this._recorder.updateHighlight(this._hoverHighlight, true);
 
       return {
         name: 'assertSnapshot',
         selector: this._hoverHighlight.selector,
+        selectors: this._hoverHighlight.selectors,
+        elementContext: this._hoverHighlight.elementContext,
         signals: [],
         snapshot: this._recorder.injectedScript.ariaSnapshot(target, { mode: 'regex' }),
       };
     } else {
-      const generated = this._recorder.injectedScript.generateSelector(target, { testIdAttributeName: this._recorder.state.testIdAttributeName, forTextExpect: true });
-      this._hoverHighlight = { selector: generated.selector, elements: generated.elements, color: HighlightColors.assert };
+      const generated = this._recorder.injectedScript.generateSelector(target, { testIdAttributeName: this._recorder.state.testIdAttributeName, forTextExpect: true, multiple: true });
+      this._hoverHighlight = { selector: generated.selector, selectors: generated.selectors, elementContext: generated.elementContext, elements: generated.elements, color: HighlightColors.assert };
       // forTextExpect can update the target, re-highlight it.
       this._recorder.updateHighlight(this._hoverHighlight, true);
 
       return {
         name: 'assertText',
         selector: this._hoverHighlight.selector,
+        selectors: this._hoverHighlight.selectors,
+        elementContext: this._hoverHighlight.elementContext,
         signals: [],
         text: this._recorder.injectedScript.utils.elementText(this._textCache, target).normalized,
         substring: true,
@@ -1341,10 +1381,22 @@ export class Recorder {
   }
 
   async performAction(action: actions.PerformOnRecordAction) {
+    this.injectedScript.window.console.log('=== PERFORM ACTION (browser) ===', {
+      name: action.name,
+      selectors: (action as any).selectors,
+      selectorsLength: (action as any).selectors?.length,
+      actionString: JSON.stringify(action)
+    });
     await this._delegate.performAction?.(action).catch(() => {});
   }
 
   recordAction(action: actions.Action) {
+    this.injectedScript.window.console.log('=== RECORD ACTION (browser) ===', {
+      name: action.name,
+      selectors: (action as any).selectors,
+      selectorsLength: (action as any).selectors?.length,
+      actionString: JSON.stringify(action)
+    });
     void this._delegate.recordAction?.(action);
   }
 
@@ -1354,7 +1406,7 @@ export class Recorder {
 
   elementPicked(selector: string, model: HighlightModel) {
     const ariaSnapshot = this.injectedScript.ariaSnapshot(model.elements[0]);
-    void this._delegate.elementPicked?.({ selector, ariaSnapshot });
+    void this._delegate.elementPicked?.({ selector, selectors: model.selectors || [selector], ariaSnapshot });
   }
 }
 
@@ -1477,6 +1529,8 @@ function consumeEvent(e: Event) {
 
 type HighlightModel = {
   selector?: string;
+  selectors?: string[];
+  elementContext?: any;
   elements: Element[];
   color: string;
   tooltipText?: string;

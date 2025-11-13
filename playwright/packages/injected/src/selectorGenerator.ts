@@ -74,66 +74,232 @@ export type GenerateSelectorOptions = {
   multiple?: boolean;
 };
 
-export function generateSelector(injectedScript: InjectedScript, targetElement: Element, options: GenerateSelectorOptions): { selector: string, selectors: string[], elements: Element[] } {
+function debugLog(...args: any[]) {
+   console.log(...args);
+}
+
+function captureElementContext(element: Element): any {
+  // Helper to safely get className as string (handles SVG elements)
+  const getClassNameString = (el: Element): string => {
+    if (!el.className) return '';
+    // SVG elements have className as SVGAnimatedString
+    if (typeof el.className === 'string') return el.className;
+    if (typeof el.className === 'object' && 'baseVal' in el.className) return (el.className as any).baseVal;
+    return '';
+  };
+
+  const context: any = {
+    target: {
+      tagName: element.tagName.toLowerCase(),
+      id: element.id || null,
+      classes: getClassNameString(element).split(/\s+/).filter(Boolean),
+      textContent: element.textContent?.trim().substring(0, 200) || '',
+      attributes: {},
+      innerText: (element as HTMLElement).innerText?.substring(0, 200) || '',
+      value: (element as HTMLInputElement).value || null,
+      type: (element as HTMLInputElement).type || null,
+      name: (element as HTMLInputElement).name || null,
+      placeholder: (element as HTMLInputElement).placeholder || null,
+      href: (element as HTMLAnchorElement).href || null,
+      src: (element as HTMLImageElement).src || null,
+      alt: (element as HTMLImageElement).alt || null,
+    },
+    position: { depth: 0, index: 0, totalSiblings: 0 },
+    ancestors: [] as any[],
+    siblings: [] as any[],
+    children: [] as any[],
+  };
+
+  // Capture all attributes
+  for (const attr of Array.from(element.attributes)) {
+    context.target.attributes[attr.name] = attr.value;
+  }
+
+  // Calculate sibling position
+  if (element.parentElement) {
+    const siblings = Array.from(element.parentElement.children);
+    context.position.index = siblings.indexOf(element);
+    context.position.totalSiblings = siblings.length;
+  }
+
+  // Capture ancestors (up to 3 levels)
+  let parent = element.parentElement;
+  let depth = 0;
+  while (parent && depth < 3) {
+    context.ancestors.push({
+      tagName: parent.tagName.toLowerCase(),
+      id: parent.id || null,
+      classes: getClassNameString(parent).split(/\s+/).filter(Boolean),
+      attributes: Object.fromEntries(Array.from(parent.attributes).map(attr => [attr.name, attr.value])),
+    });
+    parent = parent.parentElement;
+    depth++;
+  }
+  context.position.depth = depth;
+
+  // Capture nearby siblings (3 before & after)
+  if (element.parentElement) {
+    const siblings = Array.from(element.parentElement.children);
+    const index = siblings.indexOf(element);
+
+    for (let i = Math.max(0, index - 3); i < Math.min(siblings.length, index + 4); i++) {
+      if (i === index) continue;
+      const sibling = siblings[i];
+      context.siblings.push({
+        position: i < index ? 'before' : 'after',
+        tagName: sibling.tagName.toLowerCase(),
+        id: (sibling as HTMLElement).id || null,
+        textContent: sibling.textContent?.trim().substring(0, 50) || '',
+      });
+    }
+  }
+
+  // Capture first 5 children
+  for (const child of Array.from(element.children).slice(0, 5)) {
+    context.children.push({
+      tagName: child.tagName.toLowerCase(),
+      id: (child as HTMLElement).id || null,
+      textContent: child.textContent?.trim().substring(0, 50) || '',
+    });
+  }
+
+  return context;
+}
+
+export function generateSelector(
+  injectedScript: InjectedScript,
+  targetElement: Element,
+  options: GenerateSelectorOptions
+): { selector: string; selectors: string[]; elements: Element[]; elementContext?: any } {
   injectedScript._evaluator.begin();
   const cache: Cache = { allowText: new Map(), disallowText: new Map() };
   beginAriaCaches();
+
+  let elementContext: any = undefined;
+  try {
+    elementContext = captureElementContext(targetElement);
+    console.log('[selectorGenerator] Element context captured:', !!elementContext);
+  } catch (e) {
+    console.error('[selectorGenerator] Error capturing element context:', e);
+  }
+
+  // Optional debug output (controlled by DEBUG flag)
+  try {
+    debugLog('Target Element:', {
+      tagName: targetElement.tagName,
+      id: targetElement.id,
+      className: targetElement.className,
+      textContent: targetElement.textContent?.substring(0, 100),
+      outerHTML: targetElement.outerHTML.substring(0, 500),
+    });
+    if (elementContext) {
+      debugLog('Element Context:', elementContext);
+    }
+  } catch (e) {
+    // Ignore debug logging errors
+  }
+
   try {
     let selectors: string[] = [];
+
     if (options.forTextExpect) {
       let targetTokens = cssFallback(injectedScript, targetElement.ownerDocument.documentElement, options);
       for (let element: Element | undefined = targetElement; element; element = parentElementOrShadowHost(element)) {
         const tokens = generateSelectorFor(cache, injectedScript, element, { ...options, noText: true });
-        if (!tokens)
-          continue;
-        const score = combineScores(tokens);
-        if (score <= kScoreThresholdForTextExpect) {
+        if (tokens && combineScores(tokens) <= kScoreThresholdForTextExpect) {
           targetTokens = tokens;
           break;
         }
       }
       selectors = [joinTokens(targetTokens)];
     } else {
-      // Note: this matches InjectedScript.retarget().
-      if (!targetElement.matches('input,textarea,select') && !(targetElement as any).isContentEditable) {
-        const interactiveParent = closestCrossShadow(targetElement, 'button,select,input,[role=button],[role=checkbox],[role=radio],a,[role=link]', options.root);
+      // Adjust to nearest interactive ancestor if necessary
+      if (
+        !targetElement.matches('input,textarea,select') &&
+        !(targetElement as any).isContentEditable
+      ) {
+        const interactiveParent = closestCrossShadow(
+          targetElement,
+          'button,select,input,[role=button],[role=checkbox],[role=radio],a,[role=link]',
+          options.root
+        );
         if (interactiveParent && isElementVisible(interactiveParent))
           targetElement = interactiveParent;
       }
+
       if (options.multiple) {
+        const tokens: SelectorToken[][] = [];
+
         const withText = generateSelectorFor(cache, injectedScript, targetElement, options);
         const withoutText = generateSelectorFor(cache, injectedScript, targetElement, { ...options, noText: true });
-        let tokens = [withText, withoutText];
 
-        // Clear cache to re-generate without css id.
+        if (withText) tokens.push(withText);
+        if (withoutText) tokens.push(withoutText);
+
         cache.allowText.clear();
         cache.disallowText.clear();
 
-        if (withText && hasCSSIdToken(withText))
-          tokens.push(generateSelectorFor(cache, injectedScript, targetElement, { ...options, noCSSId: true }));
-        if (withoutText && hasCSSIdToken(withoutText))
-          tokens.push(generateSelectorFor(cache, injectedScript, targetElement, { ...options, noText: true, noCSSId: true }));
+        if (withText && hasCSSIdToken(withText)) {
+          const noCssIdWithText = generateSelectorFor(cache, injectedScript, targetElement, {
+            ...options,
+            noCSSId: true,
+          });
+          if (noCssIdWithText) tokens.push(noCssIdWithText);
+        }
 
-        tokens = tokens.filter(Boolean);
+        if (withoutText && hasCSSIdToken(withoutText)) {
+          const noCssIdNoText = generateSelectorFor(cache, injectedScript, targetElement, {
+            ...options,
+            noText: true,
+            noCSSId: true,
+          });
+          if (noCssIdNoText) tokens.push(noCssIdNoText);
+        }
+
+        try {
+          const alternatives = generateAlternativeSelectors(cache, injectedScript, targetElement, options);
+          tokens.push(...alternatives);
+        } catch (e) {
+          // Ignore alternative selector generation errors
+        }
+
+        try {
+          const chained = generateChainedSelectors(cache, injectedScript, targetElement, options);
+          tokens.push(...chained);
+        } catch (e) {
+          // Ignore chained selector generation errors
+        }
+
         if (!tokens.length) {
           const css = cssFallback(injectedScript, targetElement, options);
           tokens.push(css);
-          if (hasCSSIdToken(css))
-            tokens.push(cssFallback(injectedScript, targetElement, { ...options, noCSSId: true }));
+          if (hasCSSIdToken(css)) {
+            const cssNoId = cssFallback(injectedScript, targetElement, { ...options, noCSSId: true });
+            tokens.push(cssNoId);
+          }
         }
-        selectors = [...new Set(tokens.map(t => joinTokens(t!)))];
+
+        selectors = [...new Set(tokens.map(joinTokens))];
       } else {
-        const targetTokens = generateSelectorFor(cache, injectedScript, targetElement, options) || cssFallback(injectedScript, targetElement, options);
+        const targetTokens =
+          generateSelectorFor(cache, injectedScript, targetElement, options) ||
+          cssFallback(injectedScript, targetElement, options);
         selectors = [joinTokens(targetTokens)];
       }
     }
+
     const selector = selectors[0];
     const parsedSelector = injectedScript.parseSelector(selector);
-    return {
-      selector,
-      selectors,
-      elements: injectedScript.querySelectorAll(parsedSelector, options.root ?? targetElement.ownerDocument)
-    };
+    const elements = injectedScript.querySelectorAll(parsedSelector, options.root ?? targetElement.ownerDocument);
+
+    console.log('[selectorGenerator] Returning result:', {
+      hasSelector: !!selector,
+      selectorsCount: selectors.length,
+      hasElementContext: !!elementContext,
+      elementContextKeys: elementContext ? Object.keys(elementContext) : []
+    });
+
+    return { selector, selectors, elements, elementContext };
   } finally {
     endAriaCaches();
     injectedScript._evaluator.end();
@@ -496,6 +662,118 @@ function chooseFirstSelector(injectedScript: InjectedScript, scope: Element | Do
   }
   return bestWithIndex;
 }
+
+function generateAlternativeSelectors(
+  cache: Cache,
+  injectedScript: InjectedScript,
+  targetElement: Element,
+  options: InternalOptions
+): SelectorToken[][] {
+  const alternatives: SelectorToken[][] = [];
+  const scope = options.root ?? (targetElement.getRootNode() as Document | ShadowRoot);
+  const seenEngines = new Set<string>();
+
+  // Build all possible candidates
+  const textCandidates = buildTextCandidates(injectedScript, targetElement, true);
+  const noTextCandidates = buildNoTextCandidates(injectedScript, targetElement, options)
+    .filter(token => !options.omitInternalEngines || !token.engine.startsWith('internal:'))
+    .map(token => [token]);
+
+  // Combine and sort by score
+  const allCandidates = [...textCandidates, ...noTextCandidates];
+  const scored = allCandidates.map(tokens => ({ tokens, score: combineScores(tokens) }));
+  scored.sort((a, b) => a.score - b.score);
+
+  for (const { tokens } of scored) {
+    if (alternatives.length >= 5) break;
+
+    const engineKey = tokens.map(t => t.engine).join(':');
+    if (seenEngines.has(engineKey)) continue;
+
+    try {
+      const parsedSelector = injectedScript.parseSelector(joinTokens(tokens));
+      const result = injectedScript.querySelectorAll(parsedSelector, scope);
+
+      if (result.includes(targetElement)) {
+        alternatives.push(tokens);
+        seenEngines.add(engineKey);
+      }
+    } catch {
+      // Skip invalid selectors silently
+    }
+  }
+
+  return alternatives;
+}
+
+function generateChainedSelectors(
+  cache: Cache,
+  injectedScript: InjectedScript,
+  targetElement: Element,
+  options: InternalOptions
+): SelectorToken[][] {
+  const chained: SelectorToken[][] = [];
+  const scope = options.root ?? (targetElement.getRootNode() as Document | ShadowRoot);
+
+  // Collect meaningful ancestors
+  const ancestors: Element[] = [];
+  let current: Element | null = targetElement;
+
+  while (current && ancestors.length < 3) {
+    const parent = parentElementOrShadowHost(current);
+    if (!parent || parent === scope) break;
+
+    const hasId = parent.id && !isGuidLike(parent.id);
+    const hasDataAttr = Array.from(parent.attributes).some(attr =>
+      attr.name.startsWith('data-') && attr.value && attr.value.length < 50
+    );
+    const hasRole = !!parent.getAttribute('role');
+    const hasTestId = !!parent.getAttribute(options.testIdAttributeName);
+    const isSemanticTag = ['FORM', 'NAV', 'HEADER', 'FOOTER', 'MAIN', 'ASIDE', 'SECTION', 'ARTICLE'].includes(parent.tagName);
+
+    if (hasId || hasDataAttr || hasRole || hasTestId || isSemanticTag) {
+      ancestors.push(parent);
+    }
+
+    current = parent;
+  }
+
+  // Cache target candidates once
+  const targetCandidates = buildNoTextCandidates(injectedScript, targetElement, options)
+    .filter(token => !options.omitInternalEngines || !token.engine.startsWith('internal:'))
+    .slice(0, 3); // Top 3 target strategies
+
+  for (const ancestor of ancestors) {
+    try {
+      const ancestorTokens = generateSelectorFor(cache, injectedScript, ancestor, { ...options, noText: true });
+      if (!ancestorTokens) continue;
+
+      for (const targetToken of targetCandidates) {
+        // Join tokens properly with '>>' separator
+        const ancestorSelector = joinTokens(ancestorTokens);
+        const targetSelector = joinTokens([targetToken]);
+        const fullSelector = `${ancestorSelector} >> ${targetSelector}`;
+
+        try {
+          const parsedSelector = injectedScript.parseSelector(fullSelector);
+          const result = injectedScript.querySelectorAll(parsedSelector, scope);
+
+          if (result[0] === targetElement) {
+            chained.push([...ancestorTokens, { engine: 'css', selector: '>>', score: 0 }, targetToken]);
+            if (chained.length >= 3) return chained; // Limit to 3 results
+          }
+        } catch {
+          // Skip invalid combinations
+        }
+      }
+    } catch {
+      // Skip invalid ancestor selectors
+    }
+  }
+
+  return chained;
+}
+
 
 function isGuidLike(id: string): boolean {
   let lastCharacterType: 'lower' | 'upper' | 'digit' | 'other' | undefined;

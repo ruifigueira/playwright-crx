@@ -40,6 +40,8 @@ export type ActionBase = {
 
 export type ActionWithSelector = ActionBase & {
   selector: string,
+  selectors?: string[],
+  elementContext?: any,
 };
 
 export type ClickAction = ActionWithSelector & {
@@ -77,9 +79,8 @@ export type ClosesPageAction = ActionBase & {
   name: 'closePage',
 };
 
-export type PressAction = ActionBase & {
+export type PressAction = ActionWithSelector & {
   name: 'press',
-  selector: string,
   key: string,
   modifiers: number,
 };
@@ -155,10 +156,19 @@ export type FrameDescription = {
   framePath: string[];
 };
 
+export type TabContext = {
+  tabId: number;
+  title?: string;
+  url?: string;
+};
+
 export type ActionInContext = {
   frame: FrameDescription;
   description?: string;
   action: Action;
+  selectors?: string[];
+  elementContext?: any;
+  tabContext?: TabContext;
   startTime: number;
   endTime?: number;
 };

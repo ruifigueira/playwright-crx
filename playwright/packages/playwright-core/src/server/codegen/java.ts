@@ -92,8 +92,36 @@ export class JavaLanguageGenerator implements LanguageGenerator {
     return formatter.format();
   }
 
+  private _generateSelectorComments(action: actions.ActionWithSelector, inFrameLocator: boolean): string {
+    if (!action.selectors || action.selectors.length <= 1)
+      return '';
+
+    const comments: string[] = [];
+    comments.push('// Alternative selectors:');
+    for (let i = 1; i < action.selectors.length; i++) {
+      const altLocator = this._asLocator(action.selectors[i], inFrameLocator);
+      comments.push(`//   ${altLocator}`);
+    }
+    return comments.join('\n') + '\n';
+  }
+
   private _generateActionCall(subject: string, actionInContext: actions.ActionInContext, inFrameLocator: boolean): string {
     const action = actionInContext.action;
+    let selectorComments = '';
+    if ('selector' in action) {
+      // Use selectors from ActionInContext if available, otherwise from action itself
+      const selectorsToUse = actionInContext.selectors || (action as actions.ActionWithSelector).selectors;
+      if (selectorsToUse && selectorsToUse.length > 1) {
+        const comments: string[] = [];
+        comments.push('// Alternative selectors:');
+        for (let i = 1; i < selectorsToUse.length; i++) {
+          const altLocator = this._asLocator(selectorsToUse[i], inFrameLocator);
+          comments.push(`//   ${altLocator}`);
+        }
+        selectorComments = comments.join('\n') + '\n';
+      }
+    }
+
     switch (action.name) {
       case 'openPage':
         throw Error('Not reached');
@@ -105,37 +133,37 @@ export class JavaLanguageGenerator implements LanguageGenerator {
           method = 'dblclick';
         const options = toClickOptionsForSourceCode(action);
         const optionsText = formatClickOptions(options);
-        return `${subject}.${this._asLocator(action.selector, inFrameLocator)}.${method}(${optionsText});`;
+        return `${selectorComments}${subject}.${this._asLocator(action.selector, inFrameLocator)}.${method}(${optionsText});`;
       }
       case 'check':
-        return `${subject}.${this._asLocator(action.selector, inFrameLocator)}.check();`;
+        return `${selectorComments}${subject}.${this._asLocator(action.selector, inFrameLocator)}.check();`;
       case 'uncheck':
-        return `${subject}.${this._asLocator(action.selector, inFrameLocator)}.uncheck();`;
+        return `${selectorComments}${subject}.${this._asLocator(action.selector, inFrameLocator)}.uncheck();`;
       case 'fill':
-        return `${subject}.${this._asLocator(action.selector, inFrameLocator)}.fill(${quote(action.text)});`;
+        return `${selectorComments}${subject}.${this._asLocator(action.selector, inFrameLocator)}.fill(${quote(action.text)});`;
       case 'setInputFiles':
-        return `${subject}.${this._asLocator(action.selector, inFrameLocator)}.setInputFiles(${formatPath(action.files.length === 1 ? action.files[0] : action.files)});`;
+        return `${selectorComments}${subject}.${this._asLocator(action.selector, inFrameLocator)}.setInputFiles(${formatPath(action.files.length === 1 ? action.files[0] : action.files)});`;
       case 'press': {
         const modifiers = toKeyboardModifiers(action.modifiers);
         const shortcut = [...modifiers, action.key].join('+');
-        return `${subject}.${this._asLocator(action.selector, inFrameLocator)}.press(${quote(shortcut)});`;
+        return `${selectorComments}${subject}.${this._asLocator(action.selector, inFrameLocator)}.press(${quote(shortcut)});`;
       }
       case 'navigate':
         return `${subject}.navigate(${quote(action.url)});`;
       case 'select':
-        return `${subject}.${this._asLocator(action.selector, inFrameLocator)}.selectOption(${formatSelectOption(action.options.length === 1 ? action.options[0] : action.options)});`;
+        return `${selectorComments}${subject}.${this._asLocator(action.selector, inFrameLocator)}.selectOption(${formatSelectOption(action.options.length === 1 ? action.options[0] : action.options)});`;
       case 'assertText':
-        return `assertThat(${subject}.${this._asLocator(action.selector, inFrameLocator)}).${action.substring ? 'containsText' : 'hasText'}(${quote(action.text)});`;
+        return `${selectorComments}assertThat(${subject}.${this._asLocator(action.selector, inFrameLocator)}).${action.substring ? 'containsText' : 'hasText'}(${quote(action.text)});`;
       case 'assertChecked':
-        return `assertThat(${subject}.${this._asLocator(action.selector, inFrameLocator)})${action.checked ? '' : '.not()'}.isChecked();`;
+        return `${selectorComments}assertThat(${subject}.${this._asLocator(action.selector, inFrameLocator)})${action.checked ? '' : '.not()'}.isChecked();`;
       case 'assertVisible':
-        return `assertThat(${subject}.${this._asLocator(action.selector, inFrameLocator)}).isVisible();`;
+        return `${selectorComments}assertThat(${subject}.${this._asLocator(action.selector, inFrameLocator)}).isVisible();`;
       case 'assertValue': {
         const assertion = action.value ? `hasValue(${quote(action.value)})` : `isEmpty()`;
-        return `assertThat(${subject}.${this._asLocator(action.selector, inFrameLocator)}).${assertion};`;
+        return `${selectorComments}assertThat(${subject}.${this._asLocator(action.selector, inFrameLocator)}).${assertion};`;
       }
       case 'assertSnapshot':
-        return `assertThat(${subject}.${this._asLocator(action.selector, inFrameLocator)}).matchesAriaSnapshot(${quote(action.snapshot)});`;
+        return `${selectorComments}assertThat(${subject}.${this._asLocator(action.selector, inFrameLocator)}).matchesAriaSnapshot(${quote(action.snapshot)});`;
     }
   }
 
