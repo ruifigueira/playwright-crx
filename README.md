@@ -8,7 +8,7 @@ For that, it relies on [`chrome.debugger`](https://developer.chrome.com/docs/ext
 
 ## Recorder / Player
 
-**Note:** This extension is available in [Chrome Web Store](https://chrome.google.com/webstore/detail/playwright-crx/jambeljnbnfbkcpnoiaedcabbgmnnlcd).
+**Note:** This extension is available in [Chrome Web Store](https://chromewebstore.google.com/detail/playwright-crx/jambeljnbnfbkcpnoiaedcabbgmnnlcd).
 
 A small demo of Playwright CRX recorder and player in action:
 
