@@ -225,7 +225,7 @@ function scopeFromContext(context: StepContextSnapshot): FlowTargetScope | undef
 
 function locatorHintFromContext(contextTarget: ElementContext, scope?: FlowTargetScope): LocatorHint | undefined {
   if (contextTarget.testId)
-    return { strategy: 'global-testid', confidence: 0.98, pageCount: contextTarget.uniqueness?.pageCount, scopeCount: contextTarget.uniqueness?.scopeCount };
+    return { strategy: 'global-testid', confidence: 0.98, pageCount: contextTarget.uniqueness?.pageCount, pageIndex: contextTarget.uniqueness?.pageIndex, scopeCount: contextTarget.uniqueness?.scopeCount };
   if (scope?.table?.testId && (scope.table.rowKey || scope.table.rowIdentity?.value || scope.table.rowText))
     return { strategy: scope.table.rowKey || scope.table.rowIdentity?.stable ? 'table-row-testid' : 'table-row-text', confidence: scope.table.rowKey || scope.table.rowIdentity?.stable ? 0.9 : 0.72 };
   if (scope?.dialog?.title)
@@ -235,7 +235,7 @@ function locatorHintFromContext(contextTarget: ElementContext, scope?: FlowTarge
   if (scope?.form?.label || contextTarget.placeholder)
     return { strategy: 'field-scoped', confidence: 0.7 };
   if (contextTarget.role && (contextTarget.text || contextTarget.ariaLabel))
-    return { strategy: 'global-role', confidence: 0.62, pageCount: contextTarget.uniqueness?.pageCount, scopeCount: contextTarget.uniqueness?.scopeCount };
+    return { strategy: 'global-role', confidence: 0.62, pageCount: contextTarget.uniqueness?.pageCount, pageIndex: contextTarget.uniqueness?.pageIndex, scopeCount: contextTarget.uniqueness?.scopeCount };
   return contextTarget.text ? { strategy: 'fallback-text', confidence: 0.45 } : undefined;
 }
 

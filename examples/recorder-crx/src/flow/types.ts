@@ -119,6 +119,7 @@ export interface LocatorHint {
     | 'fallback-text';
   confidence: number;
   pageCount?: number;
+  pageIndex?: number;
   scopeCount?: number;
   reason?: string;
 }

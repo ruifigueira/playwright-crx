@@ -16,6 +16,9 @@
 import { defineConfig, devices } from '@playwright/test';
 import type { CrxFixtureOptions } from './crx/crxTest';
 
+const testServerPort = Number(process.env.PLAYWRIGHT_CRX_TEST_PORT || 3107);
+const testServerURL = `http://127.0.0.1:${testServerPort}`;
+
 export default defineConfig<CrxFixtureOptions>({
   testDir: './crx',
   fullyParallel: true,
@@ -24,7 +27,7 @@ export default defineConfig<CrxFixtureOptions>({
   workers: process.env.CI ? 1 : 2,
   reporter: 'html',
   use: {
-    baseURL: 'http://127.0.0.1:3000',
+    baseURL: testServerURL,
     trace: 'on-first-retry',
   },
   projects: [
@@ -46,8 +49,8 @@ export default defineConfig<CrxFixtureOptions>({
     }]),
   ],
   webServer: {
-    command: 'npm run serve',
-    url: 'http://127.0.0.1:3000',
+    command: `PLAYWRIGHT_CRX_TEST_PORT=${testServerPort} npm run serve`,
+    url: testServerURL,
     reuseExistingServer: !process.env.CI,
   }
 });

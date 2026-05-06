@@ -836,30 +836,63 @@ function collectLocatorUniqueness(anchor: Element, controlType?: string) {
   const role = anchor.getAttribute('role') || inferredRole(anchor, controlType);
   if (!testId && !text)
     return undefined;
-  const pageCount = testId ? countTestId(document, testId) : countRoleTextLike(document, role, text);
-  return compactObject({ pageCount });
+  const pageMatches = testId ? testIdMatches(document, testId) : roleTextLikeMatches(document, role, text);
+  const pageIndex = pageMatches.indexOf(anchor);
+  return compactObject({ pageCount: pageMatches.length, pageIndex: pageIndex >= 0 ? pageIndex : undefined });
 }
 
-function countTestId(root: ParentNode, testId: string) {
+function testIdMatches(root: ParentNode, testId: string) {
   return Array.from(root.querySelectorAll('[data-testid], [data-test-id], [data-e2e]'))
-      .filter(element => testIdOf(element) === testId)
-      .length;
+      .filter(element => testIdOf(element) === testId);
 }
 
-function countRoleTextLike(root: ParentNode, role?: string, text?: string) {
+function roleTextLikeMatches(root: ParentNode, role?: string, text?: string) {
   if (!text)
-    return undefined;
+    return [];
   const selector = role === 'button' ? 'button, [role="button"], .ant-btn' : role ? `[role="${role}"]` : '*';
   return Array.from(root.querySelectorAll(selector))
-      .filter(element => elementText(element) === text)
-      .length;
+      .filter(element => elementText(element) === text);
 }
 
 function shouldIgnoreTarget(element: Element, kind?: ContextEventKind) {
   if (kind === 'keydown' && (element === document.body || element === document.documentElement))
     return true;
+  if (kind === 'click' && isNonInteractiveStructuralContainer(element))
+    return true;
   const input = element.closest('input, textarea') as HTMLInputElement | HTMLTextAreaElement | null;
   return !!input && (sensitivePattern.test(input.name || input.id || input.placeholder || '') || input.type === 'password');
+}
+
+function isNonInteractiveStructuralContainer(element: Element) {
+  const anchor = actionAnchorForElement(element);
+  if (isInteractiveElement(anchor))
+    return false;
+  const tag = anchor.tagName.toLowerCase();
+  if (/^(section|article|main|aside|header|footer)$/i.test(tag))
+    return true;
+  if (anchor.matches('.ant-pro-card, .ant-card, .ant-collapse-item, [role="region"]'))
+    return true;
+  const testId = testIdOf(anchor);
+  return !!testId && looksLikeStructuralContainerTestId(testId) && !looksLikeActionTestId(testId);
+}
+
+function isInteractiveElement(element: Element) {
+  const tag = element.tagName.toLowerCase();
+  const controlType = controlTypeForElement(element);
+  const role = element.getAttribute('role') || inferredRole(element, controlType);
+  const testId = testIdOf(element) || '';
+  return /^(button|a|input|textarea|select|option)$/i.test(tag) ||
+    /^(button|link|checkbox|radio|switch|combobox|option|menuitem|tab|treeitem)$/i.test(role || '') ||
+    /^(button|table-row-action|checkbox|radio|switch|select|tree-select|cascader|select-option|tree-select-option|cascader-option|menu-item|tab|date-picker|upload|input|textarea)$/i.test(controlType || '') ||
+    looksLikeActionTestId(testId);
+}
+
+function looksLikeStructuralContainerTestId(testId: string) {
+  return /(^|[-_])(section|container|card|wrapper|content|region)([-_]|$)/i.test(testId);
+}
+
+function looksLikeActionTestId(testId: string) {
+  return /(^|[-_])(button|btn|link|tab|switch|checkbox|radio|select|input|create|add|new|save|delete|remove|edit|confirm|cancel|submit|ok|option|menu)([-_]|$)/i.test(testId);
 }
 
 function frameworkForElement(element: Element) {

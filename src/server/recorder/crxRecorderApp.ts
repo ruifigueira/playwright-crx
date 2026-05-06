@@ -338,7 +338,13 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     }, actions.length ? 'info' : 'warn');
     if (!actions.length)
       return;
-    await this._crx.player.run(crxApp._context, actions);
+    const playbackPage = crxApp.activePage();
+    this._sendRuntimeEvent('runtime.playback-target', playbackPage ? 'Playwright 回放将运行在最近附加的业务页面' : 'Playwright 回放未找到已附加业务页面，将回退到浏览器上下文', {
+      tabId: playbackPage ? crxApp.tabIdForPage(playbackPage) : undefined,
+      url: playbackPage?.mainFrame().url(),
+      contextPageCount: crxApp._context.pages().length,
+    }, playbackPage ? 'info' : 'warn');
+    await this._crx.player.run(playbackPage ?? crxApp._context, actions);
   }
 
   _sendMessage(msg: RecorderMessage) {

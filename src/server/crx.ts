@@ -180,6 +180,8 @@ export class CrxApplication extends SdkObject {
   private _transport: CrxTransport;
   private _recorderApp?: CrxRecorderApp;
   private _closed = false;
+  private _attachedPages = new Map<number, Page>();
+  private _lastAttachedPage?: Page;
 
   constructor(crx: Crx, context: CRBrowserContext, transport: CrxTransport) {
     super(context, 'crxApplication');
@@ -196,9 +198,10 @@ export class CrxApplication extends SdkObject {
       if (!tabId)
         return;
 
-      (page as any)[kTabIdSymbol] = tabId;
+      this._rememberAttachedPage(tabId, page);
 
       page.on(Page.Events.Close, () => {
+        this._forgetAttachedPage(tabId, page);
         this.emit(CrxApplication.Events.Detached, { tabId });
       });
       this.emit(CrxApplication.Events.Attached, { page, tabId });
@@ -231,6 +234,17 @@ export class CrxApplication extends SdkObject {
       return;
 
     return this._transport.getTabId(targetId);
+  }
+
+  activePage(): Page | undefined {
+    if (this._lastAttachedPage && !this._lastAttachedPage.isClosed())
+      return this._lastAttachedPage;
+    for (const page of [...this._attachedPages.values()].reverse()) {
+      if (!page.isClosed()) {
+        this._lastAttachedPage = page;
+        return page;
+      }
+    }
   }
 
   async showRecorder(options?: crxchannels.CrxApplicationShowRecorderParams) {
@@ -268,6 +282,7 @@ export class CrxApplication extends SdkObject {
     const pageOrError = await crPage._page.waitForInitializedOrError();
     if (pageOrError instanceof Error)
       throw pageOrError;
+    this._rememberAttachedPage(tabId, pageOrError);
     return pageOrError;
   }
 
@@ -360,6 +375,19 @@ export class CrxApplication extends SdkObject {
 
   _recorder() {
     return this._recorderApp?._recorder;
+  }
+
+  private _rememberAttachedPage(tabId: number, page: Page) {
+    (page as any)[kTabIdSymbol] = tabId;
+    this._attachedPages.set(tabId, page);
+    this._lastAttachedPage = page;
+  }
+
+  private _forgetAttachedPage(tabId: number, page: Page) {
+    if (this._attachedPages.get(tabId) === page)
+      this._attachedPages.delete(tabId);
+    if (this._lastAttachedPage === page)
+      this._lastAttachedPage = undefined;
   }
 
   private onWindowRemoved = async () => {

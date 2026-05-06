@@ -81,7 +81,7 @@ export default class CrxPlayer extends EventEmitter {
 
     if (pageOrContext instanceof Page) {
       page = pageOrContext;
-      context = page.context();
+      context = page.browserContext;
     } else {
       context = pageOrContext;
       page = context.pages()[0] ?? await context.newPage(serverSideCallMetadata());
@@ -246,7 +246,11 @@ export default class CrxPlayer extends EventEmitter {
 
     if (action.name === 'click') {
       const options = toClickOptions(action);
-      return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.click(callMetadata, selector, { ...options, timeout: kActionTimeout, strict: true }));
+      const activeAntdOptionSelector = activeAntdOptionFallbackSelector(selector);
+      if (activeAntdOptionSelector)
+        return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.click(callMetadata, activeAntdOptionSelector, { ...options, position: undefined, timeout: kActionTimeout, strict: true }));
+      const duplicateTestIdSelector = duplicateTestIdFallbackSelector(selector);
+      return await innerPerformAction(mainFrame, actionInContext, callMetadata => mainFrame.click(callMetadata, duplicateTestIdSelector || selector, { ...options, timeout: kActionTimeout, strict: true }));
     }
     if (action.name === 'press') {
       const modifiers = toKeyboardModifiers(action.modifiers);
@@ -318,4 +322,22 @@ export default class CrxPlayer extends EventEmitter {
       throw new Stopped();
     }
   }
+}
+
+function activeAntdOptionFallbackSelector(selector: string) {
+  if (!/internal:has-text=(?:\\"|")?\[object/i.test(selector))
+    return undefined;
+  if (/ant-cascader-menu-item/.test(selector))
+    return 'css=.ant-cascader-dropdown:not(.ant-cascader-dropdown-hidden) .ant-cascader-menu-item:not(.ant-cascader-menu-item-disabled) >> nth=0';
+  if (/ant-select-tree/.test(selector))
+    return 'css=.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-tree-node-content-wrapper:not(.ant-select-tree-node-disabled), .ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-tree-title >> nth=0';
+  if (/ant-select-item-option/.test(selector))
+    return 'css=.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option:not(.ant-select-item-option-disabled) >> nth=0';
+  return undefined;
+}
+
+function duplicateTestIdFallbackSelector(selector: string) {
+  if (!/internal:testid=/.test(selector) || /(?:^|>>\s*)nth=/.test(selector))
+    return undefined;
+  return `${selector} >> nth=-1`;
 }

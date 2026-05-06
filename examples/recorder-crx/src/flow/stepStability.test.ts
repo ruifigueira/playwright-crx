@@ -183,6 +183,23 @@ const tests: TestCase[] = [
     },
   },
   {
+    name: 'same label fills in different dialogs stay as separate business steps',
+    run: () => {
+      const flow = mergeActionsIntoFlow(undefined, [
+        fillAction('地址池名称', 'test1'),
+        fillAction('地址池名称', 'test12'),
+      ], recordedSource([
+        `await page.locator(".ant-modal, .ant-drawer, [role=\\"dialog\\"]").filter({ hasText: "新建IPv4地址池" }).getByLabel("地址池名称").fill("test1");`,
+        `await page.locator(".ant-modal, .ant-drawer, [role=\\"dialog\\"]").filter({ hasText: "新建IP端口地址池" }).getByLabel("地址池名称").fill("test12");`,
+      ]), {});
+
+      assertEqual(flow.steps.length, 2);
+      assertEqual(flow.steps.map(step => step.value), ['test1', 'test12']);
+      assert(flow.steps[0].sourceCode?.includes('新建IPv4地址池'), 'first dialog scope should be preserved');
+      assert(flow.steps[1].sourceCode?.includes('新建IP端口地址池'), 'second dialog scope should be preserved');
+    },
+  },
+  {
     name: 'recorder in-place fill updates refresh existing steps when action count is unchanged',
     run: () => {
       const firstPayload = mergeActionsIntoFlow(undefined, [
@@ -993,6 +1010,29 @@ test('demo', async ({ page }) => {
     },
   },
   {
+    name: 'synthetic page context skips non-interactive structural containers',
+    run: () => {
+      const initial = mergeActionsIntoFlow(undefined, [
+        clickAction('保存配置'),
+      ], [], {});
+      const event = pageClickEventWithTarget('ctx-structural-section', Date.now() - 2000, {
+        tag: 'div',
+        testId: 'site-global-ip-pools-section',
+        text: '地址池与端口池',
+        normalizedText: '地址池与端口池',
+        framework: 'procomponents',
+        controlType: 'unknown',
+        locatorQuality: 'testid',
+      } as ElementContext);
+
+      const result = appendSyntheticPageContextStepsWithResult(initial, [event]);
+
+      assertEqual(result.insertedStepIds, []);
+      assertEqual(result.flow.steps.map(step => step.target?.testId || step.target?.name), ['保存配置']);
+      assertEqual(result.skippedEventIds, ['ctx-structural-section']);
+    },
+  },
+  {
     name: 'synthetic page context click dedupes nested targets from the same user click',
     run: () => {
       const initial = mergeActionsIntoFlow(undefined, [
@@ -1509,6 +1549,19 @@ test('demo', async ({ page }) => {
 
       assertEqual(withSynthetic.steps.length, 1);
       assertEqual(withSynthetic.steps[0].target?.name, '新建');
+    },
+  },
+  {
+    name: 'recorder action merge skips non-interactive structural container test id clicks',
+    run: () => {
+      const wallTime = Date.now();
+      const flow = mergeActionsIntoFlow(undefined, [
+        testIdClickAction('site-global-ip-pools-section', wallTime),
+        testIdClickAction('site-ip-port-pool-create-button', wallTime + 200),
+      ], [], {});
+
+      assertEqual(flow.steps.map(step => step.target?.testId), ['site-ip-port-pool-create-button']);
+      assertEqual(flow.artifacts?.recorder?.actionLog.length, 1);
     },
   },
   {
@@ -2052,6 +2105,72 @@ test('demo', async ({ page }) => {
     },
   },
   {
+    name: 'duplicated test id clicks preserve the captured page ordinal in generated code',
+    run: () => {
+      const flow: BusinessFlow = {
+        ...createNamedFlow(),
+        steps: [{
+          id: 's001',
+          order: 1,
+          kind: 'recorded',
+          sourceActionIds: ['a001'],
+          action: 'click',
+          target: {
+            testId: 'site-save-button',
+            role: 'button',
+            text: '保存配置',
+            locatorHint: { strategy: 'global-testid', confidence: 0.98, pageCount: 2, pageIndex: 1 },
+            raw: { testId: 'site-save-button', uniqueness: { pageCount: 2, pageIndex: 1 } },
+          },
+          context: {
+            eventId: 'ctx-save',
+            capturedAt: 1000,
+            before: {
+              target: {
+                tag: 'button',
+                role: 'button',
+                testId: 'site-save-button',
+                text: '保存配置',
+                locatorQuality: 'testid',
+                uniqueness: { pageCount: 2, pageIndex: 1 },
+              },
+            },
+          },
+          rawAction: testIdClickAction('site-save-button'),
+          sourceCode: `await page.getByTestId('site-save-button').click();`,
+          assertions: [],
+        }],
+      };
+
+      const exportedCode = generateBusinessFlowPlaywrightCode(flow);
+      const playbackCode = generateBusinessFlowPlaybackCode(flow);
+
+      for (const code of [exportedCode, playbackCode]) {
+        assert(code.includes('page.getByTestId("site-save-button").nth(1).click();'), 'duplicate test id locator should keep nth(1)');
+        assert(!code.includes('page.getByTestId("site-save-button").click();'), 'ambiguous duplicate test id locator should not be emitted without nth');
+      }
+    },
+  },
+  {
+    name: 'synthetic page context test id click stores duplicate ordinal in source code',
+    run: () => {
+      const result = appendSyntheticPageContextStepsWithResult(createNamedFlow(), [
+        pageClickEventWithTarget('ctx-save', 1000, {
+          tag: 'button',
+          role: 'button',
+          testId: 'site-save-button',
+          text: '保存配置',
+          normalizedText: '保存配置',
+          locatorQuality: 'testid',
+          uniqueness: { pageCount: 2, pageIndex: 1 },
+        }),
+      ]);
+
+      assertEqual(result.insertedStepIds.length, 1);
+      assertEqual(result.flow.steps[0].sourceCode, `await page.getByTestId("site-save-button").nth(1).click();`);
+    },
+  },
+  {
     name: 'explicit test id click is not replayed as an inherited cascader option',
     run: () => {
       const flow: BusinessFlow = {
@@ -2125,6 +2244,49 @@ test('demo', async ({ page }) => {
 
       assert(code.includes('has no runnable Playwright action source'), 'modal root container clicks should be documented but not replayed');
       assert(!code.includes('page.getByTestId("network-resource-modal").click') && !code.includes("page.getByTestId('network-resource-modal').click"), 'modal root test id should not be emitted as a click target');
+    },
+  },
+  {
+    name: 'code preview suppresses non-interactive structural container clicks',
+    run: () => {
+      const flow: BusinessFlow = {
+        ...createNamedFlow(),
+        steps: [{
+          id: 's001',
+          order: 1,
+          kind: 'recorded',
+          sourceActionIds: ['a001'],
+          action: 'click',
+          target: {
+            testId: 'site-global-ip-pools-section',
+          },
+          rawAction: {
+            action: {
+              name: 'click',
+              selector: 'internal:testid=[data-testid="site-global-ip-pools-section"s]',
+            },
+          },
+          sourceCode: `await page.getByTestId('site-global-ip-pools-section').click();`,
+          assertions: [],
+        }, {
+          id: 's002',
+          order: 2,
+          kind: 'recorded',
+          sourceActionIds: ['a002'],
+          action: 'click',
+          target: {
+            testId: 'site-ip-port-pool-create-button',
+            text: '新建',
+          },
+          rawAction: testIdClickAction('site-ip-port-pool-create-button'),
+          assertions: [],
+        }],
+      };
+      const code = generateBusinessFlowPlaybackCode(flow);
+
+      assert(code.includes('s001 has no runnable Playwright action source'), 'structural container clicks should be documented but not replayed');
+      assert(!code.includes('getByTestId("site-global-ip-pools-section").click') && !code.includes("getByTestId('site-global-ip-pools-section').click"), 'structural container test id should not be emitted as a click target');
+      assert(code.includes('getByTestId("site-ip-port-pool-create-button").click'), 'nearby concrete action controls should still be replayed');
     },
   },
   {
@@ -2270,6 +2432,84 @@ test('demo', async ({ page }) => {
     },
   },
   {
+    name: 'playback omits redundant text field focus click before the matching fill',
+    run: () => {
+      const flow: BusinessFlow = {
+        ...createNamedFlow(),
+        steps: [
+          {
+            id: 's001',
+            order: 1,
+            kind: 'recorded',
+            sourceActionIds: ['a001'],
+            action: 'click',
+            target: {
+              role: 'textbox',
+              label: '开始地址，例如：192.168.1.1',
+              placeholder: '开始地址，例如：',
+              scope: {
+                dialog: { title: '新建IPv4地址池', type: 'modal', visible: true },
+                form: { label: '开始地址，例如：192.168.1.1', name: 'startIp' },
+              },
+            },
+            context: {
+              eventId: 'ctx-start-click',
+              capturedAt: 1000,
+              before: {
+                dialog: { title: '新建IPv4地址池', type: 'modal', visible: true },
+                form: { label: '开始地址，例如：192.168.1.1', name: 'startIp' },
+                target: { tag: 'input', role: 'textbox', placeholder: '开始地址，例如：', controlType: 'input' },
+              },
+            },
+            rawAction: { action: { name: 'click', selector: 'internal:label="开始地址，例如：192.168.1.1"i' } },
+            sourceCode: `await page.getByLabel('开始地址，例如：192.168.1.1').click();`,
+            assertions: [],
+          },
+          {
+            id: 's002',
+            order: 2,
+            kind: 'recorded',
+            sourceActionIds: ['a002'],
+            action: 'fill',
+            target: {
+              role: 'textbox',
+              name: '开始地址，例如：',
+              placeholder: '开始地址，例如：',
+              scope: {
+                dialog: { title: '新建IPv4地址池', type: 'modal', visible: true },
+                form: { label: '开始地址，例如：192.168.1.1', name: 'startIp' },
+              },
+            },
+            value: '1.1.1.1',
+            context: {
+              eventId: 'ctx-start-fill',
+              capturedAt: 1100,
+              before: {
+                dialog: { title: '新建IPv4地址池', type: 'modal', visible: true },
+                form: { label: '开始地址，例如：192.168.1.1', name: 'startIp' },
+                target: { tag: 'input', role: 'textbox', placeholder: '开始地址，例如：', controlType: 'input' },
+              },
+            },
+            rawAction: { action: { name: 'fill', selector: 'internal:role=textbox[name="开始地址，例如："i]', text: '1.1.1.1' } },
+            sourceCode: `await page.getByRole('textbox', { name: '开始地址，例如：' }).fill('1.1.1.1');`,
+            assertions: [],
+          },
+        ],
+      };
+
+      const exportedCode = generateBusinessFlowPlaywrightCode(flow);
+      const playbackCode = generateBusinessFlowPlaybackCode(flow);
+
+      for (const code of [exportedCode, playbackCode]) {
+        assert(!code.includes('// s001 '), 'redundant focus-only click step should be omitted from generated code');
+        assert(!code.includes('.click();'), 'redundant focus-only click should not be replayed before fill');
+        assert(code.includes('开始地址，例如：'), 'fill target should still use the stable textbox name');
+        assert(code.includes('.fill("1.1.1.1");') || code.includes(`.fill('1.1.1.1');`), 'matching fill step should still be emitted');
+      }
+      assertEqual(countBusinessFlowPlaybackActions(flow), 1);
+    },
+  },
+  {
     name: 'code preview regenerates AntD select option clicks from page context instead of brittle title locators',
     run: () => {
       const flow: BusinessFlow = {
@@ -2364,6 +2604,58 @@ test('demo', async ({ page }) => {
       assert(firstStep.includes('AntD Select virtual dropdown replay workaround'), 'human-like inner option click should still use AntD dropdown replay');
       assert(firstStep.includes('locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden)").last().locator(".ant-select-item-option")'), 'option lookup should be scoped to active dropdown');
       assert(!firstStep.includes('getByText'), 'human-like option replay must not use ambiguous global text locator');
+    },
+  },
+  {
+    name: 'ReactNode AntD select option replays by matching tokens on the option container',
+    run: () => {
+      const flow: BusinessFlow = {
+        ...createNamedFlow(),
+        steps: [{
+          id: 's001',
+          order: 1,
+          kind: 'recorded',
+          sourceActionIds: ['a001'],
+          action: 'click',
+          target: {
+            text: 'test1 共享 1.1.1.1--2.2.2.2',
+            scope: {
+              form: { label: 'IP地址池' },
+              dialog: { title: '新建IP端口地址池', type: 'modal', visible: true },
+            },
+          },
+          context: {
+            eventId: 'ctx-react-node-option',
+            capturedAt: 1000,
+            before: {
+              form: { label: 'IP地址池' },
+              dialog: { title: '选择一个IP地址池', type: 'dropdown', visible: true },
+              target: {
+                tag: 'div',
+                role: 'option',
+                text: 'test1 1.1.1.1--2.2.2.2 共享',
+                selectedOption: 'test1 1.1.1.1--2.2.2.2 共享',
+                normalizedText: 'test1 1.1.1.1--2.2.2.2 共享',
+                framework: 'procomponents',
+                controlType: 'select-option',
+              },
+            },
+          },
+          rawAction: {
+            action: {
+              name: 'click',
+              selector: 'internal:text="test1"i',
+            },
+          },
+          sourceCode: `await page.getByText('test1').click();`,
+          assertions: [],
+        }],
+      };
+      const code = generateBusinessFlowPlaybackCode(flow);
+      const firstStep = stepCodeBlock(code, 's001');
+
+      assert(firstStep.includes('locator(".ant-select-item-option").filter({ hasText: "test1" })'), 'runtime locator should match the primary identity token on the option container');
+      assert(!firstStep.includes('hasText: "test1 共享 1.1.1.1--2.2.2.2"'), 'runtime locator should not require the ReactNode text to be contiguous or ordered exactly');
     },
   },
   {
@@ -2801,6 +3093,66 @@ test('demo', async ({ page }) => {
     },
   },
   {
+    name: 'business flow playback code keeps active popup option replay parser safe after manual waits',
+    run: () => {
+      const flow: BusinessFlow = {
+        ...createNamedFlow(),
+        steps: [
+          {
+            id: 's001',
+            order: 1,
+            kind: 'recorded',
+            sourceActionIds: ['a001'],
+            action: 'click',
+            target: { testId: 'site-save-button', text: '保存配置' },
+            rawAction: testIdClickAction('site-save-button'),
+            sourceCode: `await page.getByTestId('site-save-button').click();`,
+            assertions: [],
+          },
+          {
+            id: 's002',
+            order: 2,
+            kind: 'manual',
+            action: 'wait',
+            value: '5000',
+            sourceCode: `await page.waitForLoadState('networkidle').catch(() => {});\nawait page.waitForTimeout(5000);`,
+            assertions: [],
+          },
+          {
+            id: 's003',
+            order: 3,
+            kind: 'recorded',
+            sourceActionIds: ['a002'],
+            action: 'click',
+            target: { text: '华东生产区', name: '华东生产区' },
+            context: {
+              eventId: 'ctx-active-popup',
+              capturedAt: 2000,
+              before: {
+                dialog: { type: 'dropdown', visible: true },
+                target: { tag: 'div', role: 'option', text: '华东生产区', normalizedText: '华东生产区', framework: 'antd', controlType: 'select-option' },
+              },
+            },
+            rawAction: { action: { name: 'click', selector: 'internal:text="华东生产区"i' } },
+            sourceCode: `await page.getByText('华东生产区').click();`,
+            assertions: [],
+          },
+        ],
+      };
+      const playbackCode = generateBusinessFlowPlaybackCode(flow);
+
+      assert(playbackCode.includes('waitForTimeout(5000)'), 'manual wait should stay in playback code');
+      assert(!playbackCode.includes('waitForLoadState'), 'runtime playback code should not include unsupported load-state wait wrappers');
+      assert(!playbackCode.includes('.catch('), 'runtime playback code should not include unsupported catch continuations');
+      assert(!playbackCode.includes('evaluateAll'), 'runtime playback code should not include unsupported evaluate callbacks for active popup options');
+      assert(!playbackCode.includes('if (!await'), 'runtime playback code should not include unsupported control flow for active popup options');
+      assert(!playbackCode.includes('.first()'), 'runtime playback code should avoid unsupported locator first() calls');
+      assert(!playbackCode.includes('.last()'), 'runtime playback code should avoid unsupported locator last() calls');
+      assert(playbackCode.includes('.ant-select-dropdown:not(.ant-select-dropdown-hidden)'), 'runtime playback should still target the active dropdown');
+      assert(playbackCode.includes('.click();'), 'runtime playback should remain parseable click actions');
+    },
+  },
+  {
     name: 'dropdown option page context is ignored for non-option click steps',
     run: () => {
       const flow: BusinessFlow = {
@@ -3038,6 +3390,41 @@ test('demo', async ({ page }) => {
         assert(!firstStep.includes('getByRole(\'combobox\'') && !firstStep.includes('getByRole("combobox"'), 'trigger should not rely on combobox accessible name for AntD ProFormSelect');
         assert(!firstStep.includes('#rc_select_14'), 'trigger should not replay the dynamic rc_select id');
       }
+    },
+  },
+  {
+    name: 'ProFormSelect trigger with tooltip suffix uses normalized form-item label',
+    run: () => {
+      const flow: BusinessFlow = {
+        ...createNamedFlow(),
+        steps: [{
+          id: 's001',
+          order: 1,
+          kind: 'recorded',
+          sourceActionIds: ['a001'],
+          action: 'click',
+          target: {
+            role: 'combobox',
+            name: '* IP地址池 question-circle',
+            displayName: '* IP地址池 question-circle',
+          },
+          rawAction: {
+            action: {
+              name: 'click',
+              selector: 'internal:role=combobox[name="* IP地址池 question-circle"i]',
+            },
+          },
+          sourceCode: `await page.getByRole("combobox", { name: "* IP地址池 question-circle" }).click();`,
+          assertions: [],
+        }],
+      };
+
+      const playbackCode = generateBusinessFlowPlaybackCode(flow);
+      const firstStep = stepCodeBlock(playbackCode, 's001');
+      const executableStepCode = firstStep.split('\n').slice(1).join('\n');
+      assert(executableStepCode.includes('locator(".ant-form-item").filter({ hasText: "IP地址池" }).locator(".ant-select-selector").first().click();'), 'tooltip suffix should be stripped before locating the ProFormSelect trigger');
+      assert(!executableStepCode.includes('question-circle'), 'runtime trigger should not depend on tooltip text');
+      assert(!executableStepCode.includes('getByRole("combobox"') && !executableStepCode.includes('getByRole(\'combobox\''), 'runtime trigger should not use the brittle combobox role');
     },
   },
   {

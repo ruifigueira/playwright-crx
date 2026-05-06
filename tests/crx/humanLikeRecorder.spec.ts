@@ -37,6 +37,220 @@ import {
 
 test.describe.configure({ mode: 'serial' });
 
+test('human-like recorder preserves nth for duplicate test id save button @human-smoke', async ({ page, attachRecorder, baseURL }, testInfo) => {
+  test.setTimeout(120_000);
+
+  await page.goto(`${baseURL}/empty.html`);
+  const recorderPage = await attachRecorder(page, { mode: 'business-flow' });
+  recorderPage.on('dialog', dialog => dialog.type() === 'prompt' ? dialog.accept('5') : dialog.accept());
+
+  await beginNewFlowFromLibraryLikeUser(recorderPage);
+  await fillFlowMetaLikeUser(recorderPage, '流程名称', '重复 test id 保存按钮');
+  await fillFlowMetaLikeUser(recorderPage, '应用', 'AntD Pro');
+  await fillFlowMetaLikeUser(recorderPage, '模块', '站点配置');
+  await fillFlowMetaLikeUser(recorderPage, '页面', '全局配置');
+  await fillFlowMetaLikeUser(recorderPage, '角色', 'admin');
+  await humanClick(recorderPage.getByRole('button', { name: '创建并开始录制' }));
+  await expect(recorderPage.locator('.recording-status')).toContainText('录制中');
+
+  await page.goto(`${baseURL}/antd-pro-form-fields.html?duplicateSaveButton=1`);
+  await expect(page.getByText('地址池与端口池')).toBeVisible();
+  await expect(page.getByTestId('site-save-button')).toHaveCount(2);
+
+  await humanClick(page.getByTestId('site-save-button').nth(1));
+  await expect(page.getByText('配置已保存')).toBeVisible();
+  await expect.poll(() => visibleStepTexts(recorderPage), { timeout: 25_000 }).toContain('site-save-button');
+
+  await humanClick(recorderPage.getByRole('button', { name: '停止录制' }));
+  await expect(recorderPage.locator('.recording-status')).toContainText('复查');
+
+  const flow = await exportBusinessFlowJsonLikeUser(recorderPage);
+  await attachRecorderEvidence(testInfo, page, recorderPage, flow);
+  const saveStep = flow.steps.find((step: any) => step.target?.testId === 'site-save-button');
+  expect(saveStep?.target?.locatorHint?.pageCount).toBe(2);
+  expect(saveStep?.target?.locatorHint?.pageIndex).toBe(1);
+  expect(flow.artifacts.playwrightCode).toContain('page.getByTestId("site-save-button").nth(1).click();');
+  expect(flow.artifacts.playwrightCode).not.toContain('page.getByTestId("site-save-button").click();');
+
+  await humanClick(recorderPage.getByRole('button', { name: 'Playwright 代码' }));
+
+  const runtimeLogBaseline = await runtimeDiagnostics(recorderPage);
+  await humanClick(recorderPage.getByTitle('Resume (F8)'));
+  await expect.poll(async () => {
+    const logs = await runtimeDiagnosticsAfter(recorderPage, runtimeLogBaseline);
+    return logs.some(log => log.type === 'runtime.playback-stop');
+  }, { timeout: 30_000 }).toBeTruthy();
+  const replayRuntimeLogs = await runtimeDiagnosticsAfter(recorderPage, runtimeLogBaseline);
+  expect(replayRuntimeLogs.filter(log => log.type.includes('error') || log.level === 'warn')).toEqual([]);
+});
+
+test('human-like runtime replay skips redundant IPv4 field focus click @human-smoke', async ({ page, attachRecorder, baseURL }) => {
+  test.setTimeout(120_000);
+  const strictHumanOptions = { allowFallback: false as const };
+
+  await page.goto(`${baseURL}/empty.html`);
+  const recorderPage = await attachRecorder(page, { mode: 'business-flow' });
+  recorderPage.on('dialog', dialog => dialog.type() === 'prompt' ? dialog.accept('5') : dialog.accept());
+
+  await beginNewFlowFromLibraryLikeUser(recorderPage);
+  await fillFlowMetaLikeUser(recorderPage, '流程名称', '地址池 runtime replay');
+  await fillFlowMetaLikeUser(recorderPage, '应用', 'AntD Pro');
+  await fillFlowMetaLikeUser(recorderPage, '模块', '站点配置');
+  await fillFlowMetaLikeUser(recorderPage, '页面', '全局配置');
+  await fillFlowMetaLikeUser(recorderPage, '角色', 'admin');
+  await humanClick(recorderPage.getByRole('button', { name: '创建并开始录制' }));
+  await expect(recorderPage.locator('.recording-status')).toContainText('录制中');
+
+  await page.goto(`${baseURL}/antd-pro-form-fields.html`);
+  await expect(page.getByText('地址池与端口池')).toBeVisible();
+
+  const ipv4Dialog = page.locator('.ant-modal, .ant-drawer, [role="dialog"]').filter({ hasText: '新建IPv4地址池' });
+  await humanClickUntil(
+      page.getByTestId('site-ip-address-pool-create-button'),
+      async () => await ipv4Dialog.isVisible().catch(() => false),
+      { attempts: 5, afterClickDelayMs: 500, ...strictHumanOptions },
+  );
+  await expect(ipv4Dialog).toBeVisible({ timeout: 10_000 });
+
+  await humanType(page.getByPlaceholder('地址池名称'), 'runtime-pool');
+  const wanTrigger = ipv4Dialog.locator('.ant-form-item').filter({ hasText: 'WAN口' }).locator('.ant-select-selector').first();
+  await selectAntdOptionLikeUser(page, wanTrigger, 'xtest16:WAN1', { searchText: 'xtest16', ...strictHumanOptions });
+  await expect(ipv4Dialog.locator('.ant-form-item').filter({ hasText: 'WAN口' })).toContainText('xtest16:WAN1');
+
+  await humanType(page.getByRole('textbox', { name: '开始地址，例如：' }), '1.1.1.1');
+  await humanType(page.getByRole('textbox', { name: '结束地址，例如：' }), '2.2.2.2');
+  await humanClickUntil(
+      ipv4Dialog.getByRole('button', { name: '确 定' }),
+      async () => !await ipv4Dialog.isVisible().catch(() => false),
+      { attempts: 5, afterClickDelayMs: 800, ...strictHumanOptions },
+  );
+  await expect(page.getByRole('row', { name: /runtime-pool.*xtest16:WAN1.*1\.1\.1\.1.*2\.2\.2\.2/ })).toBeVisible({ timeout: 10_000 });
+  await humanClick(page.getByTestId('site-save-button'));
+  await expect(page.getByText('配置已保存')).toBeVisible();
+
+  await expect.poll(() => visibleStepTexts(recorderPage), { timeout: 25_000 }).toContain('runtime-pool');
+  await expect.poll(() => visibleStepTexts(recorderPage)).toContain('1.1.1.1');
+  await humanClick(recorderPage.getByRole('button', { name: '停止录制' }));
+  await expect(recorderPage.locator('.recording-status')).toContainText('复查');
+
+  await page.goto(`${baseURL}/antd-pro-form-fields.html`);
+  await expect(page.getByText('地址池与端口池')).toBeVisible();
+  await humanClick(recorderPage.getByRole('button', { name: 'Playwright 代码' }));
+  const runtimeLogBaseline = await runtimeDiagnostics(recorderPage);
+  await humanClick(recorderPage.getByTitle('Resume (F8)'));
+  await expect.poll(async () => {
+    const logs = await runtimeDiagnosticsAfter(recorderPage, runtimeLogBaseline);
+    return logs.some(log => log.type === 'runtime.playback-stop');
+  }, { timeout: 30_000 }).toBeTruthy();
+  const replayRuntimeLogs = await runtimeDiagnosticsAfter(recorderPage, runtimeLogBaseline);
+  expect(replayRuntimeLogs.filter(log => log.type.includes('error') || log.level === 'warn')).toEqual([]);
+  await expect(page.getByRole('row', { name: /runtime-pool.*xtest16:WAN1.*1\.1\.1\.1.*2\.2\.2\.2/ })).toBeVisible({ timeout: 10_000 });
+});
+
+test('human-like runtime replay supports wait inserted between address and port pools @human-smoke', async ({ page, attachRecorder, baseURL }, testInfo) => {
+  test.setTimeout(180_000);
+  const strictHumanOptions = { allowFallback: false as const };
+
+  await page.goto(`${baseURL}/empty.html`);
+  const recorderPage = await attachRecorder(page, { mode: 'business-flow' });
+  recorderPage.on('dialog', dialog => dialog.type() === 'prompt' ? dialog.accept('5') : dialog.accept());
+
+  await beginNewFlowFromLibraryLikeUser(recorderPage);
+  await fillFlowMetaLikeUser(recorderPage, '流程名称', '地址池端口池 wait replay');
+  await fillFlowMetaLikeUser(recorderPage, '应用', 'AntD Pro');
+  await fillFlowMetaLikeUser(recorderPage, '模块', '站点配置');
+  await fillFlowMetaLikeUser(recorderPage, '页面', '全局配置');
+  await fillFlowMetaLikeUser(recorderPage, '角色', 'admin');
+  await humanClick(recorderPage.getByRole('button', { name: '创建并开始录制' }));
+  await expect(recorderPage.locator('.recording-status')).toContainText('录制中');
+
+  await page.goto(`${baseURL}/antd-pro-form-fields.html?duplicateSaveButton=1`);
+  await expect(page.getByText('地址池与端口池')).toBeVisible();
+  await expect(page.getByTestId('site-save-button')).toHaveCount(2);
+
+  const ipv4Dialog = page.locator('.ant-modal, .ant-drawer, [role="dialog"]').filter({ hasText: '新建IPv4地址池' });
+  await humanClickUntil(
+      page.getByTestId('site-ip-address-pool-create-button'),
+      async () => await ipv4Dialog.isVisible().catch(() => false),
+      { attempts: 5, afterClickDelayMs: 500, ...strictHumanOptions },
+  );
+  await expect(ipv4Dialog).toBeVisible({ timeout: 10_000 });
+  await humanType(ipv4Dialog.getByPlaceholder('地址池名称'), 'test1');
+  const wanTrigger = ipv4Dialog.locator('.ant-form-item').filter({ hasText: 'WAN口' }).locator('.ant-select-selector').first();
+  await selectAntdOptionLikeUser(page, wanTrigger, 'xtest16:WAN1', { searchText: 'xtest16', ...strictHumanOptions });
+  await expect(ipv4Dialog.locator('.ant-form-item').filter({ hasText: 'WAN口' })).toContainText('xtest16:WAN1');
+  await humanType(page.getByRole('textbox', { name: '开始地址，例如：' }), '1.1.1.1');
+  await humanType(page.getByRole('textbox', { name: '结束地址，例如：' }), '2.2.2.2');
+  await humanClickUntil(
+      ipv4Dialog.getByRole('button', { name: '确 定' }),
+      async () => !await ipv4Dialog.isVisible().catch(() => false),
+      { attempts: 5, afterClickDelayMs: 800, ...strictHumanOptions },
+  );
+  await expect(page.getByRole('row', { name: /test1.*xtest16:WAN1.*1\.1\.1\.1.*2\.2\.2\.2/ })).toBeVisible({ timeout: 10_000 });
+  await humanClick(page.getByTestId('site-save-button').nth(1));
+  await expect(page.getByText('配置已保存')).toBeVisible();
+  await humanClick(page.getByTestId('site-global-ip-pools-section'));
+
+  const portDialog = page.locator('.ant-modal, .ant-drawer, [role="dialog"]').filter({ hasText: '新建IP端口地址池' });
+  await humanClickUntil(
+      page.getByTestId('site-ip-port-pool-create-button'),
+      async () => await portDialog.isVisible().catch(() => false),
+      { attempts: 5, afterClickDelayMs: 500, ...strictHumanOptions },
+  );
+  await expect(portDialog).toBeVisible({ timeout: 10_000 });
+  await humanType(portDialog.getByPlaceholder('地址池名称'), 'test12');
+  const addressPoolTrigger = portDialog.locator('.ant-form-item').filter({ hasText: 'IP地址池' }).locator('.ant-select-selector').first();
+  await selectAntdOptionLikeUser(page, addressPoolTrigger, 'test1 共享 1.1.1.1--2.2.2.2', { searchText: 'test1', ...strictHumanOptions });
+  await expect(portDialog.locator('.ant-form-item').filter({ hasText: 'IP地址池' })).toContainText('test1');
+  await expect(portDialog.locator('.ant-form-item').filter({ hasText: 'IP地址池' })).toContainText('共享');
+  await expect(portDialog.locator('.ant-form-item').filter({ hasText: 'IP地址池' })).toContainText('1.1.1.1--2.2.2.2');
+  await humanType(page.getByRole('textbox', { name: 'IP/前缀，例如：192.168.1.1或192.168.' }), '1.1.1.1');
+  await humanType(page.getByRole('textbox', { name: '端口，例如：80,100-' }), '80');
+  const vrfTrigger = portDialog.locator('.ant-form-item').filter({ hasText: '关联VRF' }).locator('.ant-select-selector').first();
+  await selectAntdOptionLikeUser(page, vrfTrigger, 'default', strictHumanOptions);
+  await expect(portDialog.locator('.ant-form-item').filter({ hasText: '关联VRF' })).toContainText('default');
+  await humanClickUntil(
+      portDialog.getByRole('button', { name: '确 定' }),
+      async () => !await portDialog.isVisible().catch(() => false),
+      { attempts: 5, afterClickDelayMs: 800, ...strictHumanOptions },
+  );
+  await expect(page.getByRole('row', { name: /test12.*test1 共享 1\.1\.1\.1--2\.2\.2\.2.*1\.1\.1\.1:80.*default/ })).toBeVisible({ timeout: 10_000 });
+  await humanClick(page.getByTestId('site-save-button').nth(1));
+
+  await expect.poll(() => visibleStepTexts(recorderPage), { timeout: 25_000 }).toContain('site-ip-port-pool-create-button');
+  await expect.poll(() => visibleStepTexts(recorderPage)).toContain('default');
+  await humanClick(recorderPage.getByRole('button', { name: '停止录制' }));
+  await expect(recorderPage.locator('.recording-status')).toContainText('复查');
+
+  let flow = await exportBusinessFlowJsonLikeUser(recorderPage);
+  expect(flow.steps.some((step: any) => step.target?.testId === 'site-global-ip-pools-section')).toBeFalsy();
+  expect(flow.artifacts.playwrightCode).not.toContain('site-global-ip-pools-section');
+  const firstSaveStepId = requiredStepId(flow, (step: any) => step.target?.testId === 'site-save-button', 'first save config step');
+  await openInsertMenuAfterStepLikeUser(recorderPage, firstSaveStepId);
+  await humanClick(recorderPage.getByRole('button', { name: '插入等待' }));
+  await expect(recorderPage.locator('.review-step-list')).toContainText('等待');
+
+  flow = await exportBusinessFlowJsonLikeUser(recorderPage);
+  await attachRecorderEvidence(testInfo, page, recorderPage, flow);
+  const waitStepId = requiredStepId(flow, (step: any) => step.action === 'wait', 'inserted wait step');
+  expect(stepIndex(flow, waitStepId)).toBe(stepIndex(flow, firstSaveStepId) + 1);
+  expect(flow.artifacts.playwrightCode).toContain('waitForTimeout(5000)');
+  expect(flow.artifacts.playwrightCode).toContain('site-ip-port-pool-create-button');
+
+  await page.goto(`${baseURL}/antd-pro-form-fields.html?duplicateSaveButton=1`);
+  await expect(page.getByText('地址池与端口池')).toBeVisible();
+  await humanClick(recorderPage.getByRole('button', { name: 'Playwright 代码' }));
+  const runtimeLogBaseline = await runtimeDiagnostics(recorderPage);
+  await humanClick(recorderPage.getByTitle('Resume (F8)'));
+  await expect.poll(async () => {
+    const logs = await runtimeDiagnosticsAfter(recorderPage, runtimeLogBaseline);
+    return logs.some(log => log.type === 'runtime.playback-stop');
+  }, { timeout: 60_000 }).toBeTruthy();
+  const replayRuntimeLogs = await runtimeDiagnosticsAfter(recorderPage, runtimeLogBaseline);
+  expect(replayRuntimeLogs.filter(log => log.type.includes('error') || log.level === 'warn')).toEqual([]);
+  await expect(page.getByRole('row', { name: /test1.*test1 共享 1\.1\.1\.1--2\.2\.2\.2.*1\.1\.1\.1:80.*default/ })).toBeVisible({ timeout: 10_000 });
+});
+
 test('human-like records IPv4 pool repeat flow and replays generated code @human-smoke', async ({ context, page, attachRecorder, baseURL }, testInfo) => {
   test.setTimeout(180_000);
   const benchmarkCase = loadBenchmarkCase('recorder_intent_repeat.json');
@@ -327,6 +541,45 @@ function loadBenchmarkCase(fileName: string) {
   return JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'benchmarks', 'agent_models', 'cases', fileName), 'utf8'));
 }
 
+type RuntimeDiagnostic = {
+  id: number;
+  type: string;
+  level?: string;
+  message?: string;
+};
+
+async function runtimeDiagnostics(page: Page): Promise<RuntimeDiagnostic[]> {
+  return await page.evaluate(() => {
+    const logs = (window as typeof window & { __playwrightCrxRecorderDiagnostics?: RuntimeDiagnostic[] }).__playwrightCrxRecorderDiagnostics ?? [];
+    return logs.filter(log => log.type.startsWith('runtime.'));
+  });
+}
+
+async function runtimeDiagnosticsAfter(page: Page, baseline: RuntimeDiagnostic[]) {
+  const maxBaselineId = baseline.reduce((max, log) => Math.max(max, log.id), 0);
+  return (await runtimeDiagnostics(page)).filter(log => log.id > maxBaselineId);
+}
+
+function requiredStepId(flow: any, predicate: (step: any) => boolean, description: string) {
+  const step = flow.steps.find(predicate);
+  if (!step)
+    throw new Error(`Unable to find ${description} in exported flow: ${JSON.stringify(flow.steps.map((step: any) => ({ id: step.id, action: step.action, target: step.target, value: step.value })), null, 2)}`);
+  return step.id;
+}
+
+function stepIndex(flow: any, stepId: string) {
+  return flow.steps.findIndex((step: any) => step.id === stepId);
+}
+
+async function openInsertMenuAfterStepLikeUser(recorderPage: Page, stepId: string) {
+  const row = recorderPage.locator('.review-step-row').filter({ hasText: stepId }).first();
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  const insertButton = row.locator('xpath=following-sibling::*[contains(@class, "review-insert-slot")][1]//button').first();
+  await expect(insertButton).toBeVisible({ timeout: 10_000 });
+  await humanClick(insertButton);
+  await expect(recorderPage.locator('.review-insert-popover')).toBeVisible({ timeout: 10_000 });
+}
+
 async function replayGeneratedPlaywrightCode(context: BrowserContext, code: string, testInfo: TestInfo, verify?: (page: Page) => Promise<void>, standaloneVerificationLines: string[] = []) {
   const rawReplayDir = testInfo.outputPath('raw-generated-replay');
   fs.mkdirSync(rawReplayDir, { recursive: true });
@@ -368,7 +621,7 @@ function runGeneratedPlaywrightSourceAsStandaloneSpec(code: string, testInfo: Te
     `  timeout: 120000,`,
     `  workers: 1,`,
     `  reporter: 'line',`,
-    `  use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:3000' },`,
+    `  use: { ...devices['Desktop Chrome'], baseURL: ${JSON.stringify(rawReplayBaseURL())} },`,
     `});`,
     ``,
   ].join('\n'));
@@ -382,6 +635,10 @@ function runGeneratedPlaywrightSourceAsStandaloneSpec(code: string, testInfo: Te
   fs.writeFileSync(path.join(rawReplayDir, 'raw-replay-output.txt'), output);
   if (result.status !== 0)
     throw new Error(`Generated Playwright source failed as a standalone spec (exit ${result.status}). See ${rawReplayDir}/raw-replay-output.txt\n${output}`);
+}
+
+function rawReplayBaseURL() {
+  return process.env.PLAYWRIGHT_CRX_TEST_BASE_URL || `http://127.0.0.1:${process.env.PLAYWRIGHT_CRX_TEST_PORT || '3107'}`;
 }
 
 function testBody(code: string) {

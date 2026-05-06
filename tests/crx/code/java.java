@@ -10,7 +10,7 @@ public class Example {
         .setHeadless(false));
       BrowserContext context = browser.newContext();
       Page page = context.newPage();
-      page.navigate("http://127.0.0.1:3000/input/textarea.html");
+      page.navigate("http://127.0.0.1:3107/input/textarea.html");
       page.locator("textarea").click();
       page.locator("textarea").fill("test");
     }

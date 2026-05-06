@@ -89,6 +89,7 @@ export interface ElementContext {
 
 export interface LocatorUniqueness {
   pageCount?: number;
+  pageIndex?: number;
   scopeCount?: number;
   scopeKind?: 'dialog' | 'section' | 'table' | 'form';
 }

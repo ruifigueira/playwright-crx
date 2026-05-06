@@ -114,6 +114,16 @@ async function openPopupLikeUser(trigger: Locator, popup: Locator, options?: Hum
       // Retry with a fresh click. Some AntD controls ignore the first click while focus/animation settles.
     }
   }
+  const input = trigger.locator('input').first();
+  if (await input.count().catch(() => 0)) {
+    await input.focus({ timeout: 2_000 }).catch(() => {});
+  } else {
+    await trigger.focus({ timeout: 2_000 }).catch(() => {});
+  }
+  await trigger.page().keyboard.press('ArrowDown').catch(() => {});
+  await popup.waitFor({ state: 'visible', timeout: 800 }).catch(() => {});
+  if (await popup.isVisible().catch(() => false))
+    return;
   reportFallback(options, 'popup-force-click');
   await trigger.click({ force: true, timeout: 2_000 }).catch(() => {});
   await popup.waitFor({ state: 'visible', timeout: 800 }).catch(() => {});
@@ -176,6 +186,7 @@ export async function humanType(locator: Locator, text: string, options?: { clea
   }
 
   await page.keyboard.type(text, { delay: options?.delayMs ?? 35 });
+  await page.waitForTimeout(160);
   if (options?.clear === true && await locator.inputValue().catch(() => undefined) !== text)
     await locator.fill(text);
 
@@ -197,6 +208,8 @@ async function ensureLocatorFocused(locator: Locator) {
 async function exactTextOption(candidates: Locator, expectedText: string) {
   const count = await candidates.count();
   const normalizedExpected = normalized(expectedText);
+  const expectedTokens = textTokens(expectedText);
+  let tokenMatch: Locator | undefined;
   for (let i = 0; i < count; i++) {
     const candidate = candidates.nth(i);
     if (!await candidate.isVisible().catch(() => false))
@@ -204,21 +217,50 @@ async function exactTextOption(candidates: Locator, expectedText: string) {
     const text = normalized(await candidate.innerText().catch(() => ''));
     if (text === normalizedExpected)
       return candidate;
+    if (!tokenMatch && expectedTokens.length > 1 && expectedTokens.every(token => text.includes(normalized(token))))
+      tokenMatch = candidate;
   }
-  return undefined;
+  return tokenMatch;
+}
+
+function textTokens(value: string) {
+  const tokens = value.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const identityTokens = tokens.length > 2 ? tokens.filter(token => !/^(共享|独享|shared|dedicated)$/i.test(token)) : tokens;
+  return identityTokens.length > 1 ? [identityTokens[0]] : identityTokens;
 }
 
 export async function selectAntdOptionLikeUser(page: Page, trigger: Locator, optionText: string, options?: HumanLikeOptions & { searchText?: string }) {
   await closeAntdPopups(page);
-  await humanClick(trigger);
-
   const dropdown = page.locator('.ant-select-dropdown:visible').last();
+  await openPopupLikeUser(trigger, dropdown, options);
   await expect(dropdown).toBeVisible({ timeout: 10_000 });
 
   if (options?.searchText)
     await page.keyboard.type(options.searchText, { delay: 25 });
 
-  const option = await exactTextOption(dropdown.locator('.ant-select-item-option'), optionText) || dropdown
+  const findOption = async () => {
+    let option = await exactTextOption(dropdown.locator('.ant-select-item-option'), optionText);
+    if (!option) {
+      const tokenOption = textTokens(optionText).reduce((locator, token) => locator.filter({ hasText: token }), dropdown.locator('.ant-select-item-option')).last();
+      if (await tokenOption.isVisible().catch(() => false))
+        option = tokenOption;
+    }
+    return option;
+  };
+
+  let option = await findOption();
+  if (!option) {
+    const searchInput = trigger.locator('input').first();
+    if (await searchInput.isVisible().catch(() => false)) {
+      await searchInput.fill('').catch(async () => {
+        await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A').catch(() => {});
+        await page.keyboard.press('Backspace').catch(() => {});
+      });
+      await page.waitForTimeout(120);
+      option = await findOption();
+    }
+  }
+  option ??= dropdown
       .locator('.ant-select-item-option')
       .filter({ hasText: optionText })
       .last();

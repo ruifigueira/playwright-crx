@@ -524,12 +524,14 @@ function extractNewActionEntries(recorder: FlowRecorderState, actions: unknown[]
   const sourceActions = recordedSourceActions(sources);
   const start = newActionStartIndex(recorder, actions, options);
   const slicedActions = actions.slice(start);
-  const incomingActions = filterIncidentalContinuationNavigations(slicedActions, start, options);
+  const navigationFilteredActions = filterIncidentalContinuationNavigations(slicedActions, start, options);
+  const incomingActions = navigationFilteredActions.filter(({ rawAction }) => !isIncidentalStructuralContainerAction(rawAction));
   emitDiagnostic(options, 'merge.extract', '已计算本次新增 action 范围', {
     start,
     incomingRawCount: slicedActions.length,
     incomingKeptCount: incomingActions.length,
     filteredCount: slicedActions.length - incomingActions.length,
+    structuralContainerFilteredCount: navigationFilteredActions.length - incomingActions.length,
     sourceActionCount: sourceActions.length,
     rawActions: slicedActions.map(actionSummary),
     keptActions: incomingActions.map(({ rawAction }) => actionSummary(rawAction)),
@@ -658,6 +660,33 @@ function filterIncidentalContinuationNavigations(actions: unknown[], start: numb
   return indexedActions.filter(({ rawAction }) => !isNavigationAction(normalizeAction(asRecord(rawAction) as ActionInContextLike)));
 }
 
+function isIncidentalStructuralContainerAction(rawAction: unknown) {
+  const action = normalizeAction(asRecord(rawAction) as ActionInContextLike);
+  if (action.name !== 'click')
+    return false;
+  const target = extractTarget(action);
+  const testId = target?.testId || '';
+  const selector = readString(action.selector) || '';
+  const looksStructural = looksLikeStructuralContainerTestId(testId) ||
+    /(^|[ >.])(section|article|main|aside|header|footer)(?=$|[ >.#:[\]])/i.test(selector) ||
+    /\.(ant-pro-card|ant-card|ant-collapse-item|card|section|container|wrapper)(?=$|[\s.#:[\]])/i.test(selector) ||
+    /\[role=(?:"region"|'region'|region)\]/i.test(selector);
+  if (!looksStructural || looksLikeActionTestId(testId))
+    return false;
+  const role = target?.role || '';
+  if (/^(button|link|checkbox|radio|switch|combobox|option|menuitem|tab)$/i.test(role))
+    return false;
+  return !(target?.name || target?.label || target?.text || target?.placeholder);
+}
+
+function looksLikeStructuralContainerTestId(testId: string) {
+  return /(^|[-_])(section|container|card|wrapper|content|region)([-_]|$)/i.test(testId);
+}
+
+function looksLikeActionTestId(testId: string) {
+  return /(^|[-_])(button|btn|link|tab|switch|checkbox|radio|select|input|create|add|new|save|delete|remove|edit|confirm|cancel|submit|ok|option|menu)([-_]|$)/i.test(testId);
+}
+
 function dedupeSyntheticClickEvents(events: PageContextEvent[]) {
   const sorted = events
       .filter(event => event.kind === 'click' && event.wallTime)
@@ -719,6 +748,8 @@ function shouldCreateSyntheticClick(event: PageContextEvent) {
   if (!target)
     return false;
 
+  if (isNonInteractiveStructuralContextTarget(target))
+    return false;
   if (target.testId)
     return true;
   if (target.controlType && target.controlType !== 'unknown')
@@ -726,6 +757,21 @@ function shouldCreateSyntheticClick(event: PageContextEvent) {
   if (target.role && /^(button|menuitem|option|tab|checkbox|radio|switch)$/i.test(target.role))
     return true;
   return !!target.text || !!target.ariaLabel || !!target.placeholder;
+}
+
+function isNonInteractiveStructuralContextTarget(target: ElementContext) {
+  if (isInteractiveContextTarget(target))
+    return false;
+  return looksLikeStructuralContainerTestId(target.testId || '') ||
+    /^(section|article|main|aside|header|footer)$/i.test(target.tag || '') ||
+    /card|section|container|wrapper|region/i.test(target.framework === 'procomponents' || target.framework === 'antd' ? String(target.testId || '') : '');
+}
+
+function isInteractiveContextTarget(target: ElementContext) {
+  const testId = target.testId || '';
+  return /^(button|link|checkbox|radio|switch|combobox|option|menuitem|tab|treeitem)$/i.test(target.role || '') ||
+    /^(button|table-row-action|checkbox|radio|switch|select|tree-select|cascader|select-option|tree-select-option|cascader-option|menu-item|tab|date-picker|upload|input|textarea)$/i.test(target.controlType || '') ||
+    looksLikeActionTestId(testId);
 }
 
 function hasSyntheticStepForEvent(steps: FlowStep[], event: PageContextEvent) {
@@ -849,7 +895,7 @@ function stableElementText(target: ElementContext) {
 
 function syntheticClickSourceCode(target: FlowTarget | undefined, fallback: string) {
   if (target?.testId)
-    return `await page.getByTestId(${stringLiteral(target.testId)}).click();`;
+    return `await ${testIdLocatorFromTarget(target)}.click();`;
   const rawControlType = typeof target?.raw === 'object' && target.raw ? String((target.raw as { controlType?: unknown }).controlType || '') : '';
   const choiceText = target?.text || target?.name || target?.displayName;
   if (/^(checkbox|radio|switch)$/.test(rawControlType) && choiceText)
@@ -859,6 +905,16 @@ function syntheticClickSourceCode(target: FlowTarget | undefined, fallback: stri
   if (target?.role && (target.name || target.text))
     return `await page.getByRole(${stringLiteral(target.role)}, { name: ${stringLiteral(target.name || target.text)} }).click();`;
   return `await page.getByText(${stringLiteral(target?.text || target?.name || fallback)}).click();`;
+}
+
+function testIdLocatorFromTarget(target: FlowTarget) {
+  const locator = `page.getByTestId(${stringLiteral(target.testId)})`;
+  const uniqueness = typeof target.raw === 'object' && target.raw ? (target.raw as { uniqueness?: { pageCount?: number; pageIndex?: number } }).uniqueness : undefined;
+  const pageCount = Number(uniqueness?.pageCount);
+  const pageIndex = Number(uniqueness?.pageIndex);
+  if (Number.isInteger(pageIndex) && pageIndex >= 0 && Number.isFinite(pageCount) && pageCount > 1)
+    return `${locator}.nth(${pageIndex})`;
+  return locator;
 }
 
 function pageContextTargetSignature(target?: ElementContext) {
@@ -1406,9 +1462,22 @@ function isTypingPress(step: FlowStep) {
 }
 
 function sameEditableTarget(a: FlowStep, b: FlowStep) {
-  const left = targetSignature(a.target);
-  const right = targetSignature(b.target);
+  const left = editableTargetSignature(a);
+  const right = editableTargetSignature(b);
   return !!left && left === right;
+}
+
+function editableTargetSignature(step: FlowStep) {
+  const target = targetSignature(step.target);
+  if (!target)
+    return '';
+  const dialogScope = step.context?.before.dialog?.title || dialogScopeFromSource(step.sourceCode);
+  return dialogScope ? `${target}|dialog:${dialogScope}` : target;
+}
+
+function dialogScopeFromSource(sourceCode?: string) {
+  const match = sourceCode?.match(/\.filter\(\{\s*hasText:\s*(?:"([^"]+)"|'([^']+)')\s*\}\)/);
+  return cleanupSelectorText(match?.[1] || match?.[2]);
 }
 
 function targetSignature(target?: FlowTarget) {

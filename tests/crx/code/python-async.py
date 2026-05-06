@@ -7,7 +7,7 @@ async def run(playwright: Playwright) -> None:
     browser = await playwright.chromium.launch(headless=False)
     context = await browser.new_context()
     page = await context.new_page()
-    await page.goto("http://127.0.0.1:3000/input/textarea.html")
+    await page.goto("http://127.0.0.1:3107/input/textarea.html")
     await page.locator("textarea").click()
     await page.locator("textarea").fill("test")
 

@@ -716,7 +716,7 @@ function runGeneratedPlaywrightSourceAsStandaloneSpec(code: string, testInfo: Te
     `  timeout: 120000,`,
     `  workers: 1,`,
     `  reporter: 'line',`,
-    `  use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:3000' },`,
+    `  use: { ...devices['Desktop Chrome'], baseURL: ${JSON.stringify(rawReplayBaseURL())} },`,
     `});`,
     ``,
   ].join('\n'));
@@ -730,6 +730,10 @@ function runGeneratedPlaywrightSourceAsStandaloneSpec(code: string, testInfo: Te
   fs.writeFileSync(path.join(rawReplayDir, 'raw-replay-output.txt'), output);
   if (result.status !== 0)
     throw new Error(`Generated Playwright source failed as a standalone spec (exit ${result.status}). See ${rawReplayDir}/raw-replay-output.txt\n${output}`);
+}
+
+function rawReplayBaseURL() {
+  return process.env.PLAYWRIGHT_CRX_TEST_BASE_URL || `http://127.0.0.1:${process.env.PLAYWRIGHT_CRX_TEST_PORT || '3107'}`;
 }
 
 function testBody(code: string) {
