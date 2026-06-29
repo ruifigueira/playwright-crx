@@ -35,6 +35,19 @@
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dialog-close:hover {
+  color: #000;
+  background-color: #f0f0f0;
+  border-radius: 4px;
 }
 
 .dialog-content {

@@ -51,3 +51,31 @@ form button[type="submit"]:disabled {
 form .note.error {
   color: darkred;
 }
+
+form .note {
+  font-size: 13px;
+  color: #555;
+}
+
+form .radio-row {
+  display: flex;
+  gap: 16px;
+  font-weight: normal;
+}
+
+form .radio-row label {
+  font-weight: normal;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #cfd6dd;
+  border-radius: 8px;
+  background-color: #fafbfc;
+}

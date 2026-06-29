@@ -38,6 +38,7 @@ export interface RecorderProps {
   mode: Mode,
   onEditedCode?: (code: string) => any,
   onCursorActivity?: (position: { line: number }) => any,
+  onDownload?: () => void,
 }
 
 export const Recorder: React.FC<RecorderProps> = ({
@@ -47,6 +48,7 @@ export const Recorder: React.FC<RecorderProps> = ({
   mode,
   onEditedCode,
   onCursorActivity,
+  onDownload,
 }) => {
   const [selectedFileId, setSelectedFileId] = React.useState<string | undefined>();
   const [runningFileId, setRunningFileId] = React.useState<string | undefined>();
@@ -176,6 +178,7 @@ export const Recorder: React.FC<RecorderProps> = ({
       <ToolbarButton icon='files' title='Copy' disabled={!source || !source.text} onClick={() => {
         copy(source.text);
       }}></ToolbarButton>
+      <ToolbarButton icon='cloud-download'  title='Download' disabled={!source || !source.text} onClick={onDownload}></ToolbarButton>
       <ToolbarButton icon='debug-continue' title='Resume (F8)' ariaLabel='Resume' disabled={!paused} onClick={() => {
         window.dispatch({ event: 'resume' });
       }}></ToolbarButton>

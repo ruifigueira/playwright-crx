@@ -25,6 +25,9 @@ import type { CrxSettings } from './settings';
 import { addSettingsChangedListener, defaultSettings, loadSettings, removeSettingsChangedListener } from './settings';
 import ModalContainer, { create as createModal } from 'react-modal-promise';
 import { SaveCodeForm } from './saveCodeForm';
+import { SaveToGraphxForm } from './saveToGraphxForm';
+import type { SaveToGraphxResult } from './saveToGraphxForm';
+import { saveScript } from './graphx';
 import './crxRecorder.css';
 import './form.css';
 
@@ -187,6 +190,34 @@ export const CrxRecorder: React.FC = ({
     window.dispatch({ event: 'cursorActivity', params: { position } });
   }, []);
 
+  const handleDownload = React.useCallback(() => {
+    const code = source?.text;
+    if (!code)
+      return;
+
+    const modal = createModal(({ isOpen, onResolve, onReject }) => {
+      return <Dialog title='Save to GraphX' isOpen={isOpen} onClose={onReject}>
+        <SaveToGraphxForm onSubmit={onResolve} />
+      </Dialog>;
+    });
+
+    modal()
+        .then((params: SaveToGraphxResult) => {
+          return saveScript({
+            ...params,
+            code,
+            language: selectedFileId,
+          });
+        })
+        .then(result => {
+          if (result)
+            // eslint-disable-next-line no-console
+            console.log('[GraphX] saved', result);
+        })
+        .catch(() => {});
+  }, [source, selectedFileId]);
+
+
   return <>
     <ModalContainer />
 
@@ -205,7 +236,7 @@ export const CrxRecorder: React.FC = ({
           <ToolbarButton icon='settings-gear' title='Preferences' onClick={showPreferences}></ToolbarButton>
         </Toolbar>
       </>}
-      <Recorder sources={sources} paused={paused} log={log} mode={mode} onEditedCode={dispatchEditedCode} onCursorActivity={dispatchCursorActivity} />
+      <Recorder sources={sources} paused={paused} log={log} mode={mode} onEditedCode={dispatchEditedCode} onCursorActivity={dispatchCursorActivity} onDownload={handleDownload} />
     </div>
   </>;
 };

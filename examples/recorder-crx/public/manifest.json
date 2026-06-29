@@ -40,5 +40,6 @@
     "page": "preferences.html",
     "open_in_tab": false
   },
-  "permissions": ["debugger", "tabs", "contextMenus", "storage", "sidePanel"]
+  "permissions": ["debugger", "tabs", "contextMenus", "storage", "sidePanel"],
+  "host_permissions": ["https://test-automation.contineonx.com/*", "http://localhost:3000/*"]
 }
